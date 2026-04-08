@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shinkansen",
-  "version": "0.30",
+  "version": "0.32",
   "description": "快速、流暢的網頁雙語翻譯擴充功能，使用 Google Gemini。",
   "default_locale": "zh_TW",
 

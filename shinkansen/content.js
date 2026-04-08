@@ -224,10 +224,12 @@
   // 排除這些 ARIA role 的容器（全站頂部 banner、搜尋區、輔助側欄等）
   const EXCLUDE_ROLES = new Set(['banner', 'navigation', 'contentinfo', 'search']);
 
-  // 維護/警示模板類排除（Wikipedia ambox 家族等）
-  // 這些是「給編輯者看的警告框」,讀者無閱讀價值,翻譯只會浪費 token 與 Gemini 額度
-  // 新增項目請先在測試報告中確認確有出現再加,避免誤傷正文
-  const EXCLUDE_BY_SELECTOR = '.ambox, .box-AI-generated, .box-More_footnotes_needed';
+  // 注意：這裡「刻意」不做任何以內容為主的 selector 排除（例如 .ambox 維護模板）。
+  // 硬規則：「翻譯範圍由 system prompt 決定，不由 selector 決定」——content.js 只負責
+  // 「技術性必須跳過」的排除（script/style/code/表單控制項 + 語意容器 nav/footer/role），
+  // 「這段讀者該不該看」之類的內容判斷一律交給 Gemini system prompt。
+  // 歷史：v0.30 之前曾用 `.ambox, .box-AI-generated, .box-More_footnotes_needed` 排除
+  // Wikipedia 維護模板，v0.31 起移除，因為讀者確實需要看到這些警告的中文版。
 
   // 部分有意義但用 DIV / SPAN 包裝的元素，需透過 selector 補抓
   const INCLUDE_BY_SELECTOR = [
@@ -245,9 +247,9 @@
   ].join(',');
 
   function isInsideExcludedContainer(el) {
-    // 類別/選擇器層級排除（ambox 等維護模板）
-    // closest() 包含元素自身,可一次涵蓋「自己是 .ambox」與「祖先是 .ambox」兩種情況
-    if (el.closest && el.closest(EXCLUDE_BY_SELECTOR)) return true;
+    // v0.31 起不再做 class/selector 層級的內容排除（見上方硬規則註解）。
+    // 只保留 HTML5 語意容器（nav/footer）與 ARIA role（banner/navigation/
+    // search/contentinfo）的結構性排除。
     let cur = el;
     while (cur && cur !== document.body) {
       const tag = cur.tagName;
@@ -335,13 +337,13 @@
     // 純標點/純空白的 inline 元素(例如 <span class="gloss-quot">'</span>)不保留
     if (!hasSubstantiveContent(el)) return false;
 
-    // 讓位給內部的 <a>:非 <a> 的保留元素若內部含 <a>,放棄外殼、繼續往下 walk
-    // 讓內部 <a> 成為 slot(而不是把整段含連結的文字塞進外殼的 shallow clone,
-    // 把連結攤平成純文字。例如 Wikipedia 維護模板的
-    // <b>may incorporate text from a <a>large language model</a>...</b>,
-    // 若保留 <b> 外殼,內部所有 <a> 都會在送進 LLM 之前就已經消失)。
-    // 連結的語意重要性高於樣式強調 — 能保住連結就犧牲 bold / 類樣式。
-    if (el.tagName !== 'A' && el.querySelector('a')) return false;
+    // 注意：v0.31 之前這裡有一條「讓位給 <a>」規則 —— 非 <a> 的保留元素若內部
+    // 含 <a>,就放棄外殼只保留連結(犧牲 bold / em 類樣式)。v0.32 起 serializer
+    // 改為遞迴序列化,可以同時保住嵌套的 `<b><a>...</a></b>` 結構,因此這條規則
+    // 已移除。例如 Wikipedia 維護模板的
+    // <b>may incorporate text from a <a>large language model</a>, ...</b>
+    // 會序列化成 `⟦0⟧may incorporate text from a ⟦1⟧large language model⟦/1⟧, ...⟦/0⟧`,
+    // 外層 <b> 與內層 <a> 都會保留。
 
     return true;
   }
@@ -360,12 +362,13 @@
 
   /**
    * 把元素內容序列化成「文字 + slots」。
-   * 文字裡的每個保留 inline 元素都被替換成 ⟦N⟧innerText⟦/N⟧,
+   * 文字裡的每個保留 inline 元素都被替換成 ⟦N⟧…⟦/N⟧,
    * slots[N] 則記錄該元素的「殼」(shallow clone，會清空子節點）。
    *
-   * 注意：不會遞迴拆解保留元素內部 — 內部的 <a>「文字」直接整段當文字看待。
-   * 這對絕大多數網頁（連結內只有純文字或一兩層 inline)已經足夠，
-   * 而且能避免巢狀佔位符把 LLM 弄糊塗。
+   * v0.32 起支援巢狀：遞迴進入保留元素的子節點，所以
+   * `<b>may incorporate text from a <a>LLM</a>, ...</b>` 會序列化成
+   * `⟦0⟧may incorporate text from a ⟦1⟧LLM⟦/1⟧, ...⟦/0⟧`。
+   * 反序列化時同樣會遞迴組回巢狀的 DocumentFragment。
    */
   // 「原子保留」(atomic) 子樹:整個元素保留 deep clone,中間的文字完全不送 LLM。
   // 用單一自閉合佔位符 ⟦*N⟧ 表示位置;LLM 只需把這 token 原樣留在譯文中。
@@ -397,11 +400,13 @@
           }
           if (isPreservableInline(child)) {
             const idx = slots.length;
-            // 殼：shallow clone，稍後反序列化時把譯文塞回去
+            // 殼：shallow clone，稍後反序列化時把譯文（與巢狀子節點）塞回去
             const shell = child.cloneNode(false);
             slots.push(shell);
-            const inner = (child.innerText || child.textContent || '').replace(/\s+/g, ' ').trim();
-            out += PH_OPEN + idx + PH_CLOSE + inner + PH_OPEN + '/' + idx + PH_CLOSE;
+            // 遞迴序列化子節點,可能產生巢狀的 ⟦M⟧…⟦/M⟧
+            out += PH_OPEN + idx + PH_CLOSE;
+            walk(child);
+            out += PH_OPEN + '/' + idx + PH_CLOSE;
           } else {
             // 不保留外殼，但仍要把它的子文字串接進來
             walk(child);
@@ -474,37 +479,55 @@
   }
 
   function deserializeWithPlaceholders(translation, slots) {
-    const frag = document.createDocumentFragment();
-    if (!translation) return { frag, ok: false, matched: 0 };
+    if (!translation) {
+      return { frag: document.createDocumentFragment(), ok: false, matched: 0 };
+    }
 
     // 先把 LLM 自動全形化的佔位符 (⟦０⟧ / ⟦／0⟧ / ⟦ 0 ⟧ ...) 還原回標準形式
     translation = normalizeLlmPlaceholders(translation);
     // 再把 CJK 周圍黏在佔位符旁的殘留空白收掉
     translation = collapseCjkSpacesAroundPlaceholders(translation);
 
+    // v0.32 起：recursive parse to support nested placeholders
+    // （例如 ⟦0⟧一般文字 ⟦1⟧連結文字⟦/1⟧ 更多文字⟦/0⟧)。
+    // parseSegment() 會用 regex 非貪婪匹配找最外層 ⟦N⟧...⟦/N⟧，
+    // 然後對 inner 再次 parseSegment()，組出任意深度的 DocumentFragment 樹。
+    const matchedRef = { count: 0 };
+    const frag = parseSegment(translation, slots, matchedRef);
+    const ok = matchedRef.count > 0;
+    return { frag, ok, matched: matchedRef.count };
+  }
+
+  // 把一段含佔位符的字串解析成 DocumentFragment（可遞迴處理巢狀）。
+  // 非貪婪 `([\s\S]*?)` + backreference `\1` 會正確找到對應的 `⟦/N⟧`,
+  // 即使中間還有其他 `⟦M⟧...⟦/M⟧` 也不會誤判（因為 M ≠ N)。
+  function parseSegment(text, slots, matchedRef) {
+    const frag = document.createDocumentFragment();
+    if (!text) return frag;
+
     // 同時匹配兩種佔位符:
-    //   配對型 ⟦N⟧...⟦/N⟧  →  capture group 1=N(配對序號), group 2=內含文字
-    //   自閉合 ⟦*N⟧        →  capture group 3=N(原子保留序號)
+    //   配對型 ⟦N⟧...⟦/N⟧  →  capture group 1=N, group 2=內含文字（可能含巢狀佔位符）
+    //   自閉合 ⟦*N⟧        →  capture group 3=N（原子保留序號）
+    // 注意：每次 parseSegment 呼叫都要 new 一個 regex，因為 /g 的 lastIndex 是 stateful。
     const re = new RegExp(
       PH_OPEN + '(\\d+)' + PH_CLOSE + '([\\s\\S]*?)' + PH_OPEN + '\\/\\1' + PH_CLOSE
         + '|' + PH_OPEN + '\\*(\\d+)' + PH_CLOSE,
       'g'
     );
-    let cursor = 0;
-    let m;
-    let matched = 0;
 
-    function pushText(text) {
-      if (!text) return;
+    function pushText(s) {
+      if (!s) return;
       // 剝掉任何殘留的(不配對)佔位符標記,只留乾淨文字
-      const clean = stripStrayPlaceholderMarkers(text);
+      const clean = stripStrayPlaceholderMarkers(s);
       if (clean) frag.appendChild(document.createTextNode(clean));
     }
 
-    while ((m = re.exec(translation)) !== null) {
+    let cursor = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
       // 配對前的散文(可能含未配對的殘留標記)
       if (m.index > cursor) {
-        pushText(translation.slice(cursor, m.index));
+        pushText(text.slice(cursor, m.index));
       }
       if (m[3] !== undefined) {
         // 自閉合 ⟦*N⟧:直接附上 atomic slot 的 deep clone
@@ -512,7 +535,7 @@
         const slot = slots[idx];
         if (slot && slot.atomic && slot.node) {
           frag.appendChild(slot.node.cloneNode(true));
-          matched++;
+          matchedRef.count++;
         }
         // slot 不存在或型別不符就丟掉這個 token(等同剝除)
       } else {
@@ -521,29 +544,28 @@
         const inner = m[2];
         const slot = slots[idx];
         if (slot && slot.nodeType === Node.ELEMENT_NODE) {
-          const node = slot.cloneNode(false);
-          // inner 本身也可能含殘留標記,一併剝乾淨
-          node.textContent = stripStrayPlaceholderMarkers(inner);
-          frag.appendChild(node);
-          matched++;
+          const shell = slot.cloneNode(false);
+          // 遞迴解析 inner -> 可能是純文字,也可能還有 ⟦M⟧ 巢狀
+          const innerFrag = parseSegment(inner, slots, matchedRef);
+          shell.appendChild(innerFrag);
+          frag.appendChild(shell);
+          matchedRef.count++;
         } else if (slot && slot.atomic && slot.node) {
           // LLM 把自閉合誤寫成配對型,仍可救回:用 deep clone,丟掉 inner
           frag.appendChild(slot.node.cloneNode(true));
-          matched++;
+          matchedRef.count++;
         } else {
-          // slot 不存在,當純文字
-          pushText(inner);
+          // slot 不存在 → 把 inner 當普通內容遞迴解析（可能還有其他有效 slot)
+          const innerFrag = parseSegment(inner, slots, matchedRef);
+          frag.appendChild(innerFrag);
         }
       }
       cursor = m.index + m[0].length;
     }
-    if (cursor < translation.length) {
-      pushText(translation.slice(cursor));
+    if (cursor < text.length) {
+      pushText(text.slice(cursor));
     }
-
-    // 寬鬆模式:只要有任何一個 slot 成功配對,就視為可用
-    const ok = matched > 0;
-    return { frag, ok, matched };
+    return frag;
   }
 
   function isVisible(el) {
@@ -855,6 +877,10 @@
         skipStats: stats,
       };
     },
+    // 佔位符序列化 / 反序列化（v0.32 新增）：純函式，無副作用，供自動化
+    // 測試驗證巢狀 `⟦N⟧…⟦/N⟧` 的 round-trip 行為。不觸發任何 API 呼叫。
+    serialize(el) { return serializeWithPlaceholders(el); },
+    deserialize(text, slots) { return deserializeWithPlaceholders(text, slots); },
     // 當前翻譯狀態快照
     getState() {
       return {

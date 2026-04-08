@@ -104,7 +104,15 @@
 - Extension 版本變更時 service worker 會自動清空快取
 - 修改 prompt、模型、段落偵測邏輯後，搭配版本 +0.01 可自動讓使用者的舊快取失效
 
-### 6. 中文排版偏好一律交給 system prompt 處理
+### 6. 翻譯範圍由 system prompt 決定，不由 selector 決定
+
+- **`content.js` 只負責「技術性必須跳過」的排除**：`<script>` / `<style>` / `<code>` / `<pre>` / `<noscript>` / 表單控制項（`input` / `button` / `select` / `textarea`），以及 HTML5 語意容器 `<nav>` / `<footer>` 和 ARIA role `banner` / `navigation` / `search` / `contentinfo`。這些是「結構上本來就不該翻」的東西。
+- **「這段讀者該不該看」之類的內容品味判斷一律交給 Gemini `systemInstruction`**，不要在 `content.js` / `lib/` 加 class 或 selector 層級的內容排除（例如不要再加 `.ambox`、`.box-*`、`.editnotice` 之類的黑名單）。
+- **原因**：selector 與 prompt 兩條路徑若同時定義「該不該翻」，容易互相衝突，且 selector 一刀切會造成誤傷（例如 Wikipedia 的維護警告框其實是讀者需要看到的內容）。統一由 prompt 控制才能依語意判斷。
+- **歷史**：v0.29–v0.30 曾用 `EXCLUDE_BY_SELECTOR = '.ambox, .box-AI-generated, .box-More_footnotes_needed'` 排除 Wikipedia 維護模板，v0.31 起移除，改由 system prompt 決定。
+- **例外**：若未來觀察到某類內容 LLM 翻得特別差 / 特別浪費 token，**不要**回頭加 selector 黑名單，而是改去 `systemInstruction` 指示 LLM 怎麼處理。
+
+### 7. 中文排版偏好一律交給 system prompt 處理
 
 - **全半形、中文標點、斷行、字距等「中文排版偏好」不要在 `content.js` / `lib/` 裡做事後 normalize**，一律透過修改 Gemini 的 `systemInstruction` 來達成。
 - **原因**：parse 路徑與 prompt 規則若同時定義同一件事容易互相衝突；全文 replace 也容易誤傷譯文中合法的全形內容（例如譯文裡的「２０２５」若被強制打回「2025」就壞掉了）。
