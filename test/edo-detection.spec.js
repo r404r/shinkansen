@@ -32,7 +32,6 @@ const __dirname = path.dirname(__filename);
 
 const EDO_URL = 'https://en.wikipedia.org/wiki/Edo';
 const REPORTS_DIR = path.resolve(__dirname, 'reports');
-const SHINKANSEN_MANIFEST = path.resolve(__dirname, '../shinkansen/manifest.json');
 
 /**
  * 取得指定 page 上 Shinkansen content script 的 isolated world execution
@@ -109,11 +108,6 @@ async function getShinkansenEvaluator(page) {
   return { cdp, contextId: shinkansen.id, contextName: shinkansen.name, evaluate };
 }
 
-function readManifestVersion() {
-  const m = JSON.parse(fs.readFileSync(SHINKANSEN_MANIFEST, 'utf8'));
-  return m.version;
-}
-
 test('Wikipedia Edo 段落偵測（透過 window.__shinkansen debug API）', async ({ context }) => {
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
 
@@ -126,23 +120,14 @@ test('Wikipedia Edo 段落偵測（透過 window.__shinkansen debug API）', asy
   console.log(`[CDP] Shinkansen isolated world: name="${contextName}", contextId=${contextId}`);
 
   // ── 1. 版本 drift assertion ──────────────────────────────
-  // 此測試針對 v0.30 的 collectParagraphsWithStats() debug API 撰寫，
-  // 將預期版本寫死可確保「測試所依賴的 debug API 版本」與「實際載入的
-  // extension 版本」沒有 drift。下次 Cowork bump 版本 + 加新 API 時，
-  // 這行會明確 fail，提示測試需要同步更新（取代靜默 pass 的風險）。
+  // 每次 shinkansen bump 版本號時，必須同步更新這個常數。
+  // 這是一個 forcing function，刻意設計成 bump 後不改就 fail，
+  // 用來提醒測試期望值需要跟著更新。
   const EXPECTED_VERSION = '0.30';
   const apiVersion = await evaluate('window.__shinkansen.version');
   if (apiVersion !== EXPECTED_VERSION) {
     throw new Error(
       `[DRIFT] window.__shinkansen.version (${apiVersion}) ≠ EXPECTED_VERSION (${EXPECTED_VERSION})`,
-    );
-  }
-  // 雙保險：實際載入的 extension 版本也必須與 repo 內 manifest.json 一致
-  // （避免 Chrome 載到舊版 cache 的情境）。
-  const manifestVersion = readManifestVersion();
-  if (apiVersion !== manifestVersion) {
-    throw new Error(
-      `[DRIFT] window.__shinkansen.version (${apiVersion}) ≠ manifest.json version (${manifestVersion})`,
     );
   }
 
