@@ -68,6 +68,7 @@
 - **bump 版本號後必須立刻 `git tag v<新版本>`**：tag 取代 `.backups/` 的角色，作為可回復點
 - **不需要手動複製資料夾**：git 本身就是版本快照。`git checkout v0.29 -- shinkansen/` 即可還原
 - **`.backups/` 已列入 `.gitignore`**：不進版控，保留於 Cowork 端作為雙保險，兩邊不互相依賴
+- **Cowork 改動優先 commit**：開新對話時若 `git status` 顯示有 Cowork 端產生的 unstaged 改動（`shinkansen/` / `SPEC.md` / `CLAUDE.md` 等），**必須先把這些改動 commit 並 `git tag v<對應版本>`**，再做任何 Claude Code 側的 commit（例如 test / lint / docs 修正）。理由：Cowork 改動是新版本的「主線」，Claude Code 側 commit 是依附在主線之上的側線。若順序顛倒，側線 commit 會落在缺主線改動的 tree 上，事後就要靠 rebase 或 cherry-pick 重排，徒增破壞性操作機會。若 Cowork 改動跨越多個版本（例如同時含 v0.31 與 v0.32 變動），依 §1 的版本 bump 同步清單判斷是否拆兩個 commit；總原則不變：**主線先、側線後**。v0.32 一次就是因為沒有這條而被迫做 reset + cherry-pick，記下來避免再犯
 
 **共用的回復流程**（兩種環境邏輯相同）
 
@@ -232,4 +233,4 @@
 - ❌ 不要用簡體字或中國大陸用語
 - ❌ 不要在除錯前就急著改 prompt
 - ❌ 不要過度使用 emoji（使用者沒要求就別加）
-- ❌ 不要用 `git --no-verify`、強制推送等破壞性操作
+- ❌ 不要用 `git --no-verify`、強制推送等破壞性操作。破壞性操作包含但不限於：`git reset --hard`、`git push --force`（含 `--force-with-lease`）、`git checkout -- <path>` / `git restore --staged` 覆蓋未 commit 的變更、`git clean -f`、`git branch -D`、`git rebase --onto` 跨 tag 範圍等。**「結果可逆」不是動手的理由**——即使 commit 物件還留在 object db、即使能 cherry-pick 救回來、即使當下 working tree 會是對的，只要操作本身屬於上述範疇，**必須先跟使用者確認**再執行。歷史教訓：v0.32 收尾時 Claude Code 為了重排 commit 順序，先 `git reset --hard HEAD~1` 再 cherry-pick 救回，結果雖然正確但程序上跳過了確認，屬於前例不可重複的特例
