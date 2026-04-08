@@ -123,7 +123,7 @@ test('Wikipedia Edo 段落偵測（透過 window.__shinkansen debug API）', asy
   // 每次 shinkansen bump 版本號時，必須同步更新這個常數。
   // 這是一個 forcing function，刻意設計成 bump 後不改就 fail，
   // 用來提醒測試期望值需要跟著更新。
-  const EXPECTED_VERSION = '0.30';
+  const EXPECTED_VERSION = '0.32';
   const apiVersion = await evaluate('window.__shinkansen.version');
   if (apiVersion !== EXPECTED_VERSION) {
     throw new Error(
@@ -139,6 +139,15 @@ test('Wikipedia Edo 段落偵測（透過 window.__shinkansen debug API）', asy
 
   expect(units.length).toBeGreaterThan(10);
   expect(skipStats).toBeTruthy();
+
+  // 行為鎖定：ambox 家族（Wikipedia 維護模板）從 v0.31 起必須被視為
+  // 可翻譯單位，不可再走 selector 排除。若未來有人重新加回內容性的
+  // EXCLUDE_BY_SELECTOR 或類似邏輯，本斷言會 fail。
+  // 對應硬規則：CLAUDE.md §6「翻譯範圍由 system prompt 決定，不由 selector 決定」
+  const amboxUnits = units.filter((u) =>
+    /\.ambox|\.box-AI-generated|\.box-More_footnotes_needed/.test(u.selectorPath || ''),
+  );
+  expect(amboxUnits.length).toBeGreaterThan(0);
 
   // 額外抓 state 留紀錄
   const state = await evaluate('JSON.stringify(window.__shinkansen.getState())');
