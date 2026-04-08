@@ -61,6 +61,7 @@
 - **範圍**：只備份 `shinkansen/` 資料夾（程式本體），不備份 `SPEC.md` / `CLAUDE.md` / `README.md`
 - **保留策略**：固定保留最新 5 份快照。每次建立新快照後，若 `.backups/` 裡超過 5 份，必須刪除版本號最舊的那幾份，讓總數回到 5
 - **冪等**：若對應版本的快照資料夾已存在（例如同一版本內第二次修改），**不要**覆蓋，略過即可（因為舊快照才是「被改之前的原始狀態」）
+- **絕對不要在 Cowork 環境碰 git**：Cowork sandbox 的 `.git/` 對 Claude 是唯讀或受保護的，`git add` / `commit` / `tag` 會因 `index.lock` 權限問題失敗，**不要嘗試**。即使使用者說「更新 git」，在 Cowork 裡的正確回應是：「Cowork 端已修改完畢，git commit 與 tag 請切到 Claude Code 側執行」——不要幫忙抓指令貼給使用者，也不要幫忙下 `rm .git/index.lock` 試圖繞過。Cowork 單純只負責「編輯檔案 + 快照 `.backups/`」，git 是 Claude Code 的責任範圍。歷史：v0.41 一次 Claude 試圖在 Cowork 跑 `git add` 被 sandbox 擋，然後生了一串長指令貼給使用者請他自己到終端機執行，這是錯的——正確做法是什麼都不做，告訴使用者「換 Claude Code 開工」即可
 
 **B. Claude Code 環境（本機有 git 的環境，自 v0.28 起使用）**
 
