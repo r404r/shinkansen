@@ -123,7 +123,7 @@ test('Wikipedia Edo 段落偵測（透過 window.__shinkansen debug API）', asy
   // 每次 shinkansen bump 版本號時，必須同步更新這個常數。
   // 這是一個 forcing function，刻意設計成 bump 後不改就 fail，
   // 用來提醒測試期望值需要跟著更新。
-  const EXPECTED_VERSION = '0.44';
+  const EXPECTED_VERSION = '0.45';
   const apiVersion = await evaluate('window.__shinkansen.version');
   if (apiVersion !== EXPECTED_VERSION) {
     throw new Error(

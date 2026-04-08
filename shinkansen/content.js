@@ -963,6 +963,75 @@
     return jobs;
   }
 
+  /**
+   * 翻譯核心:把一組 units 序列化 → 打包 → 並行送翻 → 注入 DOM。
+   * v0.45 抽出,供 translatePage (初次翻譯) 與 rescanTick (延遲補抓) 共用。
+   * 不負責:顯示主 toast / 設定 STATE.translated / 發送 badge 訊息。這些
+   * 由呼叫者 (translatePage) 自己處理,rescan 路徑則走靜默/補抓 toast。
+   *
+   * onProgress: 可選 callback(done, total),每批完成時呼叫一次
+   */
+  async function translateUnits(units, { onProgress } = {}) {
+    const total = units.length;
+    // 對每個段落都先序列化成「文字 + slots」,文字內含 ⟦N⟧…⟦/N⟧ 佔位符。
+    // 沒有可保留 inline 元素的段落 slots 為空陣列,行為等同舊版純文字翻譯。
+    // v0.36 起 units 可能含 element 或 fragment 兩種型態,要分別處理。
+    const serialized = units.map(unit => {
+      if (unit.kind === 'fragment') {
+        return serializeFragmentWithPlaceholders(unit);
+      }
+      const el = unit.el;
+      if (containsMedia(el)) {
+        return { text: el.innerText.trim(), slots: [] };
+      }
+      if (!hasPreservableInline(el)) {
+        return { text: el.innerText.trim(), slots: [] };
+      }
+      return serializeWithPlaceholders(el);
+    });
+    const texts = serialized.map(s => s.text);
+    const slotsList = serialized.map(s => s.slots);
+
+    // 讀取並發上限設定(若讀取失敗就用 default)
+    let maxConcurrent = DEFAULT_MAX_CONCURRENT;
+    try {
+      const { maxConcurrentBatches } = await chrome.storage.sync.get('maxConcurrentBatches');
+      if (Number.isFinite(maxConcurrentBatches) && maxConcurrentBatches > 0) {
+        maxConcurrent = maxConcurrentBatches;
+      }
+    } catch (_) { /* 保持 default */ }
+
+    let done = 0;
+    const pageUsage = { inputTokens: 0, outputTokens: 0, costUSD: 0, cacheHits: 0 };
+    const jobs = packBatches(texts, units, slotsList);
+    const failures = [];
+
+    await runWithConcurrency(jobs, maxConcurrent, async (job) => {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'TRANSLATE_BATCH',
+          payload: { texts: job.texts },
+        });
+        if (!response?.ok) throw new Error(response?.error || '未知錯誤');
+        const translations = response.result;
+        if (response.usage) {
+          pageUsage.inputTokens += response.usage.inputTokens || 0;
+          pageUsage.outputTokens += response.usage.outputTokens || 0;
+          pageUsage.costUSD += response.usage.costUSD || 0;
+          pageUsage.cacheHits += response.usage.cacheHits || 0;
+        }
+        translations.forEach((tr, j) => injectTranslation(job.units[j], tr, job.slots[j]));
+        done += job.texts.length;
+        if (onProgress) onProgress(done, total);
+      } catch (err) {
+        console.warn('[Shinkansen] batch failed', { start: job.start, error: err.message });
+        failures.push({ start: job.start, count: job.texts.length, error: err.message });
+      }
+    });
+
+    return { done, total, failures, pageUsage };
+  }
+
   async function translatePage() {
     if (STATE.translated) {
       restorePage();
@@ -979,74 +1048,11 @@
       startTimer: true,
     });
 
-    // 讀取並發上限設定(若讀取失敗就用 default)
-    let maxConcurrent = DEFAULT_MAX_CONCURRENT;
     try {
-      const { maxConcurrentBatches } = await chrome.storage.sync.get('maxConcurrentBatches');
-      if (Number.isFinite(maxConcurrentBatches) && maxConcurrentBatches > 0) {
-        maxConcurrent = maxConcurrentBatches;
-      }
-    } catch (_) { /* 保持 default */ }
-
-    // 對每個段落都先序列化成「文字 + slots」，文字內含 ⟦N⟧…⟦/N⟧ 佔位符。
-    // 沒有可保留 inline 元素的段落 slots 為空陣列，行為等同舊版純文字翻譯。
-    // v0.36 起 units 可能含 element 或 fragment 兩種型態,要分別處理。
-    const serialized = units.map(unit => {
-      if (unit.kind === 'fragment') {
-        // Fragment 只涵蓋 parent 內一段連續的 inline 子節點,沒有 block 後代。
-        // 一律走 serializer（會偵測內部有無 placeholder 元素,無則 slots=[]）。
-        return serializeFragmentWithPlaceholders(unit);
-      }
-      // element 模式（預設）
-      const el = unit.el;
-      if (containsMedia(el)) {
-        // 含媒體的段落不做佔位符 — 走舊的 text-node 替換路徑，避免複雜度爆炸
-        return { text: el.innerText.trim(), slots: [] };
-      }
-      if (!hasPreservableInline(el)) {
-        return { text: el.innerText.trim(), slots: [] };
-      }
-      return serializeWithPlaceholders(el);
-    });
-    const texts = serialized.map(s => s.text);
-    const slotsList = serialized.map(s => s.slots);
-    let done = 0;
-    // 本次翻譯的 token / 成本累計（只算真的打 API 的部分，快取命中 = 0)
-    const pageUsage = { inputTokens: 0, outputTokens: 0, costUSD: 0, cacheHits: 0 };
-
-    // 建立所有批次任務（字元預算 + 段數上限雙門檻 greedy 打包）
-    const jobs = packBatches(texts, units, slotsList);
-
-    // 並行翻譯：concurrency pool。若某批失敗,該批被標記並繼續其他批。
-    // 注意:回傳順序不保證,但每批注入時用自己的 els 陣列,
-    // 所以段落會注入到正確位置(按原始 DOM index)。
-    const failures = [];
-    try {
-      await runWithConcurrency(jobs, maxConcurrent, async (job) => {
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'TRANSLATE_BATCH',
-            payload: { texts: job.texts },
-          });
-          if (!response?.ok) throw new Error(response?.error || '未知錯誤');
-          const translations = response.result;
-          // 累加 token 與成本(並行寫入,但 JS 單執行緒,++ 與 += 原子,安全)
-          if (response.usage) {
-            pageUsage.inputTokens += response.usage.inputTokens || 0;
-            pageUsage.outputTokens += response.usage.outputTokens || 0;
-            pageUsage.costUSD += response.usage.costUSD || 0;
-            pageUsage.cacheHits += response.usage.cacheHits || 0;
-          }
-          // 立即注入這一批的譯文
-          translations.forEach((tr, j) => injectTranslation(job.units[j], tr, job.slots[j]));
-          done += job.texts.length;
-          showToast('loading', `翻譯中… ${done} / ${total}`, {
-            progress: done / total,
-          });
-        } catch (err) {
-          console.warn('[Shinkansen] batch failed', { start: job.start, error: err.message });
-          failures.push({ start: job.start, count: job.texts.length, error: err.message });
-        }
+      const { done, failures, pageUsage } = await translateUnits(units, {
+        onProgress: (d, t) => showToast('loading', `翻譯中… ${d} / ${t}`, {
+          progress: d / t,
+        }),
       });
 
       // 有部分失敗 → 顯示部分完成的訊息,但仍標記為已翻譯
@@ -1057,17 +1063,12 @@
           stopTimer: true,
           detail: firstErr.slice(0, 120),
         });
-        // 不 return;已完成的段落仍保持譯文
       }
 
       STATE.translated = true;
-      // 通知 background 在 extension icon 上點亮紅點 badge
       chrome.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
 
-      // 只有全部成功才顯示成功 toast(有 failures 的話上面已經顯示過錯誤 toast)
       if (!failures.length) {
-        // 組合完成訊息：主訊息只放段數，token/費用放 detail 第二行，
-        // 避免同一行過長被擠到換行。
         const totalTokens = pageUsage.inputTokens + pageUsage.outputTokens;
         const successMsg = `翻譯完成 （${total} 段）`;
         let detail;
@@ -1080,12 +1081,83 @@
           progress: 1,
           stopTimer: true,
           detail,
-          // 不 autoHide：讓使用者自己按 × 關閉
         });
       }
+
+      // v0.45: 安排延遲 rescan 補抓 hydration 後才 render 的內容
+      // (例如 Nikkei 的 READ NEXT 區,Next.js 把它放在 hydration 之後才 mount)
+      scheduleRescanForLateContent();
     } catch (err) {
       console.error('[Shinkansen]', err);
-      showToast('error', `翻譯失敗：${err.message}`, { stopTimer: true });
+      showToast('error', `翻譯失敗:${err.message}`, { stopTimer: true });
+    }
+  }
+
+  // ─── v0.45: 延遲 rescan 機制 ─────────────────────────────
+  // 動機:Nikkei Asia 這類 Next.js 站的 READ NEXT 區在 `document_idle` 階段
+  // (content.js 最早可執行的時機) 還沒 attach 到 DOM,React hydration 之後
+  // 才 mount。初次 translatePage 的 walker 抓不到,結果整個下半截都沒翻。
+  // 使用者手動再按一次 Alt+S 就會翻,因為第二次 walker 看到的已經是
+  // hydration 完成的完整 DOM——這正是採證時看到的行為,也證明問題純粹
+  // 在於「第一次 walker 跑太早」,不是偵測規則本身有誤。
+  //
+  // 修法:初次 translatePage 成功後,在兩個退避時間點 (1200ms, 3000ms) 再
+  // 各跑一次 `collectParagraphs`。walker 會自動 REJECT 已帶
+  // `data-shinkansen-translated` 標記的節點,所以 rescan 拿到的自然是
+  // 「上次翻完之後才出現的新段落」。若有新段落就打包送翻、注入;沒有
+  // 就靜默跳過,避免無謂打擾。
+  //
+  // 為什麼不用 MutationObserver:
+  //   - SPA 動態內容(Twitter timeline / Substack infinite scroll)會無限觸發
+  //     observer,翻譯成本會爆炸
+  //   - 需要很複雜的節流與去重
+  //   - 兩次退避式 rescan 已經足以處理 Nikkei 這類「一次性 hydration」的
+  //     常見場景,而且成本固定可預測
+  //
+  // 為什麼兩次而不是一次:第一次 rescan 可能還趕在 hydration 完成之前
+  // (尤其手機 / 慢機),3000ms 再補一次提供安全餘量。兩次都沒抓到就停。
+  const RESCAN_DELAYS_MS = [1200, 3000];
+  let rescanAttempts = 0;
+  let rescanTimer = null;
+
+  function cancelRescan() {
+    if (rescanTimer) {
+      clearTimeout(rescanTimer);
+      rescanTimer = null;
+    }
+    rescanAttempts = 0;
+  }
+
+  function scheduleRescanForLateContent() {
+    cancelRescan();
+    rescanTimer = setTimeout(rescanTick, RESCAN_DELAYS_MS[0]);
+  }
+
+  async function rescanTick() {
+    rescanTimer = null;
+    // 使用者可能已經按 Alt+S 切回原文;此時不該再注入譯文
+    if (!STATE.translated) return;
+    const newUnits = collectParagraphs();
+    if (newUnits.length > 0) {
+      try {
+        const { done, failures } = await translateUnits(newUnits);
+        // 離開 await 後再次檢查:rescan 期間使用者可能已按還原
+        if (!STATE.translated) return;
+        if (done > 0 && failures.length === 0) {
+          showToast('success', `補抓 ${done} 段新內容`, {
+            progress: 1,
+            autoHideMs: 3000,
+          });
+        }
+        // 有 failures 也靜默;console.warn 已在 translateUnits 內做了
+      } catch (err) {
+        console.warn('[Shinkansen] rescan failed', err);
+      }
+    }
+    // 即使這次沒抓到內容,也再試一次(頁面可能還在 hydrate)
+    rescanAttempts += 1;
+    if (rescanAttempts < RESCAN_DELAYS_MS.length) {
+      rescanTimer = setTimeout(rescanTick, RESCAN_DELAYS_MS[rescanAttempts]);
     }
   }
 
@@ -1253,6 +1325,10 @@
   }
 
   function restorePage() {
+    // v0.45: 取消掉任何還沒觸發的延遲 rescan,避免使用者按還原之後
+    // rescan tick 又把新段落翻出來,造成「已按還原但中文仍零星冒出」。
+    // 注意:目前正在 await 中的 rescan 還是可能寫入,接受這個小風險。
+    cancelRescan();
     STATE.originalHTML.forEach((originalHTML, el) => {
       el.innerHTML = originalHTML;
       el.removeAttribute('data-shinkansen-translated');
