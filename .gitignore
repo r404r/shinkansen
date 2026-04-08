@@ -6,6 +6,7 @@ node_modules/
 test-results/
 playwright-report/
 playwright/.cache/
+test/reports/
 
 # 系統垃圾
 .DS_Store

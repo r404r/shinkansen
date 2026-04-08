@@ -1,0 +1,14 @@
+{
+  "name": "shinkansen-tests",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shinkansen Chrome Extension 的 Playwright 自動化測試 harness",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:edo": "playwright test edo-detection.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
