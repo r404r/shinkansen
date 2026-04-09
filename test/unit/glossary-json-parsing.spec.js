@@ -1,12 +1,7 @@
-// Unit test: extractGlossary 的 JSON 解析容錯（v0.72 regression）
+// Unit test: extractGlossary 的 JSON 解析容錯 + request body 驗證
 //
-// v0.72 移除了 Gemini JSON mode（responseMimeType: 'application/json'），
-// 改為純文字輸出由 prompt 指定 JSON 格式。解析端需要處理：
-// - markdown code fence 包裹（```json ... ``` 或 ``` ... ```）
-// - 前後有說明文字
-// - JSON object（含 array 的 key 名稱不固定）
-// - 截斷的 JSON（finishReason=MAX_TOKENS）
-// - 空回應、API 錯誤
+// v0.72: 移除 JSON mode，改為純文字 + 解析端容錯
+// v0.74: 加入 thinkingConfig: { thinkingBudget: 0 } 防止 thinking token 截斷
 import { test, expect } from '@playwright/test';
 
 // ── Mock chrome.storage ──────────────────────────────────────
@@ -17,17 +12,21 @@ globalThis.chrome = {
   },
 };
 
+let lastCapturedBody = null;
 function mockGeminiResponse(rawText, { ok = true, status = 200, errorMessage } = {}) {
-  globalThis.fetch = async () => ({
-    ok,
-    status,
-    json: async () => ok
-      ? {
-          candidates: [{ content: { parts: [{ text: rawText }] }, finishReason: 'STOP' }],
-          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
-        }
-      : { error: { message: errorMessage || `HTTP ${status}` } },
-  });
+  globalThis.fetch = async (_url, options) => {
+    lastCapturedBody = JSON.parse(options.body);
+    return {
+      ok,
+      status,
+      json: async () => ok
+        ? {
+            candidates: [{ content: { parts: [{ text: rawText }] }, finishReason: 'STOP' }],
+            usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
+          }
+        : { error: { message: errorMessage || `HTTP ${status}` } },
+    };
+  };
 }
 
 const { extractGlossary } = await import('../../shinkansen/lib/gemini.js');
@@ -131,5 +130,18 @@ test.describe('glossary JSON 解析容錯', () => {
     const result = await extractGlossary('some text', settings);
     expect(result.glossary).toEqual([]);
     expect(result._diag).toContain('500');
+  });
+
+  // v0.74 regression: thinking token 截斷防治
+  test('request body 包含 thinkingConfig: { thinkingBudget: 0 }', async () => {
+    mockGeminiResponse('[{"source":"test","target":"測試"}]');
+    await extractGlossary('some text', settings);
+    expect(lastCapturedBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+  });
+
+  test('request body 不包含 responseMimeType（v0.72 已移除 JSON mode）', async () => {
+    mockGeminiResponse('[{"source":"test","target":"測試"}]');
+    await extractGlossary('some text', settings);
+    expect(lastCapturedBody.generationConfig.responseMimeType).toBeUndefined();
   });
 });
