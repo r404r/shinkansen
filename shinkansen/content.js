@@ -1206,9 +1206,9 @@
    * 由呼叫者 (translatePage) 自己處理,rescan 路徑則走靜默/補抓 toast。
    *
    * onProgress: 可選 callback(done, total),每批完成時呼叫一次
-   * glossary: v0.69 可選的術語對照表,帶入則每批翻譯都會附上
+   * referencePairs: v0.73 可選的首批翻譯參考對（方案 3），格式 [{source, target}, ...]
    */
-  async function translateUnits(units, { onProgress, glossary } = {}) {
+  async function translateUnits(units, { onProgress, referencePairs } = {}) {
     const total = units.length;
     // 對每個段落都先序列化成「文字 + slots」,文字內含 ⟦N⟧…⟦/N⟧ 佔位符。
     // 沒有可保留 inline 元素的段落 slots 為空陣列,行為等同舊版純文字翻譯。
@@ -1253,7 +1253,7 @@
       try {
         const response = await chrome.runtime.sendMessage({
           type: 'TRANSLATE_BATCH',
-          payload: { texts: job.texts, glossary: glossary || null },
+          payload: { texts: job.texts, referencePairs: referencePairs || null },
         });
         if (!response?.ok) throw new Error(response?.error || '未知錯誤');
         const translations = response.result;
@@ -1290,30 +1290,20 @@
     }
     const total = units.length;
 
-    // ─── v0.69: 術語表前置流程 ────────────────────────────
-    // 讀取術語表設定（門檻值）
+    // ─── v0.73: 術語表一致化（方案 3：首批播種 + 其餘平行） ─────────
+    // 讀取開關
     let glossaryEnabled = true;
-    let skipThreshold = GLOSSARY_SKIP_THRESHOLD_DEFAULT;
-    let blockingThreshold = GLOSSARY_BLOCKING_THRESHOLD_DEFAULT;
-    let glossaryTimeout = GLOSSARY_TIMEOUT_DEFAULT;
     try {
       const { glossary: gc } = await chrome.storage.sync.get('glossary');
-      if (gc) {
-        glossaryEnabled = gc.enabled !== false;
-        skipThreshold = gc.skipThreshold ?? skipThreshold;
-        blockingThreshold = gc.blockingThreshold ?? blockingThreshold;
-        glossaryTimeout = gc.timeoutMs ?? glossaryTimeout;
-      }
+      if (gc) glossaryEnabled = gc.enabled !== false;
     } catch (_) { /* 保持 default */ }
 
-    // 先序列化拿到 texts，用來估算批次數
+    // 估算批次數（決定是否需要術語表流程）
     const preSerialized = units.map(unit => {
       if (unit.kind === 'fragment') return { text: (unit.parent?.innerText || '').trim() };
       return { text: (unit.el?.innerText || '').trim() };
     });
     const preTexts = preSerialized.map(s => s.text);
-
-    // 估算批次數（用簡化版打包邏輯計算，不需要完整的 slotsList）
     let batchCount = 0;
     {
       let chars = 0, segs = 0;
@@ -1328,63 +1318,11 @@
       if (segs > 0) batchCount++;
     }
 
-    let glossary = null;
+    // 方案 3：若啟用且 ≥2 批，先翻首批收集 reference pairs，其餘帶著平行翻
+    // ≤1 批不需要一致化（沒有跨批問題）
+    const useSeeding = glossaryEnabled && batchCount >= 2;
 
-    if (glossaryEnabled && batchCount > skipThreshold) {
-      // 需要建術語表
-      const compressedText = extractGlossaryInput(units);
-      const inputHash = await sha1(compressedText);
-      console.log(`[Shinkansen] glossary: batchCount=${batchCount}, mode=${batchCount > blockingThreshold ? 'blocking' : 'fire-and-forget'}, compressedChars=${compressedText.length}, hash=${inputHash.slice(0, 8)}`);
-
-      if (batchCount > blockingThreshold) {
-        // ─── 長文：阻塞等術語表 ─────────────────────
-        showToast('loading', '建立術語表⋯', { progress: 0, startTimer: true });
-        try {
-          const glossaryResult = await Promise.race([
-            chrome.runtime.sendMessage({
-              type: 'EXTRACT_GLOSSARY',
-              payload: { compressedText, inputHash },
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('術語表逾時')), glossaryTimeout)
-            ),
-          ]);
-          if (glossaryResult?.ok && glossaryResult.glossary?.length > 0) {
-            glossary = glossaryResult.glossary;
-            console.log(`[Shinkansen] glossary ready: ${glossary.length} terms`
-              + (glossaryResult.fromCache ? ' (cached)' : ''));
-          } else if (glossaryResult?.ok) {
-            console.warn('[Shinkansen] glossary returned ok but empty (no terms extracted)',
-              glossaryResult.fromCache ? '[FROM CACHE — 上次的空結果被快取了，請清除快取再試]' : '',
-              glossaryResult._diag ? `diag: ${glossaryResult._diag}` : '',
-              `usage: in=${glossaryResult.usage?.inputTokens || 0} out=${glossaryResult.usage?.outputTokens || 0}`);
-          } else {
-            console.warn('[Shinkansen] glossary returned not ok:', glossaryResult?.error, glossaryResult?._diag);
-          }
-        } catch (err) {
-          console.warn('[Shinkansen] glossary failed/timeout, proceeding without', err.message);
-        }
-      } else {
-        // ─── 中檔：fire-and-forget，第一批不等 ──────────
-        // 術語表請求在背景跑，透過 Promise 存起來供後續批次使用
-        const glossaryPromise = chrome.runtime.sendMessage({
-          type: 'EXTRACT_GLOSSARY',
-          payload: { compressedText, inputHash },
-        }).then(res => {
-          if (res?.ok && res.glossary?.length > 0) {
-            console.log(`[Shinkansen] glossary arrived (async): ${res.glossary.length} terms`);
-            return res.glossary;
-          }
-          return null;
-        }).catch(err => {
-          console.warn('[Shinkansen] glossary async failed', err.message);
-          return null;
-        });
-        // 把 promise 存到 STATE 上，translateUnits 的 mid-flight 策略會用到
-        STATE._glossaryPromise = glossaryPromise;
-      }
-    }
-    // ─── 術語表前置流程結束 ────────────────────────────────
+    console.log(`[Shinkansen] translatePage: ${total} units, ~${batchCount} batches, glossary=${glossaryEnabled ? 'on' : 'off'}, seeding=${useSeeding}`);
 
     showToast('loading', `翻譯中… 0 / ${total}`, {
       progress: 0,
@@ -1392,24 +1330,92 @@
     });
 
     try {
-      // v0.69: 中檔模式 — 若有 _glossaryPromise 但 glossary 還是 null，
-      // 嘗試在送翻譯前等一小段時間讓它回來（最多 2 秒，不影響首批體驗太多）
-      if (!glossary && STATE._glossaryPromise) {
-        try {
-          glossary = await Promise.race([
-            STATE._glossaryPromise,
-            new Promise(resolve => setTimeout(() => resolve(null), 2000)),
-          ]);
-        } catch (_) { /* ignore */ }
-        STATE._glossaryPromise = null;
-      }
+      let referencePairs = null;
 
-      const { done, failures, pageUsage } = await translateUnits(units, {
-        glossary,
-        onProgress: (d, t) => showToast('loading', `翻譯中… ${d} / ${t}`, {
-          progress: d / t,
-        }),
-      });
+      if (useSeeding) {
+        // ── 首批播種：單獨翻譯第一批，收集 source↔target pairs ──
+        // 用 packBatches 的第一批 units 做為種子
+        const seedSize = Math.min(total, MAX_UNITS_PER_BATCH);
+        const seedUnits = units.slice(0, seedSize);
+        const remainingUnits = units.slice(seedSize);
+
+        console.log(`[Shinkansen] seeding: translating first ${seedSize} units to build reference...`);
+        showToast('loading', `播種翻譯中… 0 / ${seedSize}`, { progress: 0 });
+
+        const seedResult = await translateUnits(seedUnits, {
+          onProgress: (d, t) => showToast('loading', `播種翻譯中… ${d} / ${t}`, {
+            progress: d / (total), // 分母用 total 讓進度條是整頁的
+          }),
+        });
+
+        // 從首批結果收集 reference pairs（source → target）
+        // translateUnits 完成後，seedUnits 的 DOM 已被注入譯文，
+        // 但我們需要 source 與 target 的配對。用 seedUnits 的 _originalText
+        // （restorePage 用的備份）與注入後的 innerText 來組 pairs。
+        referencePairs = [];
+        for (const unit of seedUnits) {
+          const source = unit._originalText || '';
+          const el = unit.kind === 'fragment' ? unit.parent : unit.el;
+          const target = el ? el.innerText.trim() : '';
+          // 只收集有意義的配對（兩邊都有內容、且有變化）
+          if (source && target && source !== target) {
+            referencePairs.push({ source, target });
+          }
+        }
+        console.log(`[Shinkansen] seeding done: ${referencePairs.length} reference pairs collected`);
+        if (referencePairs.length > 0 && referencePairs.length <= 5) {
+          // 數量少的時候印出來方便 debug
+          console.log('[Shinkansen] reference pairs:', referencePairs.map(p =>
+            `${p.source.slice(0, 40)}… → ${p.target.slice(0, 40)}…`));
+        } else if (referencePairs.length > 5) {
+          console.log('[Shinkansen] reference pairs (first 5):', referencePairs.slice(0, 5).map(p =>
+            `${p.source.slice(0, 40)}… → ${p.target.slice(0, 40)}…`));
+        }
+
+        // 若首批沒收集到有效 pairs，放棄 seeding，後續當普通翻譯
+        if (referencePairs.length === 0) {
+          console.warn('[Shinkansen] seeding: no valid pairs collected, proceeding without reference');
+          referencePairs = null;
+        }
+
+        // 翻譯剩餘 units，帶著 referencePairs
+        if (remainingUnits.length > 0) {
+          const seedDone = seedResult.done;
+          const restResult = await translateUnits(remainingUnits, {
+            referencePairs,
+            onProgress: (d, t) => showToast('loading', `翻譯中… ${seedDone + d} / ${total}`, {
+              progress: (seedDone + d) / total,
+            }),
+          });
+
+          // 合併 usage
+          var done = seedResult.done + restResult.done;
+          var failures = [...seedResult.failures, ...restResult.failures];
+          var pageUsage = {
+            inputTokens: seedResult.pageUsage.inputTokens + restResult.pageUsage.inputTokens,
+            outputTokens: seedResult.pageUsage.outputTokens + restResult.pageUsage.outputTokens,
+            cachedTokens: seedResult.pageUsage.cachedTokens + restResult.pageUsage.cachedTokens,
+            costUSD: seedResult.pageUsage.costUSD + restResult.pageUsage.costUSD,
+            billedInputTokens: seedResult.pageUsage.billedInputTokens + restResult.pageUsage.billedInputTokens,
+            billedCostUSD: seedResult.pageUsage.billedCostUSD + restResult.pageUsage.billedCostUSD,
+            cacheHits: seedResult.pageUsage.cacheHits + restResult.pageUsage.cacheHits,
+          };
+        } else {
+          var done = seedResult.done;
+          var failures = seedResult.failures;
+          var pageUsage = seedResult.pageUsage;
+        }
+      } else {
+        // 不需要 seeding（關閉或 ≤1 批），直接平行翻譯全部
+        const result = await translateUnits(units, {
+          onProgress: (d, t) => showToast('loading', `翻譯中… ${d} / ${t}`, {
+            progress: d / t,
+          }),
+        });
+        var done = result.done;
+        var failures = result.failures;
+        var pageUsage = result.pageUsage;
+      }
 
       // 有部分失敗 → 顯示部分完成的訊息,但仍標記為已翻譯
       if (failures.length) {

@@ -105,6 +105,13 @@ async function init() {
   const { autoTranslate = true } = await chrome.storage.sync.get(['autoTranslate']);
   const { apiKey = '' } = await chrome.storage.local.get(['apiKey']);
   $('auto').checked = autoTranslate;
+
+  // v0.73: 術語表一致化開關（讀 chrome.storage.sync 的 glossary.enabled）
+  try {
+    const { glossary: gc } = await chrome.storage.sync.get('glossary');
+    $('glossary-toggle').checked = gc?.enabled ?? true;
+  } catch { /* 讀取失敗時維持預設 checked */ }
+
   if (!apiKey) {
     statusEl.textContent = '狀態：⚠ 尚未設定 API Key';
     statusEl.style.color = '#ff3b30';
@@ -132,6 +139,17 @@ $('translate-btn').addEventListener('click', async () => {
 
 $('auto').addEventListener('change', async (e) => {
   await chrome.storage.sync.set({ autoTranslate: e.target.checked });
+});
+
+// v0.73: 術語表一致化開關 — 寫入 chrome.storage.sync 的 glossary.enabled
+$('glossary-toggle').addEventListener('change', async (e) => {
+  try {
+    const { glossary: gc = {} } = await chrome.storage.sync.get('glossary');
+    gc.enabled = e.target.checked;
+    await chrome.storage.sync.set({ glossary: gc });
+  } catch (err) {
+    console.error('[Shinkansen] popup: failed to save glossary toggle', err);
+  }
 });
 
 $('options-btn').addEventListener('click', () => {
