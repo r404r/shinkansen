@@ -347,6 +347,7 @@ async function translateChunk(texts, settings, glossary) {
     topP,
     topK,
     maxOutputTokens,
+    useThinking,
     systemInstruction,
   } = geminiConfig;
 
@@ -360,6 +361,16 @@ async function translateChunk(texts, settings, glossary) {
   // 術語表是「參考資料」放最後。若術語表夾在中間會稀釋 LLM 對佔位符規則的注意力，
   // 導致 ⟦*N⟧ 標記洩漏到譯文裡（v0.70 的 bug）。
   let effectiveSystem = systemInstruction;
+
+  // v0.77: 多段翻譯時，追加明確的分隔符規則。
+  // 根因：system prompt 第 4 條只說「以特定分隔符號區隔」太模糊，Gemini 有時會
+  // 忽略 <<<SHINKANSEN_SEP>>> 分隔符，把所有段落翻譯合併成一段輸出，觸發
+  // per-segment fallback（逐段重送 API），造成該批次耗時 10 倍以上。
+  // 這裡明確告訴模型分隔符的完整字串和預期的段數，確保輸出格式正確。
+  if (texts.length > 1) {
+    effectiveSystem = effectiveSystem +
+      `\n\n額外規則（多段翻譯分隔符，極重要）:\n本批次包含 ${texts.length} 段文字，段與段之間以分隔符 <<<SHINKANSEN_SEP>>> 隔開。你的輸出也必須用完全相同的分隔符 <<<SHINKANSEN_SEP>>> 將各段譯文隔開。輸出必須恰好包含 ${texts.length} 段譯文和 ${texts.length - 1} 個分隔符，順序與輸入一一對應。不可合併段落、不可省略分隔符、不可增減段數。`;
+  }
 
   // v0.50: 若本批文字含段內換行（\n，來自序列化時 <br> 的還原）,追加一條規則
   // 要求 LLM 在對應位置保留 \n 段落分隔。MJML / Mailjet 等 HTML email 模板用
@@ -391,6 +402,12 @@ async function translateChunk(texts, settings, glossary) {
       topP,
       topK,
       maxOutputTokens,
+      // v0.77: 預設關閉思考功能（useThinking=false）。gemini-2.5-flash 是
+      // thinking model，思考 token 計入 maxOutputTokens 額度，可能導致輸出
+      // 截斷 → segment mismatch → per-segment fallback（極慢）。
+      // v0.79: 改為可透過設定頁開關控制。開啟時移除此限制，讓模型自行決定
+      // 思考預算（可能提高翻譯品質但增加延遲與 token 消耗）。
+      ...(useThinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -414,10 +431,12 @@ async function translateChunk(texts, settings, glossary) {
 
   const t0 = Date.now();
   const maxRetries = typeof settings?.maxRetries === 'number' ? settings.maxRetries : 3;
+  console.log(`[Shinkansen] translateChunk: sending ${texts.length} segments, ${joined.length} chars`);
   const resp = await fetchWithRetry(url, body, { maxRetries });
 
   const json = await resp.json();
   const ms = Date.now() - t0;
+  console.log(`[Shinkansen] translateChunk: API responded in ${ms}ms (${texts.length} segments)`);
 
   if (!resp.ok) {
     await debugLog('error', 'gemini error', { status: resp.status, json, ms });
@@ -443,6 +462,7 @@ async function translateChunk(texts, settings, glossary) {
   const parts = text.split(DELIMITER).map(s => s.trim());
   // 若回傳段數不符，且本批不只一段，則 fallback 改為逐段單獨翻譯，確保對齊
   if (parts.length !== texts.length) {
+    console.warn(`[Shinkansen] ⚠️ SEGMENT MISMATCH: expected ${texts.length} segments, got ${parts.length} — falling back to per-segment translation (this will be SLOW)`);
     await debugLog('warn', 'segment count mismatch — fallback to per-segment', {
       expected: texts.length, got: parts.length,
     });
@@ -455,13 +475,17 @@ async function translateChunk(texts, settings, glossary) {
     // 所以還是要算進總成本裡。
     const aligned = [];
     const aggUsage = { ...chunkUsage };
-    for (const seg of texts) {
-      const r = await translateChunk([seg], settings, glossary);
+    const tFallback0 = Date.now();
+    for (let fi = 0; fi < texts.length; fi++) {
+      const tSeg0 = Date.now();
+      const r = await translateChunk([texts[fi]], settings, glossary);
+      console.log(`[Shinkansen]   fallback segment ${fi + 1}/${texts.length}: ${Date.now() - tSeg0}ms`);
       aligned.push(r.parts[0] || '');
       aggUsage.inputTokens += r.usage.inputTokens;
       aggUsage.outputTokens += r.usage.outputTokens;
       aggUsage.cachedTokens += r.usage.cachedTokens || 0;
     }
+    console.log(`[Shinkansen] fallback complete: ${texts.length} segments in ${Date.now() - tFallback0}ms (original batch took ${ms}ms)`);
     return { parts: aligned, usage: aggUsage };
   }
   return { parts, usage: chunkUsage };

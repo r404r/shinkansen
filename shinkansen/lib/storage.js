@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
     topP: 0.95,
     topK: 40,
     maxOutputTokens: 8192,
+    useThinking: false,    // v0.79: 是否啟用 Gemini thinking model 思考功能
     systemInstruction: DEFAULT_SYSTEM_PROMPT,
   },
   // 計價設定（USD per 1M tokens)。預設值為 gemini-2.5-flash 的官方報價，

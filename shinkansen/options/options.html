@@ -105,6 +105,11 @@
 
     <section>
       <h2>LLM 參數微調</h2>
+      <label class="switch">
+        <input type="checkbox" id="useThinking">
+        <span>啟用 Thinking（深度思考）</span>
+      </label>
+      <small class="muted" style="display:block;margin-top:-0.5em;margin-bottom:1em;">Gemini 2.5+ 系列是 thinking model，開啟後模型會先內部推理再翻譯，可能提升品質但會增加延遲與 token 消耗。預設關閉，因為思考 token 計入 Max Output Tokens 額度，可能導致多段翻譯被截斷。</small>
       <label>
         Temperature
         <input type="number" id="temperature" step="0.1" min="0" max="2">

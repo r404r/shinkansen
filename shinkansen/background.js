@@ -267,16 +267,24 @@ async function handleTranslate(payload, sender) {
     // 先過 rate limiter 取得一個 slot(會自動等待到 RPM/TPM/RPD 都有餘裕)
     if (!limiter) await initLimiter();
     const estTokens = estimateInputTokens(missingTexts);
+    const tAcq0 = Date.now();
     await limiter.acquire(estTokens, /* priority */ 1);
+    const acquireMs = Date.now() - tAcq0;
+    if (acquireMs > 50) {
+      console.log(`[Shinkansen] rate limiter waited ${acquireMs}ms (estTokens=${estTokens})`);
+    }
 
     const t0 = Date.now();
+    console.log(`[Shinkansen] handleTranslate: calling translateBatch with ${missingTexts.length} texts (${missingTexts.reduce((s, t) => s + (t?.length || 0), 0)} chars)`);
     const res = await translateBatch(missingTexts, settings, glossary);
     fresh = res.translations;
     batchUsage = res.usage;
     batchCostUSD = computeCostUSD(batchUsage.inputTokens, batchUsage.outputTokens, settings.pricing);
+    const batchMs = Date.now() - t0;
+    console.log(`[Shinkansen] handleTranslate: translateBatch done in ${batchMs}ms (${missingTexts.length} texts, input=${batchUsage.inputTokens} tok, output=${batchUsage.outputTokens} tok)`);
     debugLog('info', 'gemini batch done', {
       count: missingTexts.length,
-      ms: Date.now() - t0,
+      ms: batchMs,
       tabId: sender?.tab?.id,
       usage: batchUsage,
       costUSD: batchCostUSD,

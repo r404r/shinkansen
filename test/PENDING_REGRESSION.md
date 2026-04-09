@@ -18,7 +18,14 @@
 
 ## 條目
 
-(目前沒有 pending 條目)
+### v0.77/v0.78 — 2026-04-09 — Gemini 忽略分隔符導致 segment mismatch fallback
+- **症狀**：翻譯某些頁面時，某批次的 Gemini 回應只有 1 段而非預期的 14 段（`SEGMENT MISMATCH: expected 14 segments, got 1`），觸發逐段 fallback（14 次依序 API 呼叫），造成該批次極慢
+- **來源 URL**：https://www.culpium.com/p/introducing-the-worlds-most-powerful
+- **修在**：`shinkansen/lib/gemini.js` 的 `translateChunk()`：(1) v0.77 加入 `thinkingConfig: { thinkingBudget: 0 }` 關閉思考功能（降低回應時間但未解決段數問題）；(2) v0.78 多段翻譯時動態追加明確分隔符規則到 effectiveSystem，告訴模型確切的 `<<<SHINKANSEN_SEP>>>` 分隔符和預期段數
+- **為什麼還不能寫測試**：
+    此 bug 的觸發條件是 Gemini 對特定內容忽略分隔符。本地 fixture + canned response 無法模擬「API 回傳段數不符」的情境（canned response 的段數是寫死的）。要寫有意義的 regression test 需要 mock fetch 層——這超出目前 regression test 架構的範圍。
+- **建議 spec 位置**：`test/regression/mismatch-fallback.spec.js`（若未來架構支援 mock API 層）
+- **觀察重點**：v0.78 修復後應該不再出現 segment mismatch。若仍出現，考慮改用 numbered format 取代 delimiter
 
 <!--
 條目格式範例(實際加入時把上面那行 placeholder 刪掉):

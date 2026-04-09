@@ -397,10 +397,68 @@
     return false;
   }
 
+  // ─── v0.76: 自動語言偵測 ─────────────────────────────────
+  // 繁體中文段落跳過不翻；簡體中文段落照送（Gemini 會轉成繁體）。
+  // 判斷邏輯：
+  //   1. 只看「字母」字元（CJK + 拉丁 + 西里爾 + 假名 + 韓文等），
+  //      忽略數字與標點，避免「清領時期 (1683-1895)」這類中文標題
+  //      因年份數字稀釋 CJK 佔比而被誤判為非中文
+  //   2. CJK 佔字母字元 > 50% → 視為「中文為主」
+  //   3. 在 CJK 字元中找簡體特徵字（這些字的繁體寫法不同）
+  //   4. 有簡體特徵字 → 不是繁體 → 需要翻譯
+  //   5. 純繁體中文 → 跳過
+  //
+  // 特徵字集注意事項：
+  //   - 只收「繁體中文絕不會出現」的字形。「准」雖是簡體「準」的對應字，
+  //     但繁體中文的「核准」「批准」也用「准」，所以不收。
+  //   - 同理「几」(茶几)、「干」(干涉)、「里」(鄰里) 等繁簡共用字不收。
+  const SIMPLIFIED_ONLY_CHARS = new Set(
+    '们这对没说还会为从来东车长开关让认应该头电发问时点学两' +
+    '乐义习飞马鸟鱼与单亲边连达远运进过选钱铁错阅难页题风' +
+    '饭体办写农决况净减划动务区医华压变号叶员围图场坏块' +
+    '声处备够将层岁广张当径总战担择拥拨挡据换损摇数断无旧显' +
+    '机权条极标样欢残毕气汇沟泽浅温湿灭灵热爱状独环现盖监盘' +
+    '码确离种积称穷竞笔节范药虑虽见规览计订训许设评识证诉试' +
+    '详语误读调贝负贡财贫购贸费赶递邮释银锁门间隐随雾静须领' +
+    '颜饮驱验鸡麦龙龟齿齐复'
+  );
+
+  function isTraditionalChinese(text) {
+    // 只保留字母類字元，忽略數字、標點、符號、空白
+    const lettersOnly = text.replace(/[\s\d\p{P}\p{S}]/gu, '');
+    if (lettersOnly.length === 0) return false;
+
+    let cjkCount = 0;
+    let hasSimplified = false;
+
+    for (const ch of lettersOnly) {
+      const code = ch.codePointAt(0);
+      // CJK Unified Ideographs (U+4E00–U+9FFF) + Extension A (U+3400–U+4DBF)
+      if ((code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF)) {
+        cjkCount++;
+        if (!hasSimplified && SIMPLIFIED_ONLY_CHARS.has(ch)) {
+          hasSimplified = true;
+        }
+      }
+    }
+
+    // CJK 佔字母字元不到 50% → 不是中文為主的段落
+    if (cjkCount / lettersOnly.length < 0.5) return false;
+
+    // 有簡體特徵字 → 是簡體中文，需要翻譯（轉繁體）
+    if (hasSimplified) return false;
+
+    // CJK 佔多數且無簡體特徵 → 繁體中文，跳過
+    return true;
+  }
+
   function isCandidateText(el) {
     const text = el.innerText?.trim();
     if (!text || text.length < 2) return false;
-    if (!/[A-Za-zÀ-ÿ\u0400-\u04FF]/.test(text)) return false;
+    // v0.76: 繁體中文段落跳過不翻
+    if (isTraditionalChinese(text)) return false;
+    // 必須包含至少一個字母或 CJK 字元（排除純數字/符號段落）
+    if (!/[\p{L}]/u.test(text)) return false;
     return true;
   }
 
@@ -1249,12 +1307,23 @@
     const jobs = packBatches(texts, units, slotsList);
     const failures = [];
 
+    // v0.76: 每批計時 log，診斷「前快後慢」問題
+    const t0All = Date.now();
+    console.log(`[Shinkansen] translateUnits: ${jobs.length} batches, ${total} units, maxConcurrent=${maxConcurrent}`);
+
     await runWithConcurrency(jobs, maxConcurrent, async (job) => {
+      const batchIdx = jobs.indexOf(job);
+      const t0 = Date.now();
+      console.log(`[Shinkansen] batch ${batchIdx + 1}/${jobs.length} start: ${job.texts.length} units, ${job.chars} chars`);
       try {
         const response = await chrome.runtime.sendMessage({
           type: 'TRANSLATE_BATCH',
           payload: { texts: job.texts, glossary: glossary || null },
         });
+        const elapsed = Date.now() - t0;
+        const cacheHit = response?.usage?.cacheHits || 0;
+        const apiCalls = job.texts.length - cacheHit;
+        console.log(`[Shinkansen] batch ${batchIdx + 1}/${jobs.length} done: ${elapsed}ms (${cacheHit} cached, ${apiCalls} API calls)`);
         if (!response?.ok) throw new Error(response?.error || '未知錯誤');
         const translations = response.result;
         if (response.usage) {
@@ -1270,10 +1339,13 @@
         done += job.texts.length;
         if (onProgress) onProgress(done, total);
       } catch (err) {
-        console.warn('[Shinkansen] batch failed', { start: job.start, error: err.message });
+        const elapsed = Date.now() - t0;
+        console.warn(`[Shinkansen] batch ${batchIdx + 1}/${jobs.length} FAILED after ${elapsed}ms`, { start: job.start, error: err.message });
         failures.push({ start: job.start, count: job.texts.length, error: err.message });
       }
     });
+
+    console.log(`[Shinkansen] translateUnits complete: ${Date.now() - t0All}ms total, ${done}/${total} done, ${failures.length} failures`);
 
     return { done, total, failures, pageUsage };
   }
@@ -1283,6 +1355,17 @@
       restorePage();
       return;
     }
+
+    // v0.76: 頁面層級語言偵測 — 若整頁文字以繁體中文為主，直接跳過。
+    // 這避免了繁中頁面上少數英文腳註/引用被單獨送去翻譯的問題。
+    // 取 document.body.innerText 的前 2000 字做樣本（足以判斷主要語言，
+    // 且避免在超長頁面上做全文掃描）。
+    const pageSample = (document.body.innerText || '').slice(0, 2000);
+    if (pageSample.length > 20 && isTraditionalChinese(pageSample)) {
+      showToast('error', '此頁面已是繁體中文，不需翻譯', { autoHideMs: 3000 });
+      return;
+    }
+
     const units = collectParagraphs();
     if (units.length === 0) {
       showToast('error', '找不到可翻譯的內容', { autoHideMs: 3000 });
@@ -2022,6 +2105,7 @@
         index: i,
         kind: 'fragment',
         tag: unit.el.tagName,
+        id: unit.el.id || null,
         textLength: trimmed.length,
         textPreview: trimmed.slice(0, 200),
         hasMedia: false, // fragment 本質上是 inline-run,不會跨 block 媒體容器
@@ -2033,6 +2117,7 @@
       index: i,
       kind: 'element',
       tag: el.tagName,
+      id: el.id || null,
       textLength: (el.innerText || '').trim().length,
       textPreview: (el.innerText || '').trim().slice(0, 200),
       hasMedia: containsMedia(el),

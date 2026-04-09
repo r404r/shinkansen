@@ -39,6 +39,7 @@ const DEFAULTS = {
     topP: 0.95,
     topK: 40,
     maxOutputTokens: 8192,
+    useThinking: false,
     systemInstruction: DEFAULT_SYSTEM_PROMPT,
   },
   pricing: {
@@ -196,6 +197,7 @@ async function load() {
   $('topP').value = s.geminiConfig.topP;
   $('topK').value = s.geminiConfig.topK;
   $('maxOutputTokens').value = s.geminiConfig.maxOutputTokens;
+  $('useThinking').checked = s.geminiConfig.useThinking === true;
   $('systemInstruction').value = s.geminiConfig.systemInstruction;
   $('inputPerMTok').value = s.pricing.inputPerMTok;
   $('outputPerMTok').value = s.pricing.outputPerMTok;
@@ -236,6 +238,7 @@ async function save() {
       topP: Number($('topP').value),
       topK: Number($('topK').value),
       maxOutputTokens: Number($('maxOutputTokens').value),
+      useThinking: $('useThinking').checked,
       systemInstruction: $('systemInstruction').value,
     },
     pricing: {
@@ -392,6 +395,7 @@ function sanitizeImport(raw) {
       topP:             { type: 'number', min: 0, max: 1 },
       topK:             { type: 'number', min: 1, max: 100, int: true },
       maxOutputTokens:  { type: 'number', min: 256, max: 65535, int: true },
+      useThinking:      { type: 'boolean' },
       systemInstruction:{ type: 'string' },
     };
     for (const [key, rule] of Object.entries(gcRules)) {
