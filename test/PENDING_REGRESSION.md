@@ -18,7 +18,58 @@
 
 ## 條目
 
-(目前沒有 pending 條目)
+### v0.85 — 2026-04-09 — chrome.storage 配額滿 LRU 淘汰
+- **功能描述**：快取值改為 `{ v, t }` LRU 結構，配額滿時依時間戳淘汰最舊條目
+- **來源 URL**：N/A（防禦性程式，長期使用後快取累積觸發）
+- **修在**：shinkansen/lib/cache.js 的 `safeStorageSet`、`evictOldest`、`proactiveEvictionCheck`
+- **為什麼還不能寫測試**：
+    需要 mock `chrome.storage.local` API（模擬 set() 拋出 QUOTA_BYTES 錯誤），
+    目前 regression suite 跑在 Playwright + real extension 環境，
+    沒有 storage mock 機制。需要另建 unit test harness（例如用 Jest +
+    chrome mock）或在 Playwright 裡用 CDP 注入假 storage 行為。
+- **建議 spec 位置**：test/regression/cache-lru-eviction.spec.js
+- **建議測試場景**：
+    1. setBatch 成功時值為 { v, t } 結構
+    2. getBatch 讀到舊格式（純字串）正常回傳
+    3. getBatch 命中時更新時間戳
+    4. safeStorageSet 遇 QUOTA_BYTES 錯誤 → 觸發 evictOldest → 重試成功
+    5. evictOldest 按時間戳升序淘汰（t=0 的舊格式最先被淘汰）
+    6. proactiveEvictionCheck 超過 90% 閾值觸發淘汰
+
+### v0.84 — 2026-04-09 — API 回應非 JSON / 格式異常防護
+- **功能描述**：translateChunk 的 resp.json() try-catch、candidates 結構驗證（空 candidates / blockReason / finishReason 異常）、fetchWithRetry 5xx 重試
+- **來源 URL**：N/A（防禦性程式，非特定網站觸發）
+- **修在**：shinkansen/lib/gemini.js 的 `translateChunk` 與 `fetchWithRetry`
+- **為什麼還不能寫測試**：
+    需要 mock fetch / HTTP 層才能模擬非 JSON 回應、空 candidates、5xx 錯誤。
+    目前 regression suite 是走 canned response 的 inject 路徑測試，
+    不涉及 HTTP 層。需要另建 API-mock harness（例如用 MSW 或
+    custom fetch stub），等 Claude Code 端設計。
+- **建議 spec 位置**：test/regression/api-error-handling.spec.js
+- **建議測試場景**：
+    1. resp.json() 拋 SyntaxError → 拋出包含 HTTP 狀態碼的可讀錯誤
+    2. candidates 為空 + blockReason=SAFETY → 拋出安全過濾器錯誤
+    3. finishReason=SAFETY + text 為空 → 拋出安全過濾器錯誤
+    4. finishReason=MAX_TOKENS + text 為空 → 拋出 maxOutputTokens 錯誤
+    5. HTTP 500 → 重試最多 maxRetries 次後拋錯
+    6. HTTP 500 + 第二次正常 → 回傳正常結果
+
+### v0.82 — 2026-04-09 — SPA 動態載入內容支援
+- **功能描述**：SPA 導航偵測（pushState/replaceState/popstate）+ 翻譯後 MutationObserver
+- **來源 URL**：Twitter/X（SPA 導航）、任何 lazy-load 內容的頁面
+- **修在**：shinkansen/content.js 的 `handleSpaNavigation`、`resetForSpaNavigation`、`startSpaObserver`、`spaObserverRescan`
+- **為什麼還不能寫測試**：
+    SPA 導航偵測需要真正的 pushState 環境（靜態 fixture 做不到），
+    MutationObserver 需要模擬動態新增 DOM 節點。需要一個可以
+    programmatically 觸發 pushState 並在 callback 後新增 DOM 的測試頁面，
+    且需要 mock chrome.storage.sync 的 domainRules。等切到 Claude Code 端
+    再設計適當的 test harness。
+- **建議 spec 位置**：test/regression/spa-navigation.spec.js
+- **建議測試場景**：
+    1. pushState 後 STATE 被重置（translated = false, originalHTML 清空）
+    2. MutationObserver 偵測到新增段落後觸發 rescan
+    3. MutationObserver 達到 MAX_RESCANS 後自動停止
+    4. restorePage 後 Observer 被 disconnect
 
 <!--
 條目格式範例(實際加入時把上面那行 placeholder 刪掉):

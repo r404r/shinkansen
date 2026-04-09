@@ -92,6 +92,19 @@ async function fetchWithRetry(url, body, { maxRetries = 3 } = {}) {
       continue;
     }
 
+    // v0.84: 5xx 伺服器錯誤也重試（Gemini 偶爾回 500/503 服務暫時不可用）
+    if (resp.status >= 500 && resp.status < 600) {
+      await debugLog('warn', `gemini ${resp.status} server error`, { status: resp.status, attempt });
+      if (attempt >= maxRetries) {
+        let errMsg = `HTTP ${resp.status}`;
+        try { const j = await resp.json(); errMsg = j?.error?.message || errMsg; } catch { /* noop */ }
+        throw new Error(errMsg);
+      }
+      await sleep(Math.min(MAX_BACKOFF_MS, 500 * Math.pow(2, attempt)));
+      attempt += 1;
+      continue;
+    }
+
     if (resp.status !== 429) return resp;
 
     // 429 處理
@@ -434,7 +447,21 @@ async function translateChunk(texts, settings, glossary) {
   console.log(`[Shinkansen] translateChunk: sending ${texts.length} segments, ${joined.length} chars`);
   const resp = await fetchWithRetry(url, body, { maxRetries });
 
-  const json = await resp.json();
+  // v0.84: resp.json() 加 try-catch。API 回傳非 JSON 時（HTML 錯誤頁、空回應、
+  // CDN 擋下的 502 HTML 頁面等）原本會直接 crash，現在包成可讀的錯誤訊息。
+  let json;
+  try {
+    json = await resp.json();
+  } catch (parseErr) {
+    const ms = Date.now() - t0;
+    // 嘗試讀 raw text 取前 200 字元作為診斷線索
+    let rawPreview = '';
+    try { rawPreview = await resp.clone().text().then(t => t.slice(0, 200)); } catch { /* noop */ }
+    await debugLog('error', 'gemini response body is not JSON', {
+      status: resp.status, ms, parseError: parseErr.message, rawPreview,
+    });
+    throw new Error(`Gemini API 回應格式異常（非 JSON）：HTTP ${resp.status}。${rawPreview ? '回應前 200 字元：' + rawPreview : ''}`);
+  }
   const ms = Date.now() - t0;
   console.log(`[Shinkansen] translateChunk: API responded in ${ms}ms (${texts.length} segments)`);
 
@@ -444,7 +471,44 @@ async function translateChunk(texts, settings, glossary) {
     throw new Error(msg);
   }
 
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // v0.84: candidates 結構驗證。API 可能回傳空 candidates（被安全過濾器擋掉、
+  // 模型拒絕回應、promptFeedback.blockReason 不為空等情況）。
+  const candidate = json?.candidates?.[0];
+  const finishReason = candidate?.finishReason || 'unknown';
+  const text = candidate?.content?.parts?.[0]?.text || '';
+
+  // 檢查 promptFeedback（整個 prompt 被擋的情況，candidates 會是空陣列）
+  const blockReason = json?.promptFeedback?.blockReason;
+  if (blockReason) {
+    await debugLog('error', 'gemini prompt blocked', { blockReason, ms });
+    throw new Error(`Gemini 拒絕處理此請求（promptFeedback.blockReason: ${blockReason}）。可能是安全過濾器誤判，請嘗試縮短段落或調整內容。`);
+  }
+
+  // 檢查 candidates 為空或無文字輸出
+  if (!candidate || !text) {
+    await debugLog('error', 'gemini empty candidates', {
+      ms, finishReason,
+      candidatesLength: json?.candidates?.length || 0,
+      promptFeedback: json?.promptFeedback,
+    });
+    // 根據 finishReason 給出更有意義的錯誤訊息
+    const reasonMessages = {
+      SAFETY: '內容被 Gemini 安全過濾器擋下。可能是原文含有敏感內容，請嘗試跳過此段落。',
+      RECITATION: 'Gemini 偵測到輸出與已知作品高度重複（recitation filter），請嘗試縮短段落。',
+      MAX_TOKENS: '輸出超過 maxOutputTokens 上限。請到設定頁提高上限，或減少每批段落數。',
+      OTHER: 'Gemini 回傳空內容（finishReason: OTHER），原因不明。請稍後重試。',
+    };
+    const friendlyMsg = reasonMessages[finishReason]
+      || `Gemini 回傳空內容（finishReason: ${finishReason}）。`;
+    throw new Error(friendlyMsg);
+  }
+
+  // finishReason 異常警告（有文字但不是正常結束）
+  if (finishReason && finishReason !== 'STOP' && finishReason !== 'unknown') {
+    console.warn(`[Shinkansen] translateChunk: finishReason=${finishReason} (expected STOP) — output may be truncated`);
+    await debugLog('warn', 'gemini unusual finishReason', { finishReason, ms, textLength: text.length });
+  }
+
   const meta = json?.usageMetadata || {};
   const chunkUsage = {
     inputTokens: meta.promptTokenCount || 0,
@@ -456,6 +520,7 @@ async function translateChunk(texts, settings, glossary) {
   await debugLog('info', 'gemini response', {
     ms,
     usage: meta,
+    finishReason,
     preview: text.slice(0, 200),
   });
 

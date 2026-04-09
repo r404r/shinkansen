@@ -1163,6 +1163,14 @@
   // 500+ 段，全部送 API 會造成不必要的成本與延遲。超過此上限時截斷並提示使用者。
   const MAX_TOTAL_UNITS = 500;
 
+  // v0.82: SPA 動態載入支援常數
+  // MutationObserver 在翻譯完成後啟動，偵測 SPA 動態新增的段落。
+  // 嚴格限制次數與去抖動間隔，避免 infinite scroll 造成 API 成本爆炸。
+  const SPA_OBSERVER_DEBOUNCE_MS = 3000;   // DOM 變化後等 3 秒再 rescan
+  const SPA_OBSERVER_MAX_RESCANS = 5;      // 單次翻譯後最多追加掃描 5 次
+  const SPA_OBSERVER_MAX_UNITS = 50;       // 每次追加掃描最多翻譯 50 段
+  const SPA_NAV_SETTLE_MS = 800;           // SPA 導航後等 DOM 穩定的毫秒數
+
   // ─── v0.69: 術語表一致化 ──────────────────────────────
   // 門檻常數（與 storage.js 的 glossary 設定對應，但 content.js 不 import ES module，
   // 所以在這裡先定義預設值，translatePage 會從 settings 讀取覆蓋）
@@ -1620,6 +1628,9 @@
       // v0.45: 安排延遲 rescan 補抓 hydration 後才 render 的內容
       // (例如 Nikkei 的 READ NEXT 區,Next.js 把它放在 hydration 之後才 mount)
       scheduleRescanForLateContent();
+
+      // v0.82: 翻譯完成後啟動 MutationObserver，偵測 SPA 動態新增段落
+      startSpaObserver();
     } catch (err) {
       console.error('[Shinkansen]', err);
       // v0.80: 若是 abort 觸發的錯誤，不顯示「翻譯失敗」
@@ -2094,6 +2105,8 @@
     // rescan tick 又把新段落翻出來,造成「已按還原但中文仍零星冒出」。
     // 注意:目前正在 await 中的 rescan 還是可能寫入,接受這個小風險。
     cancelRescan();
+    // v0.82: 停止 SPA 動態段落觀察
+    stopSpaObserver();
     STATE.originalHTML.forEach((originalHTML, el) => {
       el.innerHTML = originalHTML;
       el.removeAttribute('data-shinkansen-translated');
@@ -2114,6 +2127,192 @@
       STATE.abortController.abort();
     }
   });
+
+  // ─── v0.82: SPA 動態載入支援 ─────────────────────────────
+  // 兩個面向：
+  //   1. SPA 導航偵測（URL 變化但無整頁重載）→ 重置翻譯狀態，白名單自動重翻
+  //   2. 翻譯後 MutationObserver → 偵測動態新增段落（lazy load / AJAX 載入），
+  //      受次數上限保護，避免 infinite scroll 造成成本爆炸
+  //
+  // 設計原則：
+  //   - 不綁定站點身份（符合 CLAUDE.md 硬規則 8）
+  //   - Observer 只在翻譯完成後才啟用，使用者未觸發翻譯時完全不觀察
+  //   - 每次 rescan 有段落上限（SPA_OBSERVER_MAX_UNITS），且累計次數
+  //     達 SPA_OBSERVER_MAX_RESCANS 後自動停止
+  //   - SPA 導航偵測透過 monkey-patch history API（結構性通則，不依賴
+  //     任何特定框架或路由庫）
+
+  let spaLastUrl = location.href;
+  let spaObserver = null;          // MutationObserver instance
+  let spaObserverDebounceTimer = null;
+  let spaObserverRescanCount = 0;  // 累計追加掃描次數
+
+  /**
+   * 重置翻譯狀態，供 SPA 導航時呼叫。
+   * 與 restorePage 不同：restorePage 會還原 DOM（innerHTML），但 SPA 導航後
+   * 舊 DOM 已經被框架替換掉了，不需要（也不能）還原。這裡只清理 STATE。
+   */
+  function resetForSpaNavigation() {
+    // 若翻譯正在進行中，先中止
+    if (STATE.translating && STATE.abortController) {
+      STATE.abortController.abort();
+      STATE.translating = false;
+      STATE.abortController = null;
+    }
+    // 取消 rescan timer（v0.45 機制）
+    cancelRescan();
+    // 停止 MutationObserver
+    stopSpaObserver();
+    // 清理翻譯狀態（不碰 DOM，SPA 框架自己會換 DOM）
+    STATE.originalHTML.clear();
+    STATE.cache.clear();
+    STATE.translated = false;
+    STATE._glossaryPromise = null;
+    // 清除 badge
+    chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(() => {});
+    // 關掉 toast
+    hideToast();
+    console.log('[Shinkansen] SPA navigation detected, state reset');
+  }
+
+  /**
+   * SPA 導航後檢查白名單，若符合則自動翻譯新頁面。
+   */
+  async function handleSpaNavigation() {
+    const newUrl = location.href;
+    if (newUrl === spaLastUrl) return; // URL 沒變（例如 replaceState 更新 query 但 pathname 不變）
+    spaLastUrl = newUrl;
+    resetForSpaNavigation();
+
+    // 等 DOM 穩定（SPA 框架通常在 pushState 後才開始 render 新內容）
+    await new Promise(r => setTimeout(r, SPA_NAV_SETTLE_MS));
+
+    // 檢查網域白名單——若在白名單內，自動翻譯新內容
+    try {
+      const { domainRules } = await chrome.storage.sync.get('domainRules');
+      if (domainRules?.whitelist?.length > 0) {
+        const hostname = location.hostname;
+        const isWhitelisted = domainRules.whitelist.some(pattern => {
+          // 支援 *.example.com 萬用字元與精確比對
+          if (pattern.startsWith('*.')) {
+            const suffix = pattern.slice(1); // .example.com
+            return hostname === pattern.slice(2) || hostname.endsWith(suffix);
+          }
+          return hostname === pattern;
+        });
+        if (isWhitelisted) {
+          console.log('[Shinkansen] SPA nav: domain whitelisted, auto-translating');
+          translatePage();
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[Shinkansen] SPA nav: failed to check whitelist', err);
+    }
+    // 不在白名單 → 不自動翻譯，使用者可手動按 Alt+S
+  }
+
+  // ─── History API 攔截 ──────────────────────────────────
+  // SPA 框架（React Router、Vue Router、Next.js 等）透過 pushState / replaceState
+  // 切換頁面。原生 popstate 事件只在使用者按瀏覽器上/下一頁時觸發，
+  // 程式呼叫 pushState / replaceState 不會觸發任何事件，所以必須 monkey-patch。
+  //
+  // 注入方式：content script 跑在 isolated world，直接 patch 自己的 history 物件
+  // 不會影響頁面的 main world。但 content script 與 main world 共享同一個
+  // History 物件（MDN: "content scripts share the same DOM"），所以 main world
+  // 的 pushState 呼叫也會走到 patch 過的版本。
+  const _origPushState = history.pushState.bind(history);
+  const _origReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args) {
+    _origPushState(...args);
+    handleSpaNavigation();
+  };
+  history.replaceState = function (...args) {
+    _origReplaceState(...args);
+    handleSpaNavigation();
+  };
+  window.addEventListener('popstate', () => handleSpaNavigation());
+
+  // ─── 翻譯後 MutationObserver（動態新增段落偵測） ────────
+  // 只在翻譯完成後啟動，偵測 SPA 頁面內動態載入的新段落（例如
+  // lazy-loaded 區塊、AJAX 載入的留言區等）。
+  // 不處理 infinite scroll：次數上限 SPA_OBSERVER_MAX_RESCANS 到了就停。
+
+  function startSpaObserver() {
+    if (spaObserver) return; // 已經在觀察了
+    spaObserverRescanCount = 0;
+    spaObserver = new MutationObserver(onSpaObserverMutations);
+    spaObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+    console.log('[Shinkansen] SPA observer started');
+  }
+
+  function stopSpaObserver() {
+    if (spaObserverDebounceTimer) {
+      clearTimeout(spaObserverDebounceTimer);
+      spaObserverDebounceTimer = null;
+    }
+    if (spaObserver) {
+      spaObserver.disconnect();
+      spaObserver = null;
+    }
+    spaObserverRescanCount = 0;
+  }
+
+  function onSpaObserverMutations(mutations) {
+    // 若已還原原文或不再處於翻譯完成狀態，停止觀察
+    if (!STATE.translated) {
+      stopSpaObserver();
+      return;
+    }
+    // 過濾：只關心有實質新增節點的 mutation
+    const hasNewContent = mutations.some(m =>
+      m.type === 'childList' && m.addedNodes.length > 0 &&
+      Array.from(m.addedNodes).some(n =>
+        n.nodeType === Node.ELEMENT_NODE && n.textContent.trim().length > 10
+      )
+    );
+    if (!hasNewContent) return;
+
+    // 去抖動：每次 DOM 變動重置計時器，等穩定 SPA_OBSERVER_DEBOUNCE_MS 後才 rescan
+    if (spaObserverDebounceTimer) clearTimeout(spaObserverDebounceTimer);
+    spaObserverDebounceTimer = setTimeout(spaObserverRescan, SPA_OBSERVER_DEBOUNCE_MS);
+  }
+
+  async function spaObserverRescan() {
+    spaObserverDebounceTimer = null;
+    if (!STATE.translated) return;
+    if (spaObserverRescanCount >= SPA_OBSERVER_MAX_RESCANS) {
+      console.log(`[Shinkansen] SPA observer: reached max rescans (${SPA_OBSERVER_MAX_RESCANS}), stopping`);
+      stopSpaObserver();
+      return;
+    }
+    spaObserverRescanCount++;
+
+    let newUnits = collectParagraphs();
+    if (newUnits.length === 0) return;
+
+    // 上限保護：每次 rescan 最多翻譯 SPA_OBSERVER_MAX_UNITS 段
+    if (newUnits.length > SPA_OBSERVER_MAX_UNITS) {
+      console.warn(`[Shinkansen] SPA observer rescan: ${newUnits.length} new units, capping to ${SPA_OBSERVER_MAX_UNITS}`);
+      newUnits = newUnits.slice(0, SPA_OBSERVER_MAX_UNITS);
+    }
+
+    console.log(`[Shinkansen] SPA observer rescan #${spaObserverRescanCount}: ${newUnits.length} new units`);
+    try {
+      const { done, failures } = await translateUnits(newUnits);
+      if (!STATE.translated) return; // 使用者可能在 rescan 期間按了還原
+      if (done > 0) {
+        console.log(`[Shinkansen] SPA observer rescan #${spaObserverRescanCount}: translated ${done} units` +
+          (failures.length ? `, ${failures.length} failed` : ''));
+      }
+    } catch (err) {
+      console.warn('[Shinkansen] SPA observer rescan failed', err);
+    }
+  }
 
   // ─── 訊息接收 （來自 background / popup) ──────────────
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
