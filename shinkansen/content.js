@@ -1462,65 +1462,130 @@
   }
 
   /**
-   * v0.52: deserializer 失敗 fallback 用的「丟掉所有 inner DOM,以乾淨純文字
-   * 塞回去」助手。
+   * v0.55: 共用的「注入目標解析」helper。回答「要把譯文寫到哪個元素?」
    *
-   * 為什麼不直接 `el.textContent = cleaned`：
-   * MJML / Mailjet email 模板常見「外層 TD 設 font-size:0,真字體放在內層
-   * DIV / SPAN」的 inline-block-gap 消除技巧。直接寫 el.textContent 會把
-   * 內層 wrapper 一併清掉,文字繼承 TD 的 0px → 整段消失。
+   * 預設值是 `el` 本身——呼叫端清空 `el.children` 再 append 譯文就對了,
+   * `el` 自己的 padding / background / font-family / line-height 等樣式會
+   * 透過 CSS 繼承繼續套用到新 content,不會被動到。
    *
-   * 為什麼不沿用 replaceTextInPlace:
-   * 它把譯文塞進「最長文字節點」,對於 Wikipedia ambox 來說最長文字節點剛好
-   * 在 <I><SMALL><A> 裡面,Chinese 譯文會繼承 italic + small + link 樣式,
-   * 看起來像視覺災難(雖然結構不再是 nested 巢狀錯亂)。
+   * 唯一例外:**`el` 自己 computed font-size 趨近 0**。這是 MJML / Mailjet /
+   * Mailchimp 等 HTML email 模板在消除 `inline-block` 欄位縫隙時的業界標準
+   * 做法——外層容器 `<td style="font-size:0">`,真正字體放在內層 `<div>` /
+   * `<span>` wrapper 上。這類 `el` 的「font-size 繼承來源」是內層 wrapper,
+   * 若直接清空 `el.children` 會把這個 wrapper 也清掉,新 content 只能繼承
+   * `el` 的 0px,整段消失。命中時改把「第一個 font-size 正常的後代」當寫入
+   * 目標,清掉它的 children 後再 append,就能保留 wrapper 提供的字體大小。
    *
-   * 折中策略:
-   *   1. 預設直接 `el.textContent = cleaned` —— 一般網頁(含 ambox)就不會
-   *      帶任何 inline ancestor 樣式。
-   *   2. 偵測「el 自己 computed font-size 趨近 0」這個 MJML 特徵；命中時
-   *      改去找第一個 font-size 正常的後代當寫入目標,保留 inner wrapper。
+   * 注意:這個 helper 描述的是 DOM / CSS 的**結構特徵**,不是特定站點的
+   * selector 或 class。`font-size:0` 技巧在 email HTML 生態之外也有人用,
+   * 任何走這條路的網頁都會命中同一個處理邏輯。
    */
-  function plainTextFallback(el, cleaned) {
+  function resolveWriteTarget(el) {
     const cs = el.ownerDocument?.defaultView?.getComputedStyle?.(el);
     const px = cs ? parseFloat(cs.fontSize) : NaN;
     if (Number.isFinite(px) && px < 1) {
-      // MJML font-size:0 outer wrapper 模式：找第一個 font-size 正常的後代
       const all = el.querySelectorAll('*');
       for (const d of all) {
         const dcs = d.ownerDocument?.defaultView?.getComputedStyle?.(d);
         const dpx = dcs ? parseFloat(dcs.fontSize) : NaN;
-        if (Number.isFinite(dpx) && dpx >= 1) {
-          d.textContent = cleaned;
-          return;
-        }
+        if (Number.isFinite(dpx) && dpx >= 1) return d;
       }
-      // 找不到合適的後代 → 還是寫到 el(至少不會 silent 失敗)
     }
-    el.textContent = cleaned;
+    return el;
   }
 
+  /**
+   * v0.55: 共用的「注入」helper。回答「要怎麼把譯文寫進 target?」
+   *
+   * 兩條互斥路徑:
+   *
+   * (A) **Clean slate 預設**:清空 `target.children` 後 append content。
+   *     這對所有「slots 已經完整重建譯文結構」的場景都對——fragment 本身
+   *     就含完整的 inline 元素殼 (A/STRONG/EM/...),整段覆蓋就是正確的。
+   *
+   * (B) **Media-preserving 例外**:當 `target` 含 `<img>` / `<svg>` /
+   *     `<video>` / `<picture>` / `<audio>` / `<canvas>` 這類**序列化階段
+   *     會被丟掉**的元素時,不能 clean slate——那些元素沒被 LLM 看到、也
+   *     不在 fragment 裡,一清就消失。改走「就地替換最長文字節點」:找到
+   *     target 底下最長的可見文字節點,把 content 插在它的原位,其他文字
+   *     節點清空,但所有 element children(含 img / svg / ...)原封保留。
+   *
+   * 為什麼用 `containsMedia(target)` 這個 check 當分流條件:描述的是**結構
+   * 特徵**(「此元素內含需保留的非文字媒體」),不綁定站點。任何包含 inline
+   * 媒體 + 文字的段落都走同一條邏輯。
+   *
+   * BR 去重:只有 media 路徑才需要,因為 clean slate 路徑會清空所有原始
+   * children (含 BR)。media 路徑若 fragment 自己帶了 `<br>`、target 又留
+   * 著原始 `<br>`,兩組會堆疊造成多餘空白,所以要先把 target 的 BR 清掉。
+   */
+  function injectIntoTarget(target, content) {
+    const isString = typeof content === 'string';
+
+    if (containsMedia(target)) {
+      // (B) media-preserving path.
+      if (!isString) {
+        let fragHasBr = false;
+        const fw = document.createTreeWalker(content, NodeFilter.SHOW_ELEMENT);
+        let fn;
+        while ((fn = fw.nextNode())) {
+          if (fn.tagName === 'BR') { fragHasBr = true; break; }
+        }
+        if (fragHasBr) {
+          const oldBrs = target.querySelectorAll('br');
+          for (const br of oldBrs) if (br.parentNode) br.parentNode.removeChild(br);
+        }
+      }
+      const node = isString ? target.ownerDocument.createTextNode(content) : content;
+      const textNodes = collectVisibleTextNodes(target);
+      if (textNodes.length === 0) {
+        target.appendChild(node);
+        return;
+      }
+      const main = findLongestTextNode(textNodes);
+      for (const t of textNodes) if (t !== main) t.nodeValue = '';
+      const parent = main.parentNode;
+      if (parent) {
+        parent.insertBefore(node, main);
+        parent.removeChild(main);
+      } else {
+        target.appendChild(node);
+      }
+      return;
+    }
+
+    // (A) clean slate path.
+    while (target.firstChild) target.removeChild(target.firstChild);
+    if (isString) {
+      target.textContent = content;
+    } else {
+      target.appendChild(content);
+    }
+  }
+
+  /**
+   * v0.52 → v0.55 重構:slot 配對失敗 fallback 用的純文字注入。
+   * 現在只是 `resolveWriteTarget` + `injectIntoTarget` 的薄包裝,
+   * 與 `replaceNodeInPlace` / `replaceTextInPlace` 共用同一套注入邏輯,
+   * 不再有自己的 MJML 檢測實作。
+   */
+  function plainTextFallback(el, cleaned) {
+    const target = resolveWriteTarget(el);
+    injectIntoTarget(target, cleaned);
+  }
+
+  /**
+   * v0.49 → v0.55 重構:無 slots 路徑的純文字注入。
+   * 現在與 `replaceNodeInPlace` / `plainTextFallback` 共用同一套「寫入目標
+   * 解析 + 注入策略」邏輯。含 `\n` 的譯文仍走 fragment 路徑(`\n` → `<br>`)。
+   */
   function replaceTextInPlace(el, translation) {
-    // v0.50: 譯文若含 \n（來自序列化時把 <br> 轉成的段落分隔）,改走
-    // fragment 路徑塞回真正的 <br>,否則只是把字面 \n 塞進 text node 會被
-    // HTML 渲染成空白,失去段落視覺效果。
     if (translation && translation.includes('\n')) {
       const frag = buildFragmentFromTextWithBr(translation);
       replaceNodeInPlace(el, frag);
       return;
     }
-    const textNodes = collectVisibleTextNodes(el);
-    if (textNodes.length === 0) {
-      // 沒有獨立文字節點（例如 element 裡只有媒體 + 空白）→ 附加在最後
-      el.appendChild(document.createTextNode(translation));
-      return;
-    }
-    // 把整段譯文塞給最長的那個文字節點（主承載點），其餘清空
-    const main = findLongestTextNode(textNodes);
-    main.nodeValue = translation;
-    for (const t of textNodes) {
-      if (t !== main) t.nodeValue = '';
-    }
+    const target = resolveWriteTarget(el);
+    injectIntoTarget(target, translation);
   }
 
   /**
@@ -1538,80 +1603,14 @@
   }
 
   /**
-   * v0.49: 跟 replaceTextInPlace 同樣思路,但塞的是 DocumentFragment 而非純文字。
-   * 用在 slots 路徑 A——fragment 內已經有樣式 inline 元素（SPAN/A/STRONG 之類）,
-   * 但我們仍必須保留 el 下的 MJML inner wrapper（DIV/SPAN）來提供真字體大小,
-   * 所以「就地替換最長文字節點」而不是 `el.textContent = ''; el.appendChild(frag)`。
-   *
-   * 作法：找到 el 下最長的可見文字節點,把 fragment 插在它的 parent 的原位置,
-   * 然後把它跟其他文字節點一併清掉。fragment 落在 MJML inner wrapper 底下,
-   * 自動繼承 wrapper 的 font-size。
+   * v0.49 → v0.55 重構:slots 路徑的 fragment 注入。
+   * 與 `replaceTextInPlace` / `plainTextFallback` 共用同一套「寫入目標解析
+   * + 注入策略」邏輯(`resolveWriteTarget` + `injectIntoTarget`),三條路徑
+   * 不再各自實作 MJML font-size:0 檢測或 media 保留邏輯。
    */
   function replaceNodeInPlace(el, frag) {
-    // v0.54: 兩條互斥路徑——
-    //
-    // (A) 一般網頁(預設):直接清掉 el 所有 children,把 fragment append 進去。
-    //     fragment 本身已經由 deserializeWithPlaceholders 從 slots 重建出
-    //     完整結構(含原本所有 inline 元素 / 媒體 atomic placeholder),所以
-    //     全部覆蓋是安全的。
-    //
-    // (B) MJML / Mailjet email 模板:外層 el 自己 computed font-size 趨近 0
-    //     (font-size:0 inline-block-gap 消除技巧),真字體放在內層 wrapper。
-    //     若走 (A) 把 inner wrapper 一起清掉,文字繼承 0px → 整段消失。
-    //     這條路徑用「最長文字節點就地替換」的舊行為,讓 fragment 落在
-    //     wrapper 底下繼承正確 font-size。
-    //
-    // 為什麼要分流(歷史教訓):
-    // v0.49 → v0.53 預設都走 (B),結果 Wikipedia ambox 這種 el 內含
-    // <I><SMALL><A> 巢狀結構時,「最長文字節點」剛好在最深的 <A> 裡面,
-    // fragment 被插在那裡 → 譯文整段繼承 italic + small + link 樣式,
-    // 而 el 上原本的 <B> / 其他 inline 元素又沒被清,殘留成空殼,看起來
-    // 像「巢狀錯亂 + 全段斜體粗體」的災難。
-    //
-    // 修正方向:預設值改為「整個替換」,只在 MJML font-size:0 的特殊狀況
-    // 才退回 inner-wrapper 保留路徑。
-    let fragHasBr = false;
-    const fw = document.createTreeWalker(frag, NodeFilter.SHOW_ELEMENT);
-    let fn;
-    while ((fn = fw.nextNode())) {
-      if (fn.tagName === 'BR') { fragHasBr = true; break; }
-    }
-
-    const cs = el.ownerDocument?.defaultView?.getComputedStyle?.(el);
-    const px = cs ? parseFloat(cs.fontSize) : NaN;
-    const isMjmlZero = Number.isFinite(px) && px < 1;
-
-    if (!isMjmlZero) {
-      // 路徑 (A):整段覆蓋。
-      while (el.firstChild) el.removeChild(el.firstChild);
-      el.appendChild(frag);
-      return;
-    }
-
-    // 路徑 (B):MJML font-size:0 → 保留 inner wrapper,只就地替換最長文字節點。
-    if (fragHasBr) {
-      const oldBrs = el.querySelectorAll('br');
-      for (const br of oldBrs) {
-        if (br.parentNode) br.parentNode.removeChild(br);
-      }
-    }
-
-    const textNodes = collectVisibleTextNodes(el);
-    if (textNodes.length === 0) {
-      el.appendChild(frag);
-      return;
-    }
-    const main = findLongestTextNode(textNodes);
-    for (const t of textNodes) {
-      if (t !== main) t.nodeValue = '';
-    }
-    const parent = main.parentNode;
-    if (parent) {
-      parent.insertBefore(frag, main);
-      parent.removeChild(main);
-    } else {
-      el.appendChild(frag);
-    }
+    const target = resolveWriteTarget(el);
+    injectIntoTarget(target, frag);
   }
 
   /**
