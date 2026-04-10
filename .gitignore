@@ -8,6 +8,10 @@ playwright-report/
 playwright/.cache/
 test/reports/
 
+# Claude 協作用內部文件（含個人資訊，不公開）
+CLAUDE.md
+測試流程說明.md
+
 # 系統垃圾
 .DS_Store
 *.log
