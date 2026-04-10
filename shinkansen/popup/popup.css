@@ -32,6 +32,20 @@ button.primary {
 }
 button.primary:hover { background: #0077ed; }
 
+button.secondary {
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0071e3;
+  background: #fff;
+  border: 1px solid #0071e3;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button.secondary:hover { background: #f0f4ff; }
+
 .row {
   display: flex;
   align-items: center;

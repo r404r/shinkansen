@@ -23,15 +23,17 @@ import { debugLog } from './logger.js';
 const WINDOW_MS = 60_000;
 const RPD_KEY_PREFIX = 'rateLimit_rpd_';
 
+/** 太平洋時區日期格式化器（快取避免重複建立）。 */
+const pacificDateFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /** 取得太平洋時間的 YYYYMMDD 字串,用於 RPD key。 */
 function getPacificDateKey(now = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return fmt.format(now).replace(/-/g, ''); // YYYYMMDD
+  return pacificDateFmt.format(now).replace(/-/g, ''); // YYYYMMDD
 }
 
 export class RateLimiter {
@@ -47,6 +49,10 @@ export class RateLimiter {
     this.rpdCount = 0;
     this.rpdLoaded = false;
     this.rpdLoadingPromise = null;
+
+    // RPD 寫入節流：每 10 次 acquire 或 30 秒才持久化一次
+    this.rpdPersistCounter = 0;
+    this.rpdPersistTimer = null;
   }
 
   updateLimits({ rpm, tpm, rpd, safetyMargin = 0.1 }) {
@@ -99,6 +105,28 @@ export class RateLimiter {
     await chrome.storage.local.set({ [storageKey]: this.rpdCount });
   }
 
+  /** 節流版 RPD 持久化：每 10 次或 30 秒寫入一次。 */
+  scheduleRpdPersist() {
+    this.rpdPersistCounter += 1;
+    if (this.rpdPersistCounter >= 10) {
+      this.rpdPersistCounter = 0;
+      if (this.rpdPersistTimer) { clearTimeout(this.rpdPersistTimer); this.rpdPersistTimer = null; }
+      this.persistRpd().catch(err =>
+        debugLog('warn', 'rate-limit', 'rpd persist failed', { error: err.message })
+      );
+      return;
+    }
+    if (!this.rpdPersistTimer) {
+      this.rpdPersistTimer = setTimeout(() => {
+        this.rpdPersistTimer = null;
+        this.rpdPersistCounter = 0;
+        this.persistRpd().catch(err =>
+          debugLog('warn', 'rate-limit', 'rpd persist failed (timer)', { error: err.message })
+        );
+      }, 30_000);
+    }
+  }
+
   /** 清除 60 秒之前的舊時間戳。 */
   pruneWindow(now) {
     const cutoff = now - WINDOW_MS;
@@ -148,10 +176,8 @@ export class RateLimiter {
     this.requests.push(now);
     this.tokens.push({ t: now, n: estTokens });
     this.rpdCount += 1;
-    // Persist RPD 寫入不等待完成（小量資料,容忍短暫不一致）
-    this.persistRpd().catch(err =>
-      debugLog('warn', 'rate-limit', 'rpd persist failed', { error: err.message })
-    );
+    // 節流持久化 RPD（每 10 次或 30 秒才寫入一次，降低 storage 寫入頻率）
+    this.scheduleRpdPersist();
 
     // RPD 超過預算上限 → 回傳警告旗標（不阻擋翻譯）
     const rpdExceeded = this.rpdCount > this.rpdCap;

@@ -3,3 +3,14 @@
  * 因此不需要任何 .shinkansen-translation 區塊樣式。
  * 本檔保留給未來可能的全域樣式微調使用（例如 Toast host 定位）。
  */
+
+/* v1.0.3: 編輯譯文模式 — 淡色虛線框標示可編輯區塊 */
+.shinkansen-editable {
+  outline: 1.5px dashed rgba(0, 113, 227, 0.4) !important;
+  outline-offset: 2px;
+  border-radius: 3px;
+  cursor: text;
+}
+.shinkansen-editable:focus {
+  outline-color: rgba(0, 113, 227, 0.7) !important;
+}

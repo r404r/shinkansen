@@ -165,150 +165,126 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
-// ─── 訊息路由 ───────────────────────────────────────────────
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === 'TRANSLATE_BATCH') {
-    handleTranslate(message.payload, sender)
-      .then((result) => sendResponse({ ok: true, ...result }))
-      .catch((err) => {
-        debugLog('error', 'translate', 'translate failed', { error: err?.message || String(err) });
-        sendResponse({ ok: false, error: err?.message || String(err) });
-      });
-    return true;
-  }
-  // v0.69: 術語表擷取請求（priority 0 插隊）
-  if (message?.type === 'EXTRACT_GLOSSARY') {
-    handleExtractGlossary(message.payload, sender)
-      .then((result) => sendResponse({ ok: true, ...result }))
-      .catch((err) => {
-        debugLog('error', 'glossary', 'glossary extraction failed', { error: err?.message || String(err) });
-        sendResponse({ ok: false, error: err?.message || String(err) });
-      });
-    return true;
-  }
-  if (message?.type === 'CLEAR_CACHE') {
-    cache.clearAll()
-      .then((removed) => sendResponse({ ok: true, removed }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'CACHE_STATS') {
-    cache.stats()
-      .then((s) => sendResponse({ ok: true, ...s }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'USAGE_STATS') {
-    getUsageStats()
-      .then((s) => sendResponse({ ok: true, ...s }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'RESET_USAGE') {
-    resetUsageStats()
-      .then((s) => sendResponse({ ok: true, ...s }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'SET_BADGE_TRANSLATED') {
-    setTranslatedBadge(sender?.tab?.id)
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'CLEAR_BADGE') {
-    clearTranslatedBadge(sender?.tab?.id)
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  // ─── v0.88: Log 系統訊息 ────────────────────────────────
-  // content.js 透過 sendLog() 送 LOG 訊息到 background，統一寫入記憶體 buffer
-  if (message?.type === 'LOG') {
-    const { level, category, message: msg, data } = message.payload || {};
-    // 補上來源分頁 URL
-    const enrichedData = { ...data, _tab: sender?.tab?.url || sender?.url };
-    debugLog(level || 'info', category || 'system', msg || '', enrichedData);
-    sendResponse({ ok: true });
-    return false; // 同步回應，不需 return true
-  }
-  if (message?.type === 'GET_LOGS') {
-    const afterSeq = message.payload?.afterSeq || 0;
-    sendResponse({ ok: true, ...getLogs(afterSeq) });
-    return false;
-  }
-  if (message?.type === 'CLEAR_RPD') {
-    (async () => {
-      try {
-        const all = await chrome.storage.local.get(null);
-        const rpdKeys = Object.keys(all).filter(k => k.startsWith('rateLimit_rpd_'));
-        if (rpdKeys.length) await chrome.storage.local.remove(rpdKeys);
-        if (limiter) {
-          limiter.rpdCount = 0;
-          limiter.rpdLoaded = false;
-          limiter.rpdLoadingPromise = null;
-        }
-        debugLog('info', 'rate-limit', 'RPD cleared via debug bridge', { removedKeys: rpdKeys });
-        sendResponse({ ok: true, removedKeys: rpdKeys });
-      } catch (err) {
-        sendResponse({ ok: false, error: err.message });
+// ─── 訊息路由（handler map 取代 if-else 鏈） ──────────────────
+const messageHandlers = {
+  TRANSLATE_BATCH: {
+    async: true,
+    handler: (payload, sender) => handleTranslate(payload, sender),
+  },
+  EXTRACT_GLOSSARY: {
+    async: true,
+    handler: (payload, sender) => handleExtractGlossary(payload, sender),
+  },
+  CLEAR_CACHE: {
+    async: true,
+    handler: () => cache.clearAll().then(removed => ({ removed })),
+  },
+  CACHE_STATS: {
+    async: true,
+    handler: () => cache.stats(),
+  },
+  USAGE_STATS: {
+    async: true,
+    handler: () => getUsageStats(),
+  },
+  RESET_USAGE: {
+    async: true,
+    handler: () => resetUsageStats(),
+  },
+  SET_BADGE_TRANSLATED: {
+    async: true,
+    handler: (_, sender) => setTranslatedBadge(sender?.tab?.id),
+  },
+  CLEAR_BADGE: {
+    async: true,
+    handler: (_, sender) => clearTranslatedBadge(sender?.tab?.id),
+  },
+  LOG: {
+    async: false,
+    handler: (payload, sender) => {
+      const { level, category, message: msg, data } = payload || {};
+      const enrichedData = { ...data, _tab: sender?.tab?.url || sender?.url };
+      debugLog(level || 'info', category || 'system', msg || '', enrichedData);
+    },
+  },
+  GET_LOGS: {
+    async: false,
+    handler: (payload) => getLogs(payload?.afterSeq || 0),
+  },
+  CLEAR_LOGS: {
+    async: false,
+    handler: () => { clearLogs(); },
+  },
+  CLEAR_RPD: {
+    async: true,
+    handler: async () => {
+      const all = await chrome.storage.local.get(null);
+      const rpdKeys = Object.keys(all).filter(k => k.startsWith('rateLimit_rpd_'));
+      if (rpdKeys.length) await chrome.storage.local.remove(rpdKeys);
+      if (limiter) {
+        limiter.rpdCount = 0;
+        limiter.rpdLoaded = false;
+        limiter.rpdLoadingPromise = null;
       }
-    })();
-    return true;
-  }
-  if (message?.type === 'CLEAR_LOGS') {
-    clearLogs();
-    sendResponse({ ok: true });
-    return false;
-  }
-  // ─── v0.86: 用量紀錄相關訊息 ──────────────────────────
-  if (message?.type === 'LOG_USAGE') {
-    (async () => {
-      // 由 background 端補上 model（content.js 不知道目前模型）
+      debugLog('info', 'rate-limit', 'RPD cleared via debug bridge', { removedKeys: rpdKeys });
+      return { removedKeys: rpdKeys };
+    },
+  },
+  LOG_USAGE: {
+    async: true,
+    handler: async (payload) => {
       const settings = await getSettings();
       const record = {
-        ...message.payload,
+        ...payload,
         model: settings.geminiConfig?.model || 'unknown',
       };
       await usageDB.logTranslation(record);
-      sendResponse({ ok: true });
-    })().catch((err) => {
-      debugLog('warn', 'system', 'LOG_USAGE failed', { error: err.message });
-      sendResponse({ ok: false, error: err.message });
-    });
-    return true;
-  }
-  if (message?.type === 'QUERY_USAGE') {
-    usageDB.query(message.payload || {})
-      .then((records) => sendResponse({ ok: true, records }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'QUERY_USAGE_STATS') {
-    usageDB.getStats(message.payload || {})
-      .then((stats) => sendResponse({ ok: true, stats }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'QUERY_USAGE_CHART') {
-    usageDB.getAggregated(message.payload || {})
-      .then((data) => sendResponse({ ok: true, data }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'EXPORT_USAGE_CSV') {
-    usageDB.exportCSV(message.payload || {})
-      .then((csv) => sendResponse({ ok: true, csv }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-  if (message?.type === 'CLEAR_USAGE') {
-    const p = message.payload || {};
-    const promise = p.beforeTimestamp ? usageDB.clearBefore(p.beforeTimestamp) : usageDB.clearAll();
-    promise
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
+    },
+  },
+  QUERY_USAGE: {
+    async: true,
+    handler: async (payload) => ({ records: await usageDB.query(payload || {}) }),
+  },
+  QUERY_USAGE_STATS: {
+    async: true,
+    handler: async (payload) => ({ stats: await usageDB.getStats(payload || {}) }),
+  },
+  QUERY_USAGE_CHART: {
+    async: true,
+    handler: async (payload) => ({ data: await usageDB.getAggregated(payload || {}) }),
+  },
+  EXPORT_USAGE_CSV: {
+    async: true,
+    handler: async (payload) => ({ csv: await usageDB.exportCSV(payload || {}) }),
+  },
+  CLEAR_USAGE: {
+    async: true,
+    handler: (payload) => {
+      return payload?.beforeTimestamp
+        ? usageDB.clearBefore(payload.beforeTimestamp)
+        : usageDB.clearAll();
+    },
+  },
+};
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const type = message?.type;
+  const entry = messageHandlers[type];
+  if (!entry) return; // 不認識的訊息類型，不處理
+
+  if (entry.async) {
+    entry.handler(message.payload, sender)
+      .then((result) => sendResponse({ ok: true, ...(result && typeof result === 'object' ? result : {}) }))
+      .catch((err) => {
+        debugLog('error', 'system', `${type} failed`, { error: err?.message || String(err) });
+        sendResponse({ ok: false, error: err?.message || String(err) });
+      });
+    return true; // 保留 sendResponse 通道
+  } else {
+    // 同步 handler
+    const result = entry.handler(message.payload, sender);
+    sendResponse({ ok: true, ...(result && typeof result === 'object' ? result : {}) });
+    return false;
   }
 });
 
@@ -355,6 +331,7 @@ async function handleTranslate(payload, sender) {
   let billedInputTokens = 0;
   let billedCostUSD = 0;
   let acquireResult = null; // v0.90: hoist 到 if 外面，讓 return 讀得到 rpdExceeded
+  let batchHadMismatch = false; // v0.94: hoist 到 if 外面，讓 return 讀得到 hadMismatch
   if (missingTexts.length) {
     // 先過 rate limiter 取得一個 slot（RPM/TPM 硬限制；RPD 只回傳警告旗標）
     if (!limiter) await initLimiter();
@@ -373,7 +350,7 @@ async function handleTranslate(payload, sender) {
     const res = await translateBatch(missingTexts, settings, glossary);
     fresh = res.translations;
     batchUsage = res.usage;
-    var batchHadMismatch = res.hadMismatch || false; // v0.94: mismatch 旗標
+    batchHadMismatch = res.hadMismatch || false; // v0.94: mismatch 旗標
     batchCostUSD = computeCostUSD(batchUsage.inputTokens, batchUsage.outputTokens, settings.pricing);
     const batchMs = Date.now() - t0;
     debugLog('info', 'api', 'translateBatch done', {
@@ -429,7 +406,7 @@ async function handleTranslate(payload, sender) {
     // v0.90: RPD 軟性預算警告（不阻擋翻譯，只通知 content 端顯示提示）
     rpdExceeded: acquireResult?.rpdExceeded || false,
     // v0.94: 本批翻譯是否觸發了 segment mismatch fallback
-    hadMismatch: typeof batchHadMismatch !== 'undefined' ? batchHadMismatch : false,
+    hadMismatch: batchHadMismatch,
   };
 }
 

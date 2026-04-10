@@ -71,7 +71,7 @@
 
     <section>
       <h2>效能與配額（並行翻譯）</h2>
-      <p class="muted">根據你的 Gemini API 付費層級，自動控制翻譯速度，避免超出 Google 的使用量限制</p>
+      <p class="muted">根據你的 Gemini API 付費層級，自動控制翻譯速度，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
       <label>
         Gemini API 層級
         <select id="tier">
@@ -104,7 +104,17 @@
       <label>
         同時並發批次上限
         <input type="number" id="maxConcurrentBatches" step="1" min="1" max="50">
-        <small class="muted">同時送出幾批翻譯請求。每批最多包含 20 段或約 3,500 字元（先到先封口）。這裡的「段」是指網頁上一個獨立的文字區塊（例如一個段落、一個標題、一個列表項目），由網頁結構自動偵測，不是按字數切割。數字越大翻越快，但也越容易撞到配額上限，長文建議 5–10，短文可設 1（逐批翻譯）</small>
+        <small class="muted">同時送出幾批翻譯請求。數字越大翻越快，但也越容易撞到配額上限，長文建議 5–10，短文可設 1（逐批翻譯）</small>
+      </label>
+      <label>
+        每批段數上限
+        <input type="number" id="maxUnitsPerBatch" step="1" min="1" max="100">
+        <small class="muted">每一批最多包含幾段。這裡的「段」是指網頁上一個獨立的文字區塊（例如一個段落、一個標題、一個列表項目），由網頁結構自動偵測。數字越大每批翻越多，但太大容易導致翻譯對齊失準，預設 12</small>
+      </label>
+      <label>
+        每批字元預算
+        <input type="number" id="maxCharsPerBatch" step="500" min="500" max="20000">
+        <small class="muted">每一批累積的原文字元數上限（與段數上限先到先封口）。數字越大每批能裝越多內容，但太大可能超出模型輸出長度限制，預設 3500</small>
       </label>
       <label>
         單頁翻譯段落上限
@@ -141,7 +151,7 @@
         <small class="muted">Gemini 每次回覆的最大 token 數量。數字越大，單批能翻譯的內容越多，但也會消耗更多費用，上限 65,535，預設 8,192，一般不需要調整</small>
       </label>
       <label>
-        System Instruction
+        翻譯 Prompt
         <textarea id="systemInstruction" rows="8"></textarea>
       </label>
     </section>
@@ -164,7 +174,7 @@
         <small class="muted">長文等待術語表的最長時間。超過則放棄術語表直接翻譯，預設 60000（60 秒）</small>
       </label>
       <label>
-        術語擷取 System Instruction
+        術語擷取 Prompt
         <textarea id="glossaryPrompt" rows="10"></textarea>
         <small class="muted">控制 Gemini 擷取哪些類型的專有名詞。進階使用者可自行調整</small>
       </label>
@@ -215,6 +225,8 @@
 
     <!-- ═══ 用量紀錄分頁 ═══ -->
     <div id="tab-usage" class="tab-panel">
+
+      <p class="muted">以下為 Shinkansen 根據模型計價設定估算的用量，僅供參考。實際帳單金額請至 <a href="https://aistudio.google.com/spend" target="_blank" rel="noopener">Gemini API Spend</a> 查詢</p>
 
       <!-- 日期範圍與粒度選擇 -->
       <div class="usage-controls">
@@ -348,6 +360,6 @@
   </div>
 
   <script src="../lib/vendor/chart.min.js"></script>
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>

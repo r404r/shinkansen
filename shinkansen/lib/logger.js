@@ -33,7 +33,7 @@ let logSeq = 0;
  * @param {string} message  摘要訊息
  * @param {object} [data]   結構化附加資料
  */
-export async function debugLog(level, category, message, data) {
+export function debugLog(level, category, message, data) {
   const entry = {
     seq: ++logSeq,
     t: new Date().toISOString(),
@@ -43,49 +43,21 @@ export async function debugLog(level, category, message, data) {
     data: sanitize(data),
   };
 
-  // 寫入記憶體 buffer
+  // 寫入記憶體 buffer（同步，保證不遺漏）
   logBuffer.push(entry);
   while (logBuffer.length > MAX_LOGS) logBuffer.shift();
 
-  // 有開 debugLog 才印 console（讓進階使用者可以在 DevTools 看）
-  try {
-    const settings = await getSettings();
+  // 有開 debugLog 才印 console（非同步讀設定，不阻塞 buffer 寫入）
+  getSettings().then(settings => {
     if (settings.debugLog) {
       const tag = `[Shinkansen][${category}]`;
       if (level === 'error') console.error(tag, message, data);
       else if (level === 'warn') console.warn(tag, message, data);
       else console.log(tag, message, data);
     }
-  } catch {
-    // getSettings 失敗（例如 SW 剛啟動 storage 尚未就緒）不影響 buffer 寫入
-  }
-}
-
-/**
- * 二參數向下相容：舊呼叫 debugLog('info', 'some message', data)
- * 在 category 欄位傳的其實是 message。
- * 辨別方式：若 category 不在已知清單裡，視為舊格式。
- *
- * 注意：此 wrapper 只在過渡期存在，等全部呼叫點都改完就可以移除。
- */
-const KNOWN_CATEGORIES = new Set([
-  'translate', 'api', 'cache', 'rate-limit', 'glossary', 'spa', 'system',
-]);
-
-const _rawDebugLog = debugLog;
-
-/**
- * 重新匯出一個相容 wrapper：
- * - 新格式：debugLog(level, category, message, data)
- * - 舊格式：debugLog(level, message, data) → category 自動設為 'system'
- */
-export function log(level, categoryOrMessage, messageOrData, maybeData) {
-  if (KNOWN_CATEGORIES.has(categoryOrMessage)) {
-    // 新格式
-    return _rawDebugLog(level, categoryOrMessage, messageOrData, maybeData);
-  }
-  // 舊格式：category 位置其實是 message
-  return _rawDebugLog(level, 'system', categoryOrMessage, messageOrData);
+  }).catch(() => {
+    // getSettings 失敗不影響 buffer 寫入
+  });
 }
 
 /**

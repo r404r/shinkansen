@@ -1273,8 +1273,9 @@
   // v0.37 起改為「字元預算 + 段數上限」雙門檻的 greedy 打包，以避免單批
   // token 數暴衝（例如 20 個 Stratechery 論述段）或 slot 過多導致 LLM
   // 對齊失準。任一門檻先達到就封口開新批次；單段本身超過預算時獨佔一批。
-  const MAX_UNITS_PER_BATCH = 12;        // 段數上限（v0.91 從 20 降為 12，降低 mismatch 觸發率）
-  const MAX_CHARS_PER_BATCH = 3500;      // 字元預算，作為 token proxy（≈ 1000 英文 tokens，留 output headroom）
+  // v1.0.2: 段數上限與字元預算改為從設定頁讀取，以下僅為讀取失敗時的 fallback 預設值。
+  const DEFAULT_UNITS_PER_BATCH = 12;    // 段數上限（v0.91 從 20 降為 12，降低 mismatch 觸發率）
+  const DEFAULT_CHARS_PER_BATCH = 3500;  // 字元預算，作為 token proxy（≈ 1000 英文 tokens，留 output headroom）
   const DEFAULT_MAX_CONCURRENT = 10; // content.js 側並發上限（與 background 的 rate limiter 雙重保險）
   // v0.81: 單頁翻譯段落總數上限。超大頁面（如維基百科年表條目）可能收集到
   // 數百到上千段，全部送 API 會造成不必要的成本與延遲。超過此上限時截斷並提示使用者。
@@ -1350,9 +1351,10 @@
   }
 
   // Greedy 打包：依原順序累加段落，超過任一門檻就封口。
-  // - 字元數 > MAX_CHARS_PER_BATCH 的超大段落獨佔一批（不切段落本身，避免破壞語意）。
+  // - 字元數 > maxChars 的超大段落獨佔一批（不切段落本身，避免破壞語意）。
   // - 順序維持原始 DOM index，確保注入位置正確。
-  function packBatches(texts, units, slotsList) {
+  // v1.0.2: maxUnits / maxChars 改為參數，由呼叫端從設定讀取。
+  function packBatches(texts, units, slotsList, maxUnits, maxChars) {
     const jobs = [];
     let cur = null;
     const flush = () => {
@@ -1362,7 +1364,7 @@
     for (let i = 0; i < texts.length; i++) {
       const len = (texts[i] || '').length;
       // 單段就超過預算 → 獨佔一批
-      if (len > MAX_CHARS_PER_BATCH) {
+      if (len > maxChars) {
         flush();
         jobs.push({
           start: i,
@@ -1375,7 +1377,7 @@
         continue;
       }
       // 若加入這段會超過任一門檻，先封口
-      if (cur && (cur.chars + len > MAX_CHARS_PER_BATCH || cur.texts.length >= MAX_UNITS_PER_BATCH)) {
+      if (cur && (cur.chars + len > maxChars || cur.texts.length >= maxUnits)) {
         flush();
       }
       if (!cur) cur = { start: i, texts: [], units: [], slots: [], chars: 0 };
@@ -1418,12 +1420,20 @@
     const texts = serialized.map(s => s.text);
     const slotsList = serialized.map(s => s.slots);
 
-    // 讀取並發上限設定(若讀取失敗就用 default)
+    // 讀取並發上限 + 每批段數/字元預算設定(若讀取失敗就用 default)
     let maxConcurrent = DEFAULT_MAX_CONCURRENT;
+    let maxUnitsPerBatch = DEFAULT_UNITS_PER_BATCH;
+    let maxCharsPerBatch = DEFAULT_CHARS_PER_BATCH;
     try {
-      const { maxConcurrentBatches } = await chrome.storage.sync.get('maxConcurrentBatches');
-      if (Number.isFinite(maxConcurrentBatches) && maxConcurrentBatches > 0) {
-        maxConcurrent = maxConcurrentBatches;
+      const batchCfg = await chrome.storage.sync.get(['maxConcurrentBatches', 'maxUnitsPerBatch', 'maxCharsPerBatch']);
+      if (Number.isFinite(batchCfg.maxConcurrentBatches) && batchCfg.maxConcurrentBatches > 0) {
+        maxConcurrent = batchCfg.maxConcurrentBatches;
+      }
+      if (Number.isFinite(batchCfg.maxUnitsPerBatch) && batchCfg.maxUnitsPerBatch >= 1) {
+        maxUnitsPerBatch = batchCfg.maxUnitsPerBatch;
+      }
+      if (Number.isFinite(batchCfg.maxCharsPerBatch) && batchCfg.maxCharsPerBatch >= 500) {
+        maxCharsPerBatch = batchCfg.maxCharsPerBatch;
       }
     } catch (_) { /* 保持 default */ }
 
@@ -1435,7 +1445,7 @@
       billedInputTokens: 0, billedCostUSD: 0,
       cacheHits: 0,
     };
-    const jobs = packBatches(texts, units, slotsList);
+    const jobs = packBatches(texts, units, slotsList, maxUnitsPerBatch, maxCharsPerBatch);
     const failures = [];
     let rpdWarning = false; // v0.90: RPD 軟性預算警告旗標
     let hadAnyMismatch = false; // v0.94: 是否有任何 batch 觸發 segment mismatch
@@ -1575,14 +1585,23 @@
     });
     const preTexts = preSerialized.map(s => s.text);
 
+    // v1.0.2: 讀取每批段數/字元預算設定，用於估算批次數
+    let estUnitsPerBatch = DEFAULT_UNITS_PER_BATCH;
+    let estCharsPerBatch = DEFAULT_CHARS_PER_BATCH;
+    try {
+      const bc = await chrome.storage.sync.get(['maxUnitsPerBatch', 'maxCharsPerBatch']);
+      if (Number.isFinite(bc.maxUnitsPerBatch) && bc.maxUnitsPerBatch >= 1) estUnitsPerBatch = bc.maxUnitsPerBatch;
+      if (Number.isFinite(bc.maxCharsPerBatch) && bc.maxCharsPerBatch >= 500) estCharsPerBatch = bc.maxCharsPerBatch;
+    } catch (_) { /* 保持 default */ }
+
     // 估算批次數（用簡化版打包邏輯計算，不需要完整的 slotsList）
     let batchCount = 0;
     {
       let chars = 0, segs = 0;
       for (const t of preTexts) {
         const len = t.length;
-        if (len > MAX_CHARS_PER_BATCH) { batchCount++; chars = 0; segs = 0; continue; }
-        if (chars + len > MAX_CHARS_PER_BATCH || segs >= MAX_UNITS_PER_BATCH) {
+        if (len > estCharsPerBatch) { batchCount++; chars = 0; segs = 0; continue; }
+        if (chars + len > estCharsPerBatch || segs >= estUnitsPerBatch) {
           batchCount++; chars = 0; segs = 0;
         }
         chars += len; segs++;
@@ -2246,6 +2265,8 @@
   }
 
   function restorePage() {
+    // v1.0.3: 還原前先關閉編輯模式（避免 contenteditable 殘留）
+    if (editModeActive) toggleEditMode(false);
     // v0.45: 取消掉任何還沒觸發的延遲 rescan,避免使用者按還原之後
     // rescan tick 又把新段落翻出來,造成「已按還原但中文仍零星冒出」。
     // 注意:目前正在 await 中的 rescan 還是可能寫入,接受這個小風險。
@@ -2458,15 +2479,47 @@
     }
   }
 
+  // ─── v1.0.3: 編輯譯文模式 ─────────────────────────────
+  // 讓使用者在翻譯後直接在頁面上修改譯文（配合 Readwise Reader 等擷取工具）。
+  // 不存快取、不寫 storage，重新整理即回復原本翻譯結果。
+  let editModeActive = false;
+
+  function toggleEditMode(forceState) {
+    // 翻譯尚未完成時不允許進入編輯模式（避免與注入流程衝突）
+    if (!STATE.translated && forceState !== false) {
+      return { ok: false, error: 'translation not complete' };
+    }
+    const enable = typeof forceState === 'boolean' ? forceState : !editModeActive;
+    const els = document.querySelectorAll('[data-shinkansen-translated]');
+    if (els.length === 0) return { ok: false, error: 'no translated elements' };
+
+    for (const el of els) {
+      if (enable) {
+        el.setAttribute('contenteditable', 'true');
+        el.classList.add('shinkansen-editable');
+      } else {
+        el.removeAttribute('contenteditable');
+        el.classList.remove('shinkansen-editable');
+      }
+    }
+    editModeActive = enable;
+    sendLog('info', 'system', enable ? 'edit mode ON' : 'edit mode OFF', { elements: els.length });
+    return { ok: true, editing: editModeActive, elements: els.length };
+  }
+
   // ─── 訊息接收 （來自 background / popup) ──────────────
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === 'TOGGLE_TRANSLATE') {
       translatePage();
       return;
     }
+    if (msg?.type === 'TOGGLE_EDIT_MODE') {
+      sendResponse(toggleEditMode());
+      return true;
+    }
     if (msg?.type === 'GET_STATE') {
       // popup 開啟時用來決定按鈕該顯示「翻譯本頁」還是「顯示原文」
-      sendResponse({ ok: true, translated: STATE.translated });
+      sendResponse({ ok: true, translated: STATE.translated, editing: editModeActive });
       return true; // 保留 sendResponse 通道
     }
   });

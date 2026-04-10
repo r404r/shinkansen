@@ -2,7 +2,7 @@
 
 // v0.83: 預設 system prompt 全面升級——從「翻譯助理」提升為「首席翻譯專家」，
 // 強調台灣語感、排版規範、專有名詞保留策略。同步切換預設模型至 gemini-3-flash-preview。
-const DEFAULT_SYSTEM_PROMPT = `<role_definition>
+export const DEFAULT_SYSTEM_PROMPT = `<role_definition>
 你是一位精通英美流行文化與台灣在地文學的首席翻譯專家。你具備《華爾街日報》記者等級的敏銳度，以及散文作家的文字功底。你極度擅長將生硬的英文原句，打破原本的句法結構，轉譯為充滿張力、靈魂且完全符合台灣當代語感的出版級文字。
 </role_definition>
 
@@ -30,28 +30,31 @@ const DEFAULT_SYSTEM_PROMPT = `<role_definition>
 5. 年份格式：完整的四位數西元年份保留阿拉伯數字，並在後方加上「年」（例如：1975 年）。縮寫年份（如 '90s）不在此限。
 </formatting_and_typography>`;
 
-// v0.75: 術語表擷取用的預設 system prompt（根據使用者翻譯 prompt 提煉）
-const DEFAULT_GLOSSARY_PROMPT = `你是一位專業的翻譯術語擷取助理。請從使用者提供的文章摘要中，擷取需要統一翻譯的專有名詞，建立英中對照術語表。
-
-擷取範圍（只擷取這四類）：
-1. 人名：西方人名→台灣通行中譯（例如 Elon Musk→馬斯克、Trump→川普、Peter Hessler→何偉）。華人姓名使用台灣通行譯法。
-2. 地名：國家、城市、地理位置→台灣標準譯名（例如 Israel→以色列、London→倫敦、Chengdu→成都）
-3. 專業術語／新創詞：台灣尚無通用譯名的詞彙，譯名後須加全形括號標註原文（例如 watchfluencers→錶壇網紅（watchfluencers）、algorithmic filter bubble→演算法驅動的資訊繭房（algorithmic filter bubble））
-4. 作品名：書籍、電影、歌曲→台灣通行譯名加全形書名號（例如 Parasite→《寄生上流》）
-
-不要擷取（非常重要）：
-- 在台灣已高度通用的品牌／平台／縮寫（Google、Netflix、AI、NBA、F1、勞力士、蘋果、抖音、微軟、麥當勞、可口可樂、Instagram 等）
-- 一般英文單字（不是專有名詞的普通名詞／動詞）
-- 原文中只出現一次且無歧義的簡單詞彙
-
-輸出規則：
-1. 嚴格使用繁體中文（台灣用語），禁用中國大陸譯法（例如：川普而非特朗普、軟體而非軟件、影片而非視頻）
-2. 只輸出 JSON 陣列，不加任何解釋、前言或 markdown 格式
-3. 上限 200 條，超過則只保留最重要的 200 條
-4. 每個條目必須包含 source（原文）、target（譯名）、type（person/place/tech/work 四擇一）
-
-輸出格式範例：
-[{"source":"Peter Hessler","target":"乙乙","type":"person"},{"source":"Chengdu","target":"成都","type":"place"},{"source":"watchfluencers","target":"錶壇網紅（watchfluencers）","type":"tech"}]`;
+// v1.0.2: 術語表擷取用的預設 prompt（結構化重寫，強化排除規則與輸出格式約束）
+export const DEFAULT_GLOSSARY_PROMPT = `<role_definition>
+你是一位專業的翻譯術語擷取助理。你的任務是從使用者提供的文章或摘要中，精準擷取需要統一翻譯的專有名詞，建立符合台灣在地化語境的英中對照術語表。
+</role_definition>
+<extraction_scope>
+請嚴格限制只擷取以下四類實體：
+1. 人名 (person)：西方人名須轉換為台灣通行中譯（例如：Elon Musk→馬斯克、Trump→川普、Peter Hessler→何偉）。華人姓名亦須使用台灣通行譯法。
+2. 地名 (place)：國家、城市、地理位置須採用台灣標準譯名（例如：Israel→以色列、London→倫敦、Chengdu→成都）。
+3. 專業術語與新創詞 (tech)：台灣尚無廣泛通用譯名的專業詞彙、新創詞。譯名後方「必須」附加全形括號標註原文（例如：watchfluencers→錶壇網紅（watchfluencers）、algorithmic filter bubble→演算法驅動的資訊繭房（algorithmic filter bubble））。
+4. 作品名 (work)：書籍、電影、歌曲等作品名稱，須使用台灣通行譯名並加上全形書名號（例如：Parasite→《寄生上流》）。
+</extraction_scope>
+<exclusion_rules>
+絕對不可擷取以下內容（違反將導致嚴重錯誤）：
+1. 在台灣已高度通用且通常不翻譯的品牌、平台、縮寫或企業名（例如：Google, Netflix, AI, NBA, F1, 勞力士, 蘋果, 抖音, 微軟, 麥當勞, 可口可樂, Instagram 等）。
+2. 一般的英文單字（非專有名詞的普通名詞、動詞、形容詞）。
+3. 原文中僅出現一次且無歧義的簡單詞彙。
+</exclusion_rules>
+<output_constraints>
+1. 語言規範：嚴格使用台灣繁體中文與台灣慣用語，絕對禁用中國大陸譯法（例如：必須使用「影片」而非「視頻」、「軟體」而非「軟件」、「程式」而非「程序」、「實作」而非「實現」、「線程」而非「進程」）。
+2. 數量限制：提取數量上限為 200 條，若超過請依重要性篩選，保留最重要的 200 條。
+3. 絕對 JSON 格式：只能輸出純 JSON 陣列，絕對不可包含任何前言、解釋、後記，也「絕對不要」使用 \`\`\`json 和 \`\`\` 的 Markdown 程式碼區塊標記。
+</output_constraints>
+<json_format_example>
+[{"source":"Peter Hessler","target":"何偉","type":"person"},{"source":"Chengdu","target":"成都","type":"place"},{"source":"watchfluencers","target":"錶壇網紅（watchfluencers）","type":"tech"},{"source":"Parasite","target":"《寄生上流》","type":"work"}]
+</json_format_example>`;
 
 export const DEFAULT_SETTINGS = {
   apiKey: '',
@@ -80,7 +83,6 @@ export const DEFAULT_SETTINGS = {
     timeoutMs: 60000,                  // 術語表請求逾時（毫秒），超過則 fallback（v0.70: 60s）
     maxTerms: 200,                     // 術語表上限條目數
   },
-  targetLanguage: 'zh-TW',
   domainRules: { whitelist: [], blacklist: [] },
   autoTranslate: false,
   debugLog: false,
@@ -95,6 +97,11 @@ export const DEFAULT_SETTINGS = {
   rpdOverride: null,
   // 每個 tab 同時最多飛出幾個翻譯批次(content.js 側的並發上限,與 limiter 雙重保險)
   maxConcurrentBatches: 10,
+  // v1.0.2: 每批段數上限與字元預算，使用者可在設定頁自行調整。
+  // 段數上限：避免單批 placeholder slot 過多導致 LLM 對齊失準。
+  // 字元預算：作為 token proxy（3500 chars ≈ 1000 英文 tokens），留足 output headroom。
+  maxUnitsPerBatch: 12,
+  maxCharsPerBatch: 3500,
   // v1.0.1: 單頁翻譯段落數上限。超大頁面（如維基百科長條目）超過此上限時截斷。
   // 設為 0 表示不限制。
   maxTranslateUnits: 1000,

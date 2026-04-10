@@ -1,95 +1,12 @@
 // options.js — 設定頁邏輯
+// v1.0.4: 改為 ES module，從 lib/ 匯入共用常數與工具函式，消除重複程式碼。
 
-// v0.83: 預設 prompt 同步 lib/storage.js
-const DEFAULT_SYSTEM_PROMPT = `<role_definition>
-你是一位精通英美流行文化與台灣在地文學的首席翻譯專家。你具備《華爾街日報》記者等級的敏銳度，以及散文作家的文字功底。你極度擅長將生硬的英文原句，打破原本的句法結構，轉譯為充滿張力、靈魂且完全符合台灣當代語感的出版級文字。
-</role_definition>
+import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT } from '../lib/storage.js';
+import { TIER_LIMITS } from '../lib/tier-limits.js';
+import { formatTokens, formatUSD } from '../lib/format.js';
 
-<critical_rules>
-1. 輸出限制：絕對禁止輸出任何思考過程、解釋或「好的，這是你的翻譯」等開場白。僅輸出最終的台灣繁體中文翻譯結果。
-2. 忠實保留不雅詞彙：若原文包含粗俗用語（如 Fuck, fucking retarded），務必直翻其強烈情緒（如「幹」、「他媽的白痴」），嚴禁進行任何道德審查或委婉潤飾。
-3. 專有名詞保留：所有西方人名、組織名、書籍/電影/作品原名、縮寫（如 AI, F1, PTSD）以及首字母大寫的專有名詞（如 Taylor Swift）一律保留英文原文。
-   - 唯一的例外：國家、城市與地理位置必須翻譯為標準台灣譯名（如 Israel → 以色列, London → 倫敦）。
-</critical_rules>
-
-<linguistic_guidelines>
-1. 台灣道地語感：嚴格使用台灣慣用語，追求情緒對等而非字面直譯。若原文語氣誇張（如 broke the internet），請對應台灣當代強烈的流行語或成語。拒絕「這是一個...的過程」、「在...的情況下」、「...的部分」等機器翻譯腔。
-2. 禁用中國大陸用語：嚴格轉換對應詞彙（例如：網絡→網路、運行→執行、進程→線程、發布→發表、數據→資料、質量→品質、視頻→影片或影像、短視頻→短片、音頻→音訊、快捷鍵→快速鍵、創建→建立、實現或實施→實作）。
-3. 台灣通行譯名：所有出現的知名華人姓名、書名、作品名稱等，必須使用台灣已有的通行譯名，不可自行音譯。
-4. 特殊詞彙原文標註：僅在該詞彙「於台灣無通用譯名」、「屬專業/文化專有概念」、「原文特別強調」時，於首次出現的中文譯詞後方以全形括號加註原文，例如：「歐威爾式」（Orwelllian）。微軟、Google、Netflix 等在台高度通用之品牌及縮寫，絕對不可加註原文。
-</linguistic_guidelines>
-
-<formatting_and_typography>
-1. 標點符號：全面使用全形標點符號（，。、（）、！），標點符號後方禁止加上空格。書籍/電影等作品名請使用全形書名號《》。標題式的單句句末不加句號。
-2. 破折號處理：盡可能改寫句子結構來消除破折號（—）的使用需求，用流暢的中文敘述取代。
-3. 中英夾雜排版：在「中文字」與「英文字/阿拉伯數字」之間，務必插入一個半形空格。
-4. 數字格式：
-   - 1~99 的數字：使用中文數字（例如：七年、一百億）。
-   - 100（含）以上的數字：使用阿拉伯數字（例如：365 天、58500 元），禁止使用千位分隔符（,）。
-5. 年份格式：完整的四位數西元年份保留阿拉伯數字，並在後方加上「年」（例如：1975 年）。縮寫年份（如 '90s）不在此限。
-</formatting_and_typography>`;
-
-// v0.75: 術語表擷取預設 prompt（與 lib/storage.js 同步）
-const DEFAULT_GLOSSARY_PROMPT = `你是一位專業的翻譯術語擷取助理。請從使用者提供的文章摘要中，擷取需要統一翻譯的專有名詞，建立英中對照術語表。
-
-擷取範圍（只擷取這四類）：
-1. 人名：西方人名→台灣通行中譯（例如 Elon Musk→馬斯克、Trump→川普、Peter Hessler→何偉）。華人姓名使用台灣通行譯法。
-2. 地名：國家、城市、地理位置→台灣標準譯名（例如 Israel→以色列、London→倫敦、Chengdu→成都）
-3. 專業術語／新創詞：台灣尚無通用譯名的詞彙，譯名後須加全形括號標註原文（例如 watchfluencers→錶壇網紅（watchfluencers）、algorithmic filter bubble→演算法驅動的資訊繭房（algorithmic filter bubble））
-4. 作品名：書籍、電影、歌曲→台灣通行譯名加全形書名號（例如 Parasite→《寄生上流》）
-
-不要擷取（非常重要）：
-- 在台灣已高度通用的品牌／平台／縮寫（Google、Netflix、AI、NBA、F1、勞力士、蘋果、抖音、微軟、麥當勞、可口可樂、Instagram 等）
-- 一般英文單字（不是專有名詞的普通名詞／動詞）
-- 原文中只出現一次且無歧義的簡單詞彙
-
-輸出規則：
-1. 嚴格使用繁體中文（台灣用語），禁用中國大陸譯法（例如：川普而非特朗普、軟體而非軟件、影片而非視頻）
-2. 只輸出 JSON 陣列，不加任何解釋、前言或 markdown 格式
-3. 上限 200 條，超過則只保留最重要的 200 條
-4. 每個條目必須包含 source（原文）、target（譯名）、type（person/place/tech/work 四擇一）
-
-輸出格式範例：
-[{"source":"Peter Hessler","target":"乙乙","type":"person"},{"source":"Chengdu","target":"成都","type":"place"},{"source":"watchfluencers","target":"錶壇網紅（watchfluencers）","type":"tech"}]`;
-
-const DEFAULTS = {
-  apiKey: '',
-  geminiConfig: {
-    model: 'gemini-3-flash-preview',
-    serviceTier: 'DEFAULT',
-    temperature: 0.5,
-    topP: 0.95,
-    topK: 40,
-    maxOutputTokens: 8192,
-    systemInstruction: DEFAULT_SYSTEM_PROMPT,
-  },
-  pricing: {
-    inputPerMTok: 0.50,
-    outputPerMTok: 3.00,
-  },
-  // v0.69: 術語表一致化
-  glossary: {
-    enabled: false,
-    prompt: DEFAULT_GLOSSARY_PROMPT,
-    temperature: 0.1,
-    skipThreshold: 1,
-    blockingThreshold: 5,
-    timeoutMs: 60000,
-    maxTerms: 200,
-  },
-  targetLanguage: 'zh-TW',
-  domainRules: { whitelist: [], blacklist: [] },
-  autoTranslate: false,
-  debugLog: false,
-  tier: 'tier1',
-  safetyMargin: 0.1,
-  maxRetries: 3,
-  rpmOverride: null,
-  tpmOverride: null,
-  rpdOverride: null,
-  maxConcurrentBatches: 10,
-  maxTranslateUnits: 1000,
-};
+// 向下相容：舊程式碼大量使用 DEFAULTS，保留別名避免大範圍搜尋取代
+const DEFAULTS = DEFAULT_SETTINGS;
 
 // 模型參考價（Standard tier，每 1M tokens USD）— v0.64 更新
 // 來源：https://ai.google.dev/gemini-api/docs/pricing（2026-04-09 擷取）
@@ -99,26 +16,6 @@ const MODEL_PRICING = {
   'gemini-3.1-pro-preview':      { input: 2.00, output: 12.00 },
 };
 
-// Tier 對照表(與 lib/tier-limits.js 內容一致。options.js 是普通 script 不走 ES module,
-// 只能複製一份)。v0.96：依 2026-04 AI Studio 實際數值全面更新。
-// Unlimited RPD 以 Infinity 表示。
-const TIER_LIMITS = {
-  free: {
-    'gemini-3-flash-preview':        { rpm: 10,   tpm: 250000,   rpd: 250 },
-    'gemini-3.1-flash-lite-preview': { rpm: 15,   tpm: 250000,   rpd: 1000 },
-    'gemini-3.1-pro-preview':        { rpm: 5,    tpm: 250000,   rpd: 100 },
-  },
-  tier1: {
-    'gemini-3-flash-preview':        { rpm: 1000, tpm: 2000000,  rpd: 10000 },
-    'gemini-3.1-flash-lite-preview': { rpm: 4000, tpm: 4000000,  rpd: 150000 },
-    'gemini-3.1-pro-preview':        { rpm: 225,  tpm: 2000000,  rpd: 250 },
-  },
-  tier2: {
-    'gemini-3-flash-preview':        { rpm: 2000,  tpm: 3000000,  rpd: 100000 },
-    'gemini-3.1-flash-lite-preview': { rpm: 10000, tpm: 10000000, rpd: 350000 },
-    'gemini-3.1-pro-preview':        { rpm: 1000,  tpm: 5000000,  rpd: 50000 },
-  },
-};
 
 function getSelectedModel() {
   const sel = $('model').value;
@@ -223,6 +120,8 @@ async function load() {
   $('safetyMargin').value = marginPct;
   $('safetyMarginLabel').textContent = marginPct;
   $('maxConcurrentBatches').value = s.maxConcurrentBatches || 10;
+  $('maxUnitsPerBatch').value = s.maxUnitsPerBatch ?? 12;
+  $('maxCharsPerBatch').value = s.maxCharsPerBatch ?? 3500;
   $('maxTranslateUnits').value = s.maxTranslateUnits ?? 1000;
   $('maxRetries').value = s.maxRetries || 3;
 
@@ -261,6 +160,8 @@ async function save() {
     safetyMargin: Number($('safetyMargin').value) / 100,
     maxRetries: Number($('maxRetries').value) || 3,
     maxConcurrentBatches: Number($('maxConcurrentBatches').value) || 10,
+    maxUnitsPerBatch: Number($('maxUnitsPerBatch').value) || 12,
+    maxCharsPerBatch: Number($('maxCharsPerBatch').value) || 3500,
     maxTranslateUnits: Number($('maxTranslateUnits').value) ?? 1000,
     // 只有 custom tier 才寫入 override(其他 tier 的數字從對照表讀,不存)
     rpmOverride: $('tier').value === 'custom' ? (Number($('rpm').value) || null) : null,
@@ -384,11 +285,12 @@ function sanitizeImport(raw) {
   const topRules = {
     autoTranslate:       { type: 'boolean' },
     debugLog:            { type: 'boolean' },
-    targetLanguage:      { type: 'string' },
     tier:                { type: 'string', oneOf: ['free', 'tier1', 'tier2', 'custom'] },
     safetyMargin:        { type: 'number', min: 0, max: 0.5 },
     maxRetries:          { type: 'number', min: 0, max: 10, int: true },
     maxConcurrentBatches:{ type: 'number', min: 1, max: 50, int: true },
+    maxUnitsPerBatch:    { type: 'number', min: 1, max: 100, int: true },
+    maxCharsPerBatch:    { type: 'number', min: 500, max: 20000, int: true },
     maxTranslateUnits:   { type: 'number', min: 0, max: 10000, int: true },
     rpmOverride:         { type: 'number', min: 1, nullable: true },
     tpmOverride:         { type: 'number', min: 1, nullable: true },
@@ -564,18 +466,6 @@ function getUsageDateRange() {
 }
 
 // ─── 格式化工具 ──────────────────────────────────────────
-function fmtTokens(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
-
-function fmtUSD(n) {
-  if (n >= 1) return '$' + n.toFixed(2);
-  if (n >= 0.01) return '$' + n.toFixed(3);
-  return '$' + n.toFixed(4);
-}
-
 function fmtTime(ts) {
   const d = new Date(ts);
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -599,9 +489,9 @@ async function loadUsageData() {
   // 彙總卡片
   if (statsRes?.ok) {
     const s = statsRes.stats;
-    $('usage-total-cost').textContent = fmtUSD(s.totalBilledCostUSD);
+    $('usage-total-cost').textContent = formatUSD(s.totalBilledCostUSD);
     // v0.99: 思考 token 以 output 費率計費，加入總計
-    $('usage-total-tokens').textContent = fmtTokens(s.totalBilledInputTokens + s.totalOutputTokens);
+    $('usage-total-tokens').textContent = formatTokens(s.totalBilledInputTokens + s.totalOutputTokens);
     $('usage-total-count').textContent = String(s.count);
     // 找最常用模型
     let topModel = '—';
@@ -678,15 +568,15 @@ function renderChart(data) {
         tooltip: {
           callbacks: {
             label: function(ctx) {
-              if (ctx.datasetIndex === 0) return `Tokens: ${fmtTokens(ctx.parsed.y)}`;
-              return `費用: ${fmtUSD(ctx.parsed.y)}`;
+              if (ctx.datasetIndex === 0) return `Tokens: ${formatTokens(ctx.parsed.y)}`;
+              return `費用: ${formatUSD(ctx.parsed.y)}`;
             },
           },
         },
         // Chart.js subtitle 用作期間累計顯示
         subtitle: {
           display: true,
-          text: `期間合計：${fmtTokens(totalTokens)} tokens / ${fmtUSD(totalCost)}`,
+          text: `期間合計：${formatTokens(totalTokens)} tokens / ${formatUSD(totalCost)}`,
           align: 'end',
           font: { size: 11, weight: 'normal' },
           color: '#86868b',
@@ -708,7 +598,7 @@ function renderChart(data) {
           beginAtZero: true,
           ticks: {
             font: { size: 10 },
-            callback: (v) => fmtTokens(v),
+            callback: (v) => formatTokens(v),
           },
           title: { display: true, text: 'Tokens', font: { size: 10 }, color: '#0071e3' },
         },
@@ -750,8 +640,8 @@ function renderTable(records) {
       <td>${fmtTime(r.timestamp)}</td>
       <td>${title}<span class="site-url">${urlDisplay}</span></td>
       <td>${shortModel}</td>
-      <td class="num">${fmtTokens(billedTokens)}</td>
-      <td class="num">${fmtUSD(r.billedCostUSD || 0)}</td>
+      <td class="num">${formatTokens(billedTokens)}</td>
+      <td class="num">${formatUSD(r.billedCostUSD || 0)}</td>
     </tr>`;
   }).join('');
 }

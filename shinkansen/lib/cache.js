@@ -18,6 +18,33 @@ const CACHE_QUOTA_BYTES = 9.5 * 1024 * 1024; // 9,961,472
 // 每次 LRU 淘汰時一次性騰出的目標空間（避免每次寫入都觸發淘汰）
 const EVICTION_TARGET_BYTES = 1 * 1024 * 1024; // 1MB
 
+// ─── Eviction check 節流 ──────────────────────────────────
+// 避免每次 setBatch 都觸發完整的 storage 掃描。
+let lastEvictionCheckTime = 0;
+const EVICTION_CHECK_INTERVAL_MS = 30_000; // 最多每 30 秒檢查一次
+
+// ─── LRU 時間戳批次更新（降低寫入頻率） ────────────────────
+// getBatch 讀取時不立刻寫回時間戳，而是累積到 pendingTouches，
+// 由 debounce 計時器統一 flush，減少 chrome.storage.local.set 呼叫次數。
+const pendingTouches = {};
+let touchFlushTimer = null;
+const TOUCH_FLUSH_DELAY_MS = 5000; // 5 秒後統一 flush
+
+function scheduleTouchFlush() {
+  if (touchFlushTimer) return; // 已排程，不重複
+  touchFlushTimer = setTimeout(flushTouches, TOUCH_FLUSH_DELAY_MS);
+}
+
+function flushTouches() {
+  touchFlushTimer = null;
+  const updates = { ...pendingTouches };
+  const keys = Object.keys(updates);
+  if (!keys.length) return;
+  // 清空 pending（先清再寫，避免 flush 期間的新 touch 被漏掉）
+  for (const k of keys) delete pendingTouches[k];
+  chrome.storage.local.set(updates).catch(() => {}); // fire-and-forget
+}
+
 async function hashText(text) {
   const buf = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest('SHA-1', buf);
@@ -142,8 +169,12 @@ async function safeStorageSet(updates) {
 /**
  * 主動檢查：若快取已超過配額的 90%，提前淘汰，避免下次寫入才觸發。
  * 在 setBatch 之後呼叫（非同步，不阻塞翻譯流程）。
+ * v1.0.4: 新增節流，最多每 30 秒檢查一次（避免大量寫入時反覆掃描 storage）。
  */
 async function proactiveEvictionCheck() {
+  const now = Date.now();
+  if (now - lastEvictionCheckTime < EVICTION_CHECK_INTERVAL_MS) return;
+  lastEvictionCheckTime = now;
   try {
     const usage = await getCacheUsageBytes();
     if (usage > CACHE_QUOTA_BYTES * 0.9) {
@@ -151,7 +182,6 @@ async function proactiveEvictionCheck() {
       await evictOldest(EVICTION_TARGET_BYTES);
     }
   } catch (err) {
-    // 檢查失敗不要影響正常流程
     debugLog('warn', 'cache', 'proactive eviction check failed', { error: err.message });
   }
 }
@@ -166,20 +196,18 @@ export async function getBatch(texts, keySuffix = '') {
   const hashes = await Promise.all(texts.map(hashText));
   const keys = hashes.map(h => KEY_PREFIX + h + keySuffix);
   const stored = await chrome.storage.local.get(keys);
-  // v0.85: 讀取時更新命中條目的時間戳（延遲寫入，不阻塞回傳）
-  const touchUpdates = {};
+  // v0.85 → v1.0.4: 讀取時累積命中條目的時間戳到 pendingTouches，
+  // 由 debounce 計時器統一 flush，減少寫入頻率（原本每次 getBatch 都寫一次）。
   const results = keys.map(k => {
     if (!(k in stored)) return null;
     const val = extractValue(stored[k]);
     if (val != null) {
-      // 更新時間戳（讓常用的條目不會被 LRU 淘汰）
-      touchUpdates[k] = wrapValue(val);
+      pendingTouches[k] = wrapValue(val);
     }
     return val;
   });
-  // 非同步更新時間戳，不等待完成
-  if (Object.keys(touchUpdates).length > 0) {
-    chrome.storage.local.set(touchUpdates).catch(() => {}); // fire-and-forget
+  if (Object.keys(pendingTouches).length > 0) {
+    scheduleTouchFlush();
   }
   return results;
 }

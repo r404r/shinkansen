@@ -1,26 +1,9 @@
 // popup.js — 工具列面板邏輯
 
+import { formatBytes, formatTokens, formatUSD } from '../lib/format.js';
+
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
-
-function formatBytes(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
-  return (b / 1024 / 1024).toFixed(2) + ' MB';
-}
-
-function formatTokens(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
-
-function formatUSD(n) {
-  if (!n) return '$0';
-  if (n < 0.01) return '$' + n.toFixed(4);
-  if (n < 1) return '$' + n.toFixed(3);
-  return '$' + n.toFixed(2);
-}
 
 async function refreshUsageInfo() {
   try {
@@ -54,6 +37,7 @@ async function refreshCacheInfo() {
 async function refreshTranslateButton() {
   // 詢問 content script 目前是否已翻譯，動態切換按鈕標籤
   const btn = $('translate-btn');
+  const editBtn = $('edit-btn');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
@@ -61,15 +45,20 @@ async function refreshTranslateButton() {
     if (resp?.translated) {
       btn.textContent = '顯示原文';
       btn.dataset.mode = 'restore';
+      // v1.0.3: 已翻譯時顯示編輯按鈕
+      editBtn.hidden = false;
+      editBtn.textContent = resp?.editing ? '結束編輯' : '編輯譯文';
     } else {
       btn.textContent = '翻譯本頁';
       btn.dataset.mode = 'translate';
+      editBtn.hidden = true;
     }
   } catch {
     // 頁面尚未注入 content script (例如 chrome:// 頁、剛 reload extension)
     // 維持預設「翻譯本頁」即可
     btn.textContent = '翻譯本頁';
     btn.dataset.mode = 'translate';
+    editBtn.hidden = true;
   }
 }
 
@@ -154,6 +143,25 @@ $('glossary-toggle').addEventListener('change', async (e) => {
 
 $('options-btn').addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
+});
+
+// v1.0.3: 編輯譯文按鈕
+$('edit-btn').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+  try {
+    const resp = await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_EDIT_MODE' });
+    if (resp?.ok) {
+      $('edit-btn').textContent = resp.editing ? '結束編輯' : '編輯譯文';
+      statusEl.textContent = resp.editing
+        ? `狀態：編輯模式（${resp.elements} 個區塊可編輯）`
+        : '狀態：已結束編輯';
+      statusEl.style.color = resp.editing ? '#0071e3' : '#86868b';
+    }
+  } catch {
+    statusEl.textContent = '狀態：無法切換編輯模式';
+    statusEl.style.color = '#ff3b30';
+  }
 });
 
 $('clear-cache-btn').addEventListener('click', async () => {
