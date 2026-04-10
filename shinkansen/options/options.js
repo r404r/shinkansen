@@ -88,6 +88,7 @@ const DEFAULTS = {
   tpmOverride: null,
   rpdOverride: null,
   maxConcurrentBatches: 10,
+  maxTranslateUnits: 1000,
 };
 
 // 模型參考價（Standard tier，每 1M tokens USD）— v0.64 更新
@@ -222,6 +223,7 @@ async function load() {
   $('safetyMargin').value = marginPct;
   $('safetyMarginLabel').textContent = marginPct;
   $('maxConcurrentBatches').value = s.maxConcurrentBatches || 10;
+  $('maxTranslateUnits').value = s.maxTranslateUnits ?? 1000;
   $('maxRetries').value = s.maxRetries || 3;
 
   // v0.69: 術語表一致化設定
@@ -259,6 +261,7 @@ async function save() {
     safetyMargin: Number($('safetyMargin').value) / 100,
     maxRetries: Number($('maxRetries').value) || 3,
     maxConcurrentBatches: Number($('maxConcurrentBatches').value) || 10,
+    maxTranslateUnits: Number($('maxTranslateUnits').value) ?? 1000,
     // 只有 custom tier 才寫入 override(其他 tier 的數字從對照表讀,不存)
     rpmOverride: $('tier').value === 'custom' ? (Number($('rpm').value) || null) : null,
     tpmOverride: $('tier').value === 'custom' ? (Number($('tpm').value) || null) : null,
@@ -386,6 +389,7 @@ function sanitizeImport(raw) {
     safetyMargin:        { type: 'number', min: 0, max: 0.5 },
     maxRetries:          { type: 'number', min: 0, max: 10, int: true },
     maxConcurrentBatches:{ type: 'number', min: 1, max: 50, int: true },
+    maxTranslateUnits:   { type: 'number', min: 0, max: 10000, int: true },
     rpmOverride:         { type: 'number', min: 1, nullable: true },
     tpmOverride:         { type: 'number', min: 1, nullable: true },
     rpdOverride:         { type: 'number', min: 1, nullable: true },

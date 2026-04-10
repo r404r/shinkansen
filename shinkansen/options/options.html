@@ -107,6 +107,11 @@
         <small class="muted">同時送出幾批翻譯請求。每批最多包含 20 段或約 3,500 字元（先到先封口）。這裡的「段」是指網頁上一個獨立的文字區塊（例如一個段落、一個標題、一個列表項目），由網頁結構自動偵測，不是按字數切割。數字越大翻越快，但也越容易撞到配額上限，長文建議 5–10，短文可設 1（逐批翻譯）</small>
       </label>
       <label>
+        單頁翻譯段落上限
+        <input type="number" id="maxTranslateUnits" step="100" min="0" max="10000">
+        <small class="muted">單次翻譯最多處理幾段。超大頁面（如維基百科長條目）超過此上限時，多餘段落會被略過。設為 0 表示不限制，預設 1000</small>
+      </label>
+      <label>
         失敗重試次數
         <input type="number" id="maxRetries" step="1" min="0" max="10">
         <small class="muted">單批翻譯遇到 API 錯誤（如 429 配額限制）時的最大重試次數，設為 0 表示不重試、失敗即跳過，預設 3 次</small>

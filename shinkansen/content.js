@@ -1277,8 +1277,9 @@
   const MAX_CHARS_PER_BATCH = 3500;      // 字元預算，作為 token proxy（≈ 1000 英文 tokens，留 output headroom）
   const DEFAULT_MAX_CONCURRENT = 10; // content.js 側並發上限（與 background 的 rate limiter 雙重保險）
   // v0.81: 單頁翻譯段落總數上限。超大頁面（如維基百科年表條目）可能收集到
-  // 500+ 段，全部送 API 會造成不必要的成本與延遲。超過此上限時截斷並提示使用者。
-  const MAX_TOTAL_UNITS = 500;
+  // 數百到上千段，全部送 API 會造成不必要的成本與延遲。超過此上限時截斷並提示使用者。
+  // v1.0.1: 改為從設定頁讀取，預設 1000，設為 0 表示不限制。
+  const DEFAULT_MAX_TOTAL_UNITS = 1000;
 
   // v0.82: SPA 動態載入支援常數
   // MutationObserver 在翻譯完成後啟動，偵測 SPA 動態新增的段落。
@@ -1534,11 +1535,20 @@
     }
 
     // v0.81: 超大頁面防護 — 段落數超過上限時截斷，避免 API 成本爆炸
+    // v1.01: 從設定頁讀取上限，0 = 不限制
+    let maxTotalUnits = DEFAULT_MAX_TOTAL_UNITS;
+    try {
+      const { maxTranslateUnits } = await chrome.storage.sync.get('maxTranslateUnits');
+      if (Number.isFinite(maxTranslateUnits) && maxTranslateUnits >= 0) {
+        maxTotalUnits = maxTranslateUnits;
+      }
+    } catch (_) { /* 讀取失敗用 default */ }
+
     let truncatedCount = 0;
-    if (units.length > MAX_TOTAL_UNITS) {
-      truncatedCount = units.length - MAX_TOTAL_UNITS;
-      sendLog('warn', 'translate', 'page truncated', { total: units.length, limit: MAX_TOTAL_UNITS, skipped: truncatedCount });
-      units = units.slice(0, MAX_TOTAL_UNITS);
+    if (maxTotalUnits > 0 && units.length > maxTotalUnits) {
+      truncatedCount = units.length - maxTotalUnits;
+      sendLog('warn', 'translate', 'page truncated', { total: units.length, limit: maxTotalUnits, skipped: truncatedCount });
+      units = units.slice(0, maxTotalUnits);
     }
     const total = units.length;
 
