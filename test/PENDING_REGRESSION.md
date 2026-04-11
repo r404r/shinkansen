@@ -27,21 +27,11 @@
 ### ~~v1.0.13+v1.0.14~~ — 已補 Content Guard 核心邏輯測試 → `test/regression/guard-content-overwrite.spec.js`
 （注：「捲動觸發覆寫」的完整 Engadget IntersectionObserver 流程未涵蓋，但 guard 的核心邏輯——快取比對 + innerHTML 修復——已鎖死）
 
-### v1.0.18→v1.0.19 — 2026-04-10 — Content Guard 與 rescan 互相觸發迴圈 + 冷卻過度封鎖新內容
-- **症狀**：在 Twitter 翻譯後捲動頁面，Toast 在「已恢復N段被覆寫的翻譯」和「已翻譯N段新內容」之間無限跳動，即使停止捲動也不停止
-- **來源 URL**：`https://x.com/`（Twitter/X 首頁或任何推文時間線）
-- **修在**：`shinkansen/content.js` — v1.0.18 新增全域冷卻 `mutationSuppressedUntil`，v1.0.19 重構為精準的 `guardSuppressedUntil`（只抑制覆寫偵測）+ translated-ancestor 過濾（排除新內容偵測中的自身寫入副作用）
-- **根因**：Content Guard 用 `el.innerHTML = savedHTML` 還原譯文時產生 `childList` mutations，觸發 observer 排程新的 Content Guard 和 rescan；rescan 翻譯注入後又觸發 Content Guard，形成迴圈。Twitter 的 React virtual DOM reconciliation 會持續覆寫 Content Guard 的還原，使迴圈不會自然終止。v1.0.18 的全域冷卻修好了 Twitter 但導致 Facebook 等持續載入新內容的 SPA 在冷卻期間無法偵測新貼文
-- **為什麼還不能寫測試**：
-    觸發條件需要 React 的 virtual DOM reconciliation 機制——框架偵測到 DOM 被外部修改後
-    立刻重新渲染覆蓋回去。Playwright fixture 中的靜態 HTML 沒有 React 運行，
-    無法模擬「Content Guard 還原 → React 立刻覆寫 → observer 再觸發」的完整迴圈。
-    冷卻機制本身的邏輯（時間戳比較）太簡單，獨立測試意義不大。
-- **建議 spec 位置**：`test/regression/guard-loop-suppression.spec.js`
-- **建議測試方向**：
-    1. 在 fixture 頁面翻譯一段文字後，用 setInterval 模擬框架每 300ms 覆寫 innerHTML
-    2. 觀察 Content Guard 是否在 2 秒冷卻期後才再次觸發，而非每 500ms 都觸發
-    3. 驗證不會產生無限 toast 跳動
+### ~~v1.0.18→v1.0.19~~ — 已關閉，不需要測試
+v1.0.20 將 Content Guard 從「MutationObserver 觸發」重構為「setInterval 每秒週期性掃描」，
+迴圈在架構層面不可能發生（guard 不再由 mutation 觸發，兩者徹底脫鉤）。
+要讓此 bug 回歸，必須把 guard 改回 mutation-triggered 架構——這是重大設計變更，不是手滑就會發生。
+且「驗證某件事沒有無限發生」天生是弱斷言，寫出來的測試保護力有限。
 
 ### ~~v1.0.16~~ — 已補測試 → `test/regression/detect-nav-anchor-threshold.spec.js`
 
