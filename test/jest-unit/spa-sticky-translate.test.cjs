@@ -15,7 +15,7 @@
  * 這組測試驗證上述四個修法的行為。
  */
 
-const { createEnv } = require('./helpers/create-env.cjs');
+const { createEnv, waitForCondition } = require('./helpers/create-env.cjs');
 
 describe('v1.0.23: SPA 續翻模式 (sticky translate)', () => {
   let env;
@@ -34,15 +34,25 @@ describe('v1.0.23: SPA 續翻模式 (sticky translate)', () => {
     env.navigateHash('https://mail.google.com/mail/u/0/#inbox/FMfcgzQXKzgfBbGPNjKnGjTdbRMpNBFM');
 
     // handleSpaNavigation 是 async 函式，內部流程：
-    //   1. resetForSpaNavigation()       — 立刻執行
+    //   1. resetForSpaNavigation()       — 立刻執行（translated → false）
     //   2. await setTimeout(800ms)        — 等 DOM 穩定 (SPA_NAV_SETTLE_MS)
     //   3. if (wasSticky) translatePage() — 因為 sticky=true，呼叫翻譯
-    //   4. translatePage() → chrome.storage.sync.get([...]) — 讀取設定
-    // 等 1200ms 確保所有 async 操作完成
-    await new Promise(r => setTimeout(r, 1200));
+    //   4. translatePage() → chrome.storage.sync.get(['apiKey', ...]) — 讀取設定
 
-    // translatePage 被呼叫的證據：它會去讀 chrome.storage.sync.get 取得 API key 等設定
-    expect(env.chrome.storage.sync.get).toHaveBeenCalled();
+    // 直接斷言 1：resetForSpaNavigation 會立刻把 translated 清掉
+    // （不需要等——hashchange handler 是同步啟動 reset 的）
+    await waitForCondition(() => env.shinkansen.getState().translated === false, { timeout: 300 });
+    expect(env.shinkansen.getState().translated).toBe(false);
+
+    // 直接斷言 2：等 translatePage 被呼叫
+    // translatePage 內部會依序呼叫 storage.sync.get('skipTraditionalChinesePage')，
+    // 這是 translatePage 專屬的呼叫，handleSpaNavigation 本身不會叫它。
+    const gotTranslateCall = await waitForCondition(() => {
+      return env.chrome.storage.sync.get.mock.calls.some(
+        ([keys]) => keys === 'skipTraditionalChinesePage'
+      );
+    }, { timeout: 2000 });
+    expect(gotTranslateCall).toBe(true);
   });
 
   test('hashchange + stickyTranslate=false → 不觸發 translatePage（無白名單）', async () => {
@@ -56,13 +66,16 @@ describe('v1.0.23: SPA 續翻模式 (sticky translate)', () => {
 
     env.navigateHash('https://mail.google.com/mail/u/0/#inbox/FMfcgzQXKzgfBbGPNjKnGjTdbRMpNBFM');
 
+    // 負向測試：等足夠時間讓 handleSpaNavigation 完整跑完（800ms settle + buffer）
     await new Promise(r => setTimeout(r, 1200));
 
-    // handleSpaNavigation 會呼叫 chrome.storage.sync.get('domainRules') 做白名單檢查，
-    // 但不會帶 translatePage 專用的 keys（apiKey、model 等）。
-    // 我們的 mock 回傳空物件 → 不在白名單 → translatePage 不被呼叫。
-    //
-    // 驗證：STATE 不會進入 translating 狀態
+    // 驗證 1：translatePage 沒被呼叫（不會出現 skipTraditionalChinesePage 的 storage 讀取）
+    const hasTranslateCall = env.chrome.storage.sync.get.mock.calls.some(
+      ([keys]) => keys === 'skipTraditionalChinesePage'
+    );
+    expect(hasTranslateCall).toBe(false);
+
+    // 驗證 2：STATE 不會進入 translating 狀態
     const state = env.shinkansen.getState();
     expect(state.translating).toBe(false);
     // resetForSpaNavigation 會把 translated 清掉

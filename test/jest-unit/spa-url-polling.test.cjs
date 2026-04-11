@@ -19,7 +19,7 @@
  *   3. Sticky 覆蓋：sticky 模式下不跳過，即使有翻譯節點也觸發導航
  */
 
-const { createEnv } = require('./helpers/create-env.cjs');
+const { createEnv, waitForCondition } = require('./helpers/create-env.cjs');
 
 describe('v1.0.11: SPA URL 輪詢偵測', () => {
   let env;
@@ -31,22 +31,22 @@ describe('v1.0.11: SPA URL 輪詢偵測', () => {
   test('URL 變化被 500ms 輪詢偵測 → 觸發 handleSpaNavigation', async () => {
     env = createEnv({ url: 'https://medium.com/@user/article-1-abc123' });
 
-    // 清掉載入時的 sendMessage 記錄
-    env.chrome.runtime.sendMessage.mockClear();
+    // 先設定 translated=true，這樣 resetForSpaNavigation 把它清成 false 時
+    // 我們能用 getState().translated === false 作為直接斷言
+    env.shinkansen.setTestState({ translated: true });
 
     // 靜默改變 URL（模擬框架用快取的 pushState 導航，monkey-patch 攔不到）
     // 注意：不觸發 hashchange 或 popstate，純粹改 location.href
     env.setUrl('https://medium.com/@user/article-2-def456');
 
-    // 等 URL 輪詢觸發（500ms）+ handleSpaNavigation 執行
-    // handleSpaNavigation 內部有 800ms settle wait，總計等 1500ms
-    await new Promise(r => setTimeout(r, 1500));
-
-    // handleSpaNavigation → resetForSpaNavigation → chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' })
-    const clearBadgeCalls = env.chrome.runtime.sendMessage.mock.calls.filter(
-      ([msg]) => msg && msg.type === 'CLEAR_BADGE'
+    // 輪詢等待 translated 被清掉（證明 resetForSpaNavigation 跑了）
+    // URL 輪詢 500ms + handleSpaNavigation 立刻呼叫 reset → 最多 ~600ms
+    const resetHappened = await waitForCondition(
+      () => env.shinkansen.getState().translated === false,
+      { timeout: 2000 }
     );
-    expect(clearBadgeCalls.length).toBeGreaterThanOrEqual(1);
+    expect(resetHappened).toBe(true);
+    expect(env.shinkansen.getState().translated).toBe(false);
   });
 
   test('已翻譯 + 有翻譯節點 + 非 sticky → URL 變化視為捲動更新，不重設', async () => {
@@ -95,13 +95,13 @@ describe('v1.0.11: SPA URL 輪詢偵測', () => {
     // 靜默改變 URL（模擬 Gmail hash-based 導航被 URL 輪詢偵測到）
     env.setUrl('https://mail.google.com/mail/u/0/#inbox/FMfcgzQXKzgf');
 
-    // 等 URL 輪詢（500ms）+ handleSpaNavigation（含 800ms settle）
-    await new Promise(r => setTimeout(r, 1500));
-
-    // sticky 模式覆蓋捲動跳過邏輯 → 觸發 handleSpaNavigation → CLEAR_BADGE
-    const clearBadgeCalls = env.chrome.runtime.sendMessage.mock.calls.filter(
-      ([msg]) => msg && msg.type === 'CLEAR_BADGE'
+    // 輪詢等待 translated 被清掉（證明 resetForSpaNavigation 跑了，
+    // 代表 sticky 覆蓋了捲動跳過邏輯）
+    const resetHappened = await waitForCondition(
+      () => env.shinkansen.getState().translated === false,
+      { timeout: 2000 }
     );
-    expect(clearBadgeCalls.length).toBeGreaterThanOrEqual(1);
+    expect(resetHappened).toBe(true);
+    expect(env.shinkansen.getState().translated).toBe(false);
   });
 });

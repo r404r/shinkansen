@@ -104,4 +104,23 @@ function createEnv(options = {}) {
   };
 }
 
-module.exports = { createEnv };
+/**
+ * 輪詢等待條件成立。用於正向測試（預期某狀態最終會變化）。
+ * 負向測試（預期某事不發生）仍應使用固定等待。
+ *
+ * @param {Function} conditionFn — 回傳 truthy 代表條件成立
+ * @param {Object} [opts]
+ * @param {number} [opts.timeout=3000] — 最久等幾毫秒
+ * @param {number} [opts.interval=50]  — 每幾毫秒檢查一次
+ * @returns {Promise<boolean>} — true 表示條件在 timeout 內成立
+ */
+async function waitForCondition(conditionFn, { timeout = 3000, interval = 50 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (conditionFn()) return true;
+    await new Promise(r => setTimeout(r, interval));
+  }
+  return false;
+}
+
+module.exports = { createEnv, waitForCondition };
