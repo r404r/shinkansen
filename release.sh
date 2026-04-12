@@ -10,6 +10,12 @@ MSG="${1:-v${VERSION}}"
 
 git add -A
 git commit -m "v${VERSION} — ${MSG}"
+
+# 若 tag 已存在，先刪除本地和遠端的舊 tag 再重建
+if git tag -l "v${VERSION}" | grep -q .; then
+  git tag -d "v${VERSION}"
+  git push origin ":refs/tags/v${VERSION}" 2>/dev/null || true
+fi
 git tag "v${VERSION}"
 git push && git push --tags
 
