@@ -7,6 +7,8 @@
 
 ## v1.3.x
 
+**v1.3.4** 字幕翻譯 system prompt 新增 rule 8：忠實保留不雅詞彙，禁止道德審查或委婉潤飾（如 "fuck" → 「幹」，不得軟化為「糟糕」）。
+
 **v1.3.3（2026-04-16）補上 v1.3.1 的實際程式修正**——v1.3.1 的 CHANGELOG entry、regression spec (`test/regression/youtube-spa-navigate.spec.js`)、git tag 都已存在，但 `shinkansen/content-youtube.js` 的實際修正一直躺在 working tree 未 commit，導致 v1.3.1 / v1.3.2 tag 對應的 tree 都不含該修正，build 出的 extension 遇到 YouTube SPA 切換影片仍不會自動重啟字幕翻譯。本版把 `yt-navigate-finish` 改為 async handler（讀 `ytSubtitle.autoTranslate` 設定 + `wasActive` 旗標 + 500ms setTimeout）與 `stopYouTubeTranslation()` 的 `seeked` / `ratechange` removeEventListener 補漏正式 commit 進 code。行為細節同 v1.3.1 entry；實際 regression 保護從 v1.3.3 起生效。
 
 **v1.3.1（2026-04-16）修正 YouTube SPA 導航後字幕翻譯未自動重啟**——根本原因：`yt-navigate-finish` 事件處理器在 SPA 導航（點選其他影片）時正確重置了字幕翻譯狀態（`YT.active = false`、`rawSegments = []`），但從未為新影片重新啟動翻譯；首次載入頁面時的自動翻譯邏輯（`content.js` 初始化末段）只執行一次、不涵蓋 SPA 導航。修法：`yt-navigate-finish` 改為 async handler，重置後讀取 `ytSubtitle.autoTranslate` 設定；若設定開啟或之前字幕翻譯已啟動（`wasActive`），等 500ms 讓 YouTube 播放器初始化後自動呼叫 `translateYouTubeSubtitles()`——走「rawSegments=0」分支（等待 XHR + forceSubtitleReload 備案），與首次載入的自動翻譯流程完全一致。同時修正 `stopYouTubeTranslation()` 的漏洞：原本只移除 `timeupdate` listener，`seeked` 與 `ratechange` listener 遺漏；補上 `removeEventListener('seeked', ...)` 與 `removeEventListener('ratechange', ...)`，確保 stop → start 循環不累積 listener。
