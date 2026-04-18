@@ -7,6 +7,8 @@
 
 ## v1.4.x
 
+**v1.4.4** — 修正 `<strong><br>段落` 結構翻譯後 `<br>` 消失的問題。根因是 `collapseCjkSpacesAroundPlaceholders` 的 4 個 pattern 使用 `\s+`，會把佔位符標記與 CJK 字元之間的 `\n`（由 `<br>` 序列化來的）一併吃掉，導致還原時找不到 `\n` 而無法產生 `<br>` 元素。修法：將 4 個 pattern 的 `\s+` 改為 `[ \t]+`（只移除空格/tab，保留 `\n`），讓語意換行符能順利通過到 `parseSegment` 的 `pushText` 還原為 `<br>`。
+
 **v1.4.3** — Google Translate 模式加回行內格式保留（`<b>`、`<i>`、`<small>` 等）。測試確認只排除 `<span>`（亂碼根源）就能同時解決兩個問題：Wikipedia lede 等複雜段落不再亂碼、notice box 的斜體/小字等樣式也能正確保留。新增 `SK.GT_INLINE_TAGS` 白名單（`content-ns.js`）供 `serializeForGoogleTranslate` 判斷哪些 tag 加標記。
 
 **v1.4.2** — 修正 Google Translate 模式翻譯複雜段落（如 Wikipedia lede）時出現亂碼（如 `7/D/17777/S4]m`）的問題。根本原因：v1.4.1 使用 `serializeWithPlaceholders` 產生 10+ 個 `【N】` 標記，Google MT 被過多標記數字搞亂位置與文字，導致亂碼。修法：改用新的 `serializeForGoogleTranslate`，只對 `<a>` 連結加 `【N】`/`【/N】` 配對標記、atomic 元素（footnote sup）加 `【*N】` 單一標記，其他 span/b/i/abbr 全部直接遞迴取文字（不加標記）。通常整段只有 2-4 個標記，Google MT 能正確保留且不亂移。

@@ -152,20 +152,23 @@
   SK.collapseCjkSpacesAroundPlaceholders = function collapseCjkSpacesAroundPlaceholders(s) {
     if (!s) return s;
     const C = SK.CJK_CHAR;
+    // 注意：用 [ \t]+ 而非 \s+，刻意保留 \n 不移除。
+    // \n 代表原文有 <br> 換行（序列化時 <br> → \u0001 → \n），
+    // 若用 \s+ 會把 ⟦/N⟧\n漢字 的 \n 吃掉，導致 <br> 無法還原（v1.4.4 修正）。
     s = s.replace(
-      new RegExp('(' + C + ')\\s+(' + PH_OPEN + '\\d+' + PH_CLOSE + C + ')', 'g'),
+      new RegExp('(' + C + ')[ \\t]+(' + PH_OPEN + '\\d+' + PH_CLOSE + C + ')', 'g'),
       '$1$2'
     );
     s = s.replace(
-      new RegExp('(' + C + PH_OPEN + '\\/\\d+' + PH_CLOSE + ')\\s+(' + C + ')', 'g'),
+      new RegExp('(' + C + PH_OPEN + '\\/\\d+' + PH_CLOSE + ')[ \\t]+(' + C + ')', 'g'),
       '$1$2'
     );
     s = s.replace(
-      new RegExp('(' + C + ')\\s+(' + PH_OPEN + '\\*\\d+' + PH_CLOSE + ')', 'g'),
+      new RegExp('(' + C + ')[ \\t]+(' + PH_OPEN + '\\*\\d+' + PH_CLOSE + ')', 'g'),
       '$1$2'
     );
     s = s.replace(
-      new RegExp('(' + PH_OPEN + '\\*\\d+' + PH_CLOSE + ')\\s+(' + C + ')', 'g'),
+      new RegExp('(' + PH_OPEN + '\\*\\d+' + PH_CLOSE + ')[ \\t]+(' + C + ')', 'g'),
       '$1$2'
     );
     return s;
