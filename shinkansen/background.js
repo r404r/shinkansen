@@ -340,6 +340,78 @@ const messageHandlers = {
         : usageDB.clearAll();
     },
   },
+
+  // v1.3.9: Innertube 重構——從 YouTube 頁面 HTML 解析字幕軌道清單
+  // 用於 SPA 導航後 content script 無法從 <script> 標籤取得最新資料的 fallback 路徑
+  FETCH_YT_CAPTION_TRACKS: {
+    async: true,
+    handler: async (payload) => {
+      const { videoId } = payload || {};
+      if (!videoId) return { ok: false, error: 'missing videoId' };
+      try {
+        const url = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+        const resp = await fetch(url, {
+          headers: {
+            'Accept-Language': 'en-US,en;q=0.9',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          credentials: 'include',
+        });
+        if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
+        const html = await resp.text();
+
+        // 從 HTML 原始文字解析 captionTracks 陣列（與 extractCaptionTracksFromPage 邏輯相同）
+        const ctIdx = html.indexOf('"captionTracks"');
+        if (ctIdx === -1) return { ok: true, tracks: [] };
+        const arrStart = html.indexOf('[', ctIdx);
+        if (arrStart === -1) return { ok: true, tracks: [] };
+        let depth = 0, i = arrStart;
+        while (i < html.length) {
+          if (html[i] === '[' || html[i] === '{') depth++;
+          else if (html[i] === ']' || html[i] === '}') {
+            depth--;
+            if (depth === 0) break;
+          }
+          i++;
+        }
+        const tracks = JSON.parse(html.slice(arrStart, i + 1));
+        return { ok: true, tracks: Array.isArray(tracks) ? tracks : [] };
+      } catch (e) {
+        debugLog('warn', 'youtube', 'FETCH_YT_CAPTION_TRACKS failed', { error: e.message });
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+
+  // v1.3.9: Innertube 重構——取得字幕原文（timedtext URL → responseText）
+  // content script 負責挑選最佳軌道後把 baseUrl 傳過來，background 負責 fetch
+  FETCH_YT_CAPTIONS: {
+    async: true,
+    handler: async (payload) => {
+      const { url } = payload || {};
+      if (!url) return { ok: false, error: 'missing url' };
+      try {
+        // 確保回傳 JSON3 格式（現有 parseJson3 解析器相容）
+        const fetchUrl = url.includes('fmt=') ? url : `${url}&fmt=json3`;
+        const resp = await fetch(fetchUrl, {
+          headers: {
+            'Referer': 'https://www.youtube.com/',
+            'Origin': 'https://www.youtube.com',
+          },
+          credentials: 'include',
+        });
+        if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
+        const responseText = await resp.text();
+        if (!responseText || responseText.length < 10) {
+          return { ok: false, error: 'empty response' };
+        }
+        return { ok: true, responseText };
+      } catch (e) {
+        debugLog('warn', 'youtube', 'FETCH_YT_CAPTIONS failed', { error: e.message });
+        return { ok: false, error: e.message };
+      }
+    },
+  },
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

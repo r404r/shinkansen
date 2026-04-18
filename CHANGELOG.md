@@ -7,6 +7,8 @@
 
 ## v1.3.x
 
+**v1.3.9** — YouTube 字幕架構重構：移除 MAIN world XHR 攔截（`content-youtube-main.js` 廢棄），改為主動抓取架構。新流程：isolated world `extractCaptionTracksFromPage()` 從頁面 `<script>` 標籤解析 `ytInitialPlayerResponse`，挑選最佳英文軌道後請 background `FETCH_YT_CAPTIONS` 取得字幕原文；SPA 導航後 script 已過期時自動 fallback 至 background `FETCH_YT_CAPTION_TRACKS`（重新抓 YouTube 頁面）。manifest 同步移除 MAIN world `content_scripts` 宣告，架構為 Safari iOS 移植鋪路。
+
 **v1.3.8** — 移除未使用的 `scripting` 權限（Chrome Web Store 審查要求：manifest 不得宣告未實際使用的權限）。
 
 **v1.3.7** — YouTube 設定頁微調：移除「字幕翻譯可以使用比文章翻譯更便宜的模型，例如 Flash Lite」說明文字；移除 temperature 說明文字「字幕翻譯建議保持低 temperature（預設 0.1），讓翻譯結果穩定一致、不偏離原意。」；YouTube 字幕 temperature 預設值由 0.1 改為 1。

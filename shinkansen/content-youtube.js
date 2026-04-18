@@ -1,16 +1,18 @@
 // content-youtube.js — Shinkansen YouTube 字幕翻譯模組（isolated world）
-// v1.2.11：時間視窗批次翻譯架構
+// v1.3.9：移除 MAIN world XHR 攔截，改為主動抓取架構（Innertube 重構）
 //
 // 依賴：window.__SK（content-ns.js）、SK.sendLog、SK.showToast、SK.hideToast
 // 載入順序：必須在 content.js 之前、content-ns.js 之後
 // 外部介面：SK.YT（狀態物件）、SK.translateYouTubeSubtitles、SK.stopYouTubeTranslation、SK.isYouTubePage
 //
-// 核心設計：
-//   1. XHR 攔截（MAIN world）→ 取得含時間戳的字幕 → rawSegments[{text,normText,startMs}]
-//   2. 按時間視窗翻譯（預設 30 秒一批），video.timeupdate 驅動觸發下一批
-//   3. 在剩餘時間 < lookaheadS（預設 10 秒）時提前翻譯下一批
-//   4. observer 在第一批翻完後才啟動，避免英文閃爍
-//   5. 字幕翻譯設定（prompt/temperature/windowSizeS/lookaheadS）從 ytSubtitle settings 讀取
+// 核心設計（v1.3.9 起）：
+//   1. 主動抓取：extractCaptionTracksFromPage → selectBestTrack → background FETCH_YT_CAPTIONS
+//      → 取得含時間戳的字幕 → rawSegments[{text,normText,startMs}]
+//   2. SPA fallback：<script> 已過期時改由 background FETCH_YT_CAPTION_TRACKS 重新抓頁面
+//   3. 按時間視窗翻譯（預設 30 秒一批），video.timeupdate 驅動觸發下一批
+//   4. 在剩餘時間 < lookaheadS（預設 10 秒）時提前翻譯下一批
+//   5. observer 提前啟動，支援 on-the-fly 備援（主動抓取失敗時仍可逐條即時翻譯）
+//   6. 字幕翻譯設定（prompt/temperature/windowSizeS/lookaheadS）從 ytSubtitle settings 讀取
 
 (function(SK) {
 
@@ -316,6 +318,124 @@
     try { return parseJson3(responseText); } catch (_) {}
     try { return parseTtml(responseText); } catch (_) {}
     return [];
+  }
+
+  // ─── v1.3.9: 主動抓取字幕軌道（取代 MAIN world XHR 攔截）────
+
+  // 從頁面 <script> 標籤解析 ytInitialPlayerResponse 內的 captionTracks 陣列。
+  // 只讀 DOM（isolated world 可存取），不需要 MAIN world。
+  // videoId 用於驗證 script 內容屬於當前影片（SPA 導航後 script 可能殘留舊影片資料）。
+  function extractCaptionTracksFromPage(videoId) {
+    for (const script of document.querySelectorAll('script:not([src])')) {
+      const text = script.textContent;
+      if (!text.includes('"captionTracks"')) continue;
+      // 若指定了 videoId，確認此 script 確實對應當前影片
+      if (videoId && !text.includes(videoId)) continue;
+      try {
+        const ctIdx = text.indexOf('"captionTracks"');
+        if (ctIdx === -1) continue;
+        const arrStart = text.indexOf('[', ctIdx);
+        if (arrStart === -1) continue;
+        // 計算平衡括號找 array 結尾（支援巢狀物件）
+        let depth = 0, i = arrStart;
+        while (i < text.length) {
+          if (text[i] === '[' || text[i] === '{') depth++;
+          else if (text[i] === ']' || text[i] === '}') {
+            depth--;
+            if (depth === 0) break;
+          }
+          i++;
+        }
+        const tracks = JSON.parse(text.slice(arrStart, i + 1));
+        if (Array.isArray(tracks) && tracks.length > 0 && tracks[0].baseUrl) {
+          return tracks;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  // 從 captionTracks 挑選最適合翻譯的軌道。
+  // 優先序：英文人工翻譯 → 英文 ASR → 任何非中文軌道（取首個）
+  function selectBestTrack(tracks) {
+    if (!tracks || tracks.length === 0) return null;
+    // 排除繁/簡體中文軌道（翻譯目標語言）
+    const nonChinese = tracks.filter(t => !/^zh/i.test(t.languageCode || ''));
+    const pool = nonChinese.length > 0 ? nonChinese : tracks;
+    // 英文人工翻譯（kind 不是 'asr'）
+    const enHuman = pool.find(t => /^en/i.test(t.languageCode) && t.kind !== 'asr');
+    if (enHuman) return enHuman;
+    // 英文 ASR（自動語音辨識）
+    const enAsr = pool.find(t => /^en/i.test(t.languageCode));
+    if (enAsr) return enAsr;
+    // 任何非中文的第一條軌道
+    return pool[0] || null;
+  }
+
+  // 主動抓取字幕資料的完整流程：
+  //   1. 嘗試從頁面 <script> 解析 captionTracks（快，無額外 HTTP）
+  //   2. 失敗時請 background fetch YouTube 頁面取得軌道（SPA 後 script 已過期時用）
+  //   3. 挑選最佳軌道 → 請 background fetch timedtext URL → 解析成 rawSegments
+  async function fetchCaptionsForVideo(videoId) {
+    if (!videoId) return null;
+
+    // Step 1：從頁面 <script> 標籤取得字幕軌道
+    let tracks = extractCaptionTracksFromPage(videoId);
+    const source = tracks ? 'page-script' : 'background-fetch';
+
+    // Step 2：<script> 已過期（SPA nav 後常見）→ 請 background 抓一次完整頁面
+    if (!tracks) {
+      SK.sendLog('info', 'youtube', 'captionTracks not in page scripts, fetching via background', { videoId });
+      try {
+        const res = await chrome.runtime.sendMessage({
+          type: 'FETCH_YT_CAPTION_TRACKS',
+          payload: { videoId },
+        });
+        tracks = res?.tracks?.length > 0 ? res.tracks : null;
+      } catch (e) {
+        SK.sendLog('warn', 'youtube', 'FETCH_YT_CAPTION_TRACKS error', { error: e?.message });
+      }
+    }
+
+    const track = selectBestTrack(tracks);
+    if (!track) {
+      SK.sendLog('warn', 'youtube', 'no caption track found', {
+        source,
+        trackCount: tracks?.length ?? 0,
+        videoId,
+      });
+      return null;
+    }
+
+    SK.sendLog('info', 'youtube', 'caption track selected', {
+      source,
+      lang: track.languageCode,
+      kind: track.kind || 'human',
+    });
+
+    // Step 3：請 background fetch timedtext URL 取得字幕原文
+    const captionUrl = track.baseUrl.includes('fmt=')
+      ? track.baseUrl
+      : track.baseUrl + '&fmt=json3';
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'FETCH_YT_CAPTIONS',
+        payload: { url: captionUrl },
+      });
+      if (!res?.ok || !res.responseText) {
+        SK.sendLog('warn', 'youtube', 'FETCH_YT_CAPTIONS returned empty', { error: res?.error });
+        return null;
+      }
+      const segments = parseCaptionResponse(res.responseText);
+      SK.sendLog('info', 'youtube', 'captions fetched', {
+        segmentCount: segments.length,
+        lastMs: segments.length > 0 ? segments[segments.length - 1].startMs : 0,
+      });
+      return segments.length > 0 ? segments : null;
+    } catch (e) {
+      SK.sendLog('warn', 'youtube', 'FETCH_YT_CAPTIONS error', { error: e?.message });
+      return null;
+    }
   }
 
   // ─── 翻譯單位建構（preserveLineBreaks 模式用）────────────
@@ -656,75 +776,6 @@
     video.addEventListener('ratechange', onVideoRateChange);
   }
 
-  // ─── 強制重載字幕（CC toggle）────────────────────────────────
-  // rawSegments=0 時，CC 字幕資料可能已存在 YouTube 播放器記憶體中，
-  // 不會重新發出 /api/timedtext XHR。
-  // 解法：把 CC 按鈕關掉再打開，強迫播放器重新抓一次字幕，讓 monkey-patch 有機會攔截。
-
-  async function forceSubtitleReload() {
-    const btn = document.querySelector('.ytp-subtitles-button');
-    if (!btn) {
-      SK.sendLog('warn', 'youtube', 'forceSubtitleReload: CC button not found');
-      return;
-    }
-    const isOn = btn.getAttribute('aria-pressed') === 'true';
-    if (!isOn) {
-      SK.sendLog('info', 'youtube', 'forceSubtitleReload: CC is off, skip toggle');
-      return; // CC 未開，不強制操作
-    }
-    SK.sendLog('info', 'youtube', 'forceSubtitleReload: toggling CC to force new XHR');
-    btn.click(); // 關閉 CC → 播放器清空字幕狀態
-    await new Promise(r => setTimeout(r, 200));
-    if (SK.YT.active) btn.click(); // 重新開啟 CC → 播放器重新抓字幕，觸發 /api/timedtext XHR
-  }
-
-  // ─── 接收 MAIN world XHR 攔截結果 ────────────────────────
-
-  window.addEventListener('shinkansen-yt-captions', async (e) => {
-    const { url, responseText } = e.detail || {};
-    if (!responseText) return;
-
-    const segments = parseCaptionResponse(responseText);
-    if (segments.length === 0) return;
-
-    const YT = SK.YT;
-    YT.rawSegments = segments;
-    const lastMs = segments[segments.length - 1]?.startMs ?? 0;
-    SK.sendLog('info', 'youtube', 'XHR captions captured', {
-      url: url?.replace(/[?&].*$/, ''),
-      count: segments.length,
-      firstMs: segments[0]?.startMs,
-      lastMs,
-    });
-    // verbose log：列出全部 rawSegments 原文與 normText，供比對 DOM 字幕用
-    const dbgConfig = YT.config || await getYtConfig();
-    if (dbgConfig.debugToast) {
-      SK.sendLog('info', 'youtube-debug', 'rawSegments full list', {
-        count: segments.length,
-        segments: segments.map(s => ({ ms: s.startMs, text: s.text, norm: s.normText })),
-      });
-    }
-    _debugUpdate(`XHR 攔截 ${segments.length} 條字幕（至 ${Math.round(lastMs/1000)}s）`);
-
-    // 若字幕翻譯已啟動但尚未取得字幕（autoTranslate 或 forceSubtitleReload 在 XHR 之前跑完）
-    // 不論 captionMap 有沒有 on-the-fly 資料，一律翻譯當前視窗
-    // （on-the-fly 條目會被覆蓋，無害；不翻的話當前視窗仍會靠 on-the-fly，預翻目的落空）
-    if (YT.active) {  // v1.2.54: translateWindowFrom 內部防重入，此處無需 translating guard
-      const video = document.querySelector('video');
-      const currentMs = video ? Math.floor(video.currentTime * 1000) : 0;
-      const config = await getYtConfig();
-      const windowSizeMs = (config.windowSizeS || 30) * 1000;
-      const windowStartMs = Math.floor(currentMs / windowSizeMs) * windowSizeMs;
-      // attachVideoListener 已在 translateYouTubeSubtitles 啟動時提前呼叫；
-      // 若從 autoTranslate 路徑啟動（translateYouTubeSubtitles 不一定有呼叫），
-      // 在此補掛確保 seeked/ratechange 一定有監聽器
-      attachVideoListener();
-      showCaptionStatus('翻譯中…'); // v1.2.55: XHR 到達後顯示字幕區提示
-      await translateWindowFrom(windowStartMs);
-      // v1.2.55: hideCaptionStatus 由第一條中文字幕出現時觸發，不在此手動消除
-    }
-  });
-
   // ─── MutationObserver：即時替換字幕 ──────────────────────
 
   // 判斷字串是否已含中日韓字元（表示已翻譯完成）
@@ -1002,61 +1053,49 @@
     YT.lastLeadMs                = 0;         // v1.2.50
     YT._firstCacheHitLogged      = false;     // v1.2.51
 
-    // 立刻掛上 seeked / ratechange / timeupdate listener，不等第一批翻完：
-    // 若等翻完後才掛，使用者在第一批回來前拖進度條，seeked 沒有監聽器，fix 無效。
+    // v1.3.9: 提前掛監聽器，不等字幕資料回來（使用者可能在抓取期間拖進度條）
     attachVideoListener();
 
     const config = await getYtConfig();
-    _debugUpdate('字幕翻譯已啟動');
+    _debugUpdate('字幕翻譯已啟動，取得字幕中…');
 
-    if (YT.rawSegments.length > 0) {
-      // XHR 已攔截到字幕 → 從目前播放位置的視窗開始翻譯
+    // v1.3.9: observer 提前啟動，支援 on-the-fly 模式（即使主動抓取失敗也能運作）
+    // captionMap 尚空時 replaceSegmentEl 會 cache miss → onTheFly=false → return，字幕保持原文
+    startCaptionObserver();
+    showCaptionStatus('取得字幕…');
+
+    // v1.3.9: 主動抓取字幕（取代等待 MAIN world XHR 攔截）
+    const segments = await fetchCaptionsForVideo(YT.videoId);
+
+    if (!YT.active) return; // 使用者在抓取期間按下還原，直接中止
+
+    if (segments && segments.length > 0) {
+      YT.rawSegments = segments;
+      // verbose log：列出全部 rawSegments 原文，供除錯比對 DOM 字幕用
+      if (config.debugToast) {
+        SK.sendLog('info', 'youtube-debug', 'rawSegments full list', {
+          count: segments.length,
+          segments: segments.map(s => ({ ms: s.startMs, text: s.text, norm: s.normText })),
+        });
+      }
+      _debugUpdate(`取得 ${segments.length} 條字幕，開始翻譯`);
       const video = document.querySelector('video');
       const currentMs = video ? Math.floor(video.currentTime * 1000) : 0;
       const windowSizeMs = (config.windowSizeS || 30) * 1000;
       const windowStartMs = Math.floor(currentMs / windowSizeMs) * windowSizeMs;
-
-      showCaptionStatus('翻譯中…'); // v1.2.55: 取代 toast，顯示在字幕區
-      // v1.2.53: observer 提前啟動，與 else 分支行為對齊。
-      // 舊版 observer 在 await translateWindowFrom（Promise.all）之後才啟動，
-      // 導致第一視窗所有批次翻完前（冷啟動 ~12-17s）沒有任何 MutationObserver，
-      // 字幕出現在 DOM 卻完全未被監聽，使用者看英文字幕長達 20 秒以上。
-      // 修法：先啟動 observer，再 await 翻譯。captionMap 尚空時 observer 呼叫
-      // replaceSegmentEl → cache miss → onTheFly=false → return，字幕保持英文。
-      // 待 batch 0（~1.5s）完成並寫入 captionMap 後，後續字幕由 observer 瞬間替換。
-      startCaptionObserver();
+      showCaptionStatus('翻譯中…');
       await translateWindowFrom(windowStartMs);
-      // attachVideoListener() 已在上方提前呼叫，此處不重複
-
-      // v1.2.55: 字幕狀態提示由 hideCaptionStatus（在第一條中文字幕出現時觸發）接管，不再另顯 toast
-
+      // hideCaptionStatus 由第一條中文字幕出現時觸發（replaceSegmentEl 內呼叫）
     } else {
-      // 尚未攔截到字幕：可能是 autoTranslate 在 XHR 之前跑完，也可能是 CC 未開
-      // → 先顯示「等待中」，5 秒後若 rawSegments 還是 0 才提示使用者開 CC
-      startCaptionObserver();
-      showCaptionStatus('等待字幕資料…'); // v1.2.55: 取代 toast
-
-      // 1 秒後若仍無 XHR → 主動 toggle CC 讓播放器重新抓字幕
-      setTimeout(() => {
-        if (SK.YT.active && SK.YT.rawSegments.length === 0) {
-          forceSubtitleReload();
-        }
-      }, 1000);
-
-      // 5 秒後若仍無資料 → 判斷是否 CC 根本沒開
-      setTimeout(() => {
-        if (SK.YT.active && SK.YT.rawSegments.length === 0) {
-          if (SK.YT.captionMap.size > 0) {
-            // on-the-fly 在運作 → 字幕區提示會由 hideCaptionStatus 自然消失，不額外顯示
-            hideCaptionStatus(); // v1.2.55
-          } else {
-            // captionMap 也是空的 → CC 可能真的沒開，用 toast 確保使用者看到
-            hideCaptionStatus(); // v1.2.55: 先移除字幕區提示，改用 toast 明顯提示
-            SK.showToast('success', '字幕翻譯已開啟。請開啟 YouTube 字幕（CC），翻譯將自動開始。');
-          }
-        }
-        // 若 rawSegments 已有資料，XHR handler 已接手（不覆蓋）
-      }, 5000);
+      // 主動抓取失敗或無字幕 → on-the-fly 模式仍然可用（若使用者已開啟 CC）
+      _debugUpdate('字幕取得失敗，等待 on-the-fly');
+      if (config.onTheFly) {
+        hideCaptionStatus();
+        // on-the-fly observer 已啟動，會在字幕出現時逐條即時翻譯
+      } else {
+        hideCaptionStatus();
+        SK.showToast('success', '找不到字幕。請確認此影片有英文字幕（CC），或在設定中開啟「即時翻譯」。');
+      }
     }
 
     SK.sendLog('info', 'youtube', 'activated', {
