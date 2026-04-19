@@ -169,6 +169,30 @@
         // v1.1.9: 統一使用 BLOCK_TAGS_SET.has() 取代舊版 BLOCK_TAGS.includes()
         if (!SK.BLOCK_TAGS_SET.has(el.tagName)) {
           if (stats) stats.notBlockTag = (stats.notBlockTag || 0) + 1;
+          // v1.4.7: 非 block-tag 容器（DIV、SECTION 等）若同時有直接 TEXT 子節點（有內容）
+          // 且包含 block 子孫，補做 extractInlineFragments，避免論壇 BBCode 風格的文字漏翻。
+          // 典型案例：XenForo <div class="bbWrapper">
+          //   "I will preface..."<br>"Pros:"<ul><li>...</li></ul>"Overall..."
+          // DIV 不在 BLOCK_TAGS_SET → 以前直接 FILTER_SKIP，text node 完全不可見。
+          // 結構性特徵：直接 TEXT 子節點（trimmed >= 2 char）+ 有 block 子孫。
+          if (!fragmentExtracted.has(el) && !isInsideExcludedContainer(el)) {
+            let hasDirectText = false;
+            for (const child of el.childNodes) {
+              if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim().length >= 2) {
+                hasDirectText = true;
+                break;
+              }
+            }
+            if (hasDirectText && SK.containsBlockDescendant(el)) {
+              fragmentExtracted.add(el);
+              const frags = extractInlineFragments(el);
+              for (const f of frags) {
+                results.push(f);
+                seen.add(f.startNode);
+                if (stats) stats.fragmentUnit = (stats.fragmentUnit || 0) + 1;
+              }
+            }
+          }
           return NodeFilter.FILTER_SKIP;
         }
         if (isInsideExcludedContainer(el)) {

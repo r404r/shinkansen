@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>BBCode div text fixture</title></head>
+<body>
+<!-- 模擬 XenForo BBCode 渲染結構：
+     intro 文字 + Pros: 純文字直接放在 div.bbWrapper 裡，不包 <p>，
+     之後緊跟 <ul><li> 列表。
+     Bug (v1.4.6 以前)：DIV 不在 BLOCK_TAGS_SET → walker FILTER_SKIP，
+     text node 完全不可見 → LI 被翻、intro 未翻。
+     v1.4.7 修法：非 block-tag 容器若有直接 TEXT 子節點 + block 子孫，
+     補做 extractInlineFragments。
+-->
+<div class="message-body" id="target">
+  <div class="bbWrapper">I will preface this review by saying I live in a 1700 SQFT house.<br>
+<br>Pros:<br>
+<ul>
+  <li>Extremely light weight as advertised.</li>
+  <li>Cleaner head works as advertised with zero hair tangles.</li>
+</ul>
+Overall it is a very fun machine.</div>
+</div>
+</body>
+</html>

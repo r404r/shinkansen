@@ -7,6 +7,8 @@
 
 ## v1.4.x
 
+**v1.4.7** — 修正 XenForo / BBCode 論壇風格頁面中，`<div class="bbWrapper">` 等非 block-tag 容器內的直接 text 子節點（intro 段落、「Pros:」標題等）漏翻的問題。根因：`DIV` 不在 `BLOCK_TAGS_SET`，`collectParagraphs` walker 對 `.bbWrapper` 直接回 `FILTER_SKIP`，完全沒走到 `containsBlockDescendant` / `extractInlineFragments`，導致 `<LI>` 被翻而 intro 文字完全不可見。修法：在 `acceptNode` 的非 `BLOCK_TAGS_SET` 分支，若元素有直接 TEXT 子節點（trimmed >= 2 chars）且有 block 子孫，補做 `extractInlineFragments`，把文字抽成 fragment 單元。影響函式：`content-detect.js` → `collectParagraphs` → `acceptNode`。
+
 **v1.4.6** — 修正 Gemini 有時把換行字元以字面 `\n`（反斜線 + n，兩個可見字元）輸出，而非真正換行符（U+000A）的問題。`pushText` 用 `includes('\n')` 偵測換行，字面 `\n` 無法觸發，導致 `\n` 以兩個字元殘留 DOM。修法：在 `deserializeWithPlaceholders` 的 `normalizeLlmPlaceholders` 之後加一個規範化步驟，把字面 `\n`（`/\\n/g`）替換為真正換行符，再繼續後續的 `collapseCjkSpacesAroundPlaceholders` 與 `parseSegment`。影響函式：`content-serialize.js` → `deserializeWithPlaceholders`。
 
 **v1.4.5** — 修正 Gemini 在翻譯含醫藥/術語內容的 slot 時，會在佔位符括號內插入描述文字（如 `⟦0 drug⟧` → `⟦0⟧`），導致 `normalizeLlmPlaceholders` 無法識別，最終 `⟦` / `⟧` 被剝除、「0 drug」/「/0 drug」裸字串殘留 DOM 的問題。修法：在 `normalizeLlmPlaceholders` 加一條 regex，偵測「數字後有空白 + 非空白文字」的模式並自動清除多餘描述（保留前綴符號與數字）。影響函式：`content-serialize.js` → `normalizeLlmPlaceholders`。
