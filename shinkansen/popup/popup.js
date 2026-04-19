@@ -160,16 +160,23 @@ $('glossary-toggle').addEventListener('change', async (e) => {
 
 // v1.2.12: YouTube 字幕翻譯開關
 // v1.4.13: toggle 變更時同時更新設定（autoTranslate）+ 通知 content script 立即啟/停
+// v1.4.21: popup 顯示（讀 ytSubtitle.autoTranslate 設定值）與點擊動作對齊到同一語意——
+// 舊版點擊送 TOGGLE_SUBTITLE，content.js 走「翻面」YT.active；當設定值與 YT.active
+// desync（例如使用者手動按 Alt+S 啟動過、或處於 init 800ms 延遲窗口）時，點擊會反向作用。
+// 改為送 SET_SUBTITLE { enabled }，content.js 依 enabled 直接決定啟/停/no-op。
 $('yt-subtitle-toggle').addEventListener('change', async (e) => {
   const enabled = e.target.checked;
   try {
     // 1. 更新設定（影響下次進 YouTube 頁是否自動啟動字幕翻譯）
     const { ytSubtitle = {} } = await browser.storage.sync.get('ytSubtitle');
     await browser.storage.sync.set({ ytSubtitle: { ...ytSubtitle, autoTranslate: enabled } });
-    // 2. 通知當前分頁立即啟或停
+    // 2. 通知當前分頁把運行狀態調成 enabled
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_SUBTITLE' }).catch(() => {});
+      await browser.tabs.sendMessage(tab.id, {
+        type: 'SET_SUBTITLE',
+        payload: { enabled },
+      }).catch(() => {});
     }
   } catch (err) {
     statusEl.textContent = '狀態：無法切換字幕翻譯，請重新整理頁面';

@@ -965,12 +965,21 @@
       SK.translatePageGoogle();
       return;
     }
-    if (msg?.type === 'TOGGLE_SUBTITLE') {
-      if (SK.translateYouTubeSubtitles) {
-        SK.translateYouTubeSubtitles().catch(err => {
-          SK.sendLog('warn', 'system', 'TOGGLE_SUBTITLE failed', { error: err.message });
+    // v1.4.21: popup 勾選狀態直接決定「應該啟或停」，不再走 toggle 翻面
+    if (msg?.type === 'SET_SUBTITLE') {
+      const enabled = !!msg.payload?.enabled;
+      const active = !!(SK.YT && SK.YT.active);
+      if (enabled && !active) {
+        SK.translateYouTubeSubtitles?.().catch(err => {
+          SK.sendLog('warn', 'system', 'SET_SUBTITLE start failed', { error: err.message });
         });
+      } else if (!enabled && active) {
+        try { SK.stopYouTubeTranslation?.(); }
+        catch (err) {
+          SK.sendLog('warn', 'system', 'SET_SUBTITLE stop failed', { error: err.message });
+        }
       }
+      // 其餘兩種（enabled 與當前狀態相同）no-op
       return;
     }
   });
