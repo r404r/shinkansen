@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>vbulletin-title-div fixture</title>
+</head>
+<body>
+<!--
+  對應 v1.4.14 修的「vBulletin td.alt1 翻譯後標題 div 消失」bug。
+
+  結構特徵（sanitized 重現 forum.miata.net 貼文頁的 td.alt1）:
+    <td id="td_post_test">
+      <div class="smallfont"><strong>標題</strong></div>  ← 需獨立收集
+      <hr>
+      <div class="postbitcontrol2">
+        內文 ...
+        <img class="inlineimg">                          ← 觸發 injection 的 media-preserving path
+      </div>
+    </td>
+
+  Bug 根因（v1.4.13 以前）:
+    walker 碰到 <td>，containsBlockDescendant(td) = false（DIV 不在 BLOCK_TAGS_SET）
+    → td 通過所有檢查 → FILTER_ACCEPT → 整個 td 被當成一個翻譯單元。
+    injectIntoTarget(td, frag) 偵測到 td 內有 <img>，走 media-preserving path。
+    此路徑會清空無 media 的 parent（STRONG text 被清空 → STRONG 移除 →
+    smallfont 沒 media → smallfont 移除），標題 div 消失。
+
+  v1.4.14 修法:
+    collectParagraphs walker 在 BLOCK_TAGS_SET 分支新增 guard:
+    若 td 有直接 CONTAINER_TAGS 子元素且各有候選文字 → FILTER_SKIP 讓 walker 下探。
+    再新增 Case C: wrapper div 只含 preservable inline（STRONG 等非 <a>）→ 整體當 element 單元。
+    → 標題 div 與 postbitcontrol2 div 分別被收集。
+-->
+<table><tbody><tr>
+  <td class="alt1" id="td_post_test">
+    <!-- icon and title -->
+    <div class="smallfont hideonmobile">
+      <strong>Thread title goes here for testing purposes only</strong>
+    </div>
+    <hr class="hideonmobile" size="1">
+    <!-- message -->
+    <div class="postbitcontrol2" id="post_message_test">
+      This is the post body content. It needs enough text to translate properly.
+      Second sentence here to ensure sufficient length for detection.<br><br>
+      Third paragraph content for the inline image test case here.
+      <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" class="inlineimg">
+    </div>
+    <!-- /message -->
+  </td>
+</tr></tbody></table>
+</body>
+</html>

@@ -18,17 +18,8 @@
 
 ## 條目
 
-### vBulletin td.alt1 翻譯後標題 div 消失 — 待 Cowork 端 Chrome MCP 診斷
-- **症狀**：forum.miata.net 貼文頁翻譯後，`<div class="smallfont hideonmobile">` 標題 div 整個被吃掉（DOM 內不見），但 HR 與 post_message div 維持原位
-- **來源 URL**：https://forum.miata.net/vb/showthread.php?t=800453（任一 thread 應該都重現）
-- **初步 DOM 對照**（Jimmy 2026-04-19 DevTools 截圖）：
-  - 翻譯前：`td.alt1` 子節點 = `[comment] [div.smallfont.hideonmobile] [hr.hideonmobile] [comment] [comment] [div.postbitcontrol2] [comment]`
-  - 翻譯後：`td.alt1` 子節點 = `[comment] [hr.hideonmobile] [comment] [comment] [div.postbitcontrol2] [comment]`
-  - 標題 div 不見、HR 與 comment 都在、中文標題顯示在頁面（位置不明，截圖沒拍到）
-- **推論**：這不是 v1.4.10 HR 那個 bug。是 injection path 在 td 整段翻譯時，把「標題 div」從子節點 list 移除但中文沒正確填回原位置。可能走了不是 clean slate 的某條注入路徑
-- **為什麼還沒修**：要在 Cowork 端用 `mcp__Claude_in_Chrome__*` 實地看 inject 後中文標題實際 DOM 位置 + 哪條 injection path 被觸發才能找到結構性通則。Claude Code 端無 Chrome MCP，純靠 console 輸出推理容易走偏
-- **建議 spec 位置**：`test/regression/inject-vbulletin-title-div.spec.js`
-- **下次動手時**：切 Cowork，用 Chrome MCP navigate 到該 URL，翻譯前後各抓 `document.getElementById('td_post_XXXXXX').outerHTML`，觀察譯文中文標題掛在哪個節點上，再決定修法（絕對不能加「站點特判」，必須找結構性通則——硬規則 8）
+### ~~vBulletin td.alt1 翻譯後標題 div 消失~~ — 已修復 → `test/regression/inject-vbulletin-title-div.spec.js`（v1.4.14）
+（根因在 detection：DIV 不在 `BLOCK_TAGS_SET` 所以 `containsBlockDescendant(td)=false`，td 被 FILTER_ACCEPT 整段翻譯，injection 走 media-preserving path 清掉 smallfont。修法是結構性通則：block 元素若有直接 `CONTAINER_TAGS` 子元素且有候選文字 → FILTER_SKIP 讓 walker 下探；另新增 Case C 收集「只含 preservable inline、無 BR、無 direct text」的 wrapper div（如 smallfont 裡的 STRONG 標題）。injection path 不動。SANITY 通過：移除 guard 後 td 重新整段被收、smallfont 被清掉、斷言 fail；還原後 pass。）
 
 ### v1.4.12 — 2026-04-19 — 三組 preset 快速鍵 + 統一取消邏輯
 - **新功能不是 bug**：manifest commands 改成 `translate-preset-1/2/3`（Alt+A/S/D），各自對應 `translatePresets` storage 中的一組 `{engine, model, label}`。閒置按 → 啟動該 preset；翻譯中按任一鍵 → abort；已翻譯按任一鍵 → `restorePage`。v1.4.11 sticky 的 storage schema 從 `engine` 字串改存 `slot` number，新 tab 繼承相同 preset。

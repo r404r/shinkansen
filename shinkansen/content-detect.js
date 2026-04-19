@@ -108,6 +108,28 @@
     return total;
   }
 
+  // v1.4.14 Case C helper：BLOCK_TAGS_SET 元素有直接 CONTAINER_TAGS 子元素且各有候選文字時，
+  // 不應整體收集，應 skip 讓 walker 下探讓子元素各自被收集。
+  function hasContainerChildWithCandidateText(el) {
+    for (const child of el.children) {
+      if (SK.CONTAINER_TAGS.has(child.tagName) && isCandidateText(child)) return true;
+    }
+    return false;
+  }
+
+  // v1.4.14 Case C helper：確認有非 <a> 的 preservable inline 元素（STRONG/B/EM 等）。
+  // 純連結導覽區（只有 <a>）不觸發，避免誤收 nav link div。
+  function hasNonAnchorPreservableInline(el) {
+    const all = el.getElementsByTagName('*');
+    for (let i = 0; i < all.length; i++) {
+      const n = all[i];
+      if (n.tagName === 'A') continue;
+      if (SK.HARD_EXCLUDE_TAGS.has(n.tagName)) continue;
+      if (SK.isPreservableInline(n)) return true;
+    }
+    return false;
+  }
+
   // ─── Fragment 抽取 ────────────────────────────────────
 
   function extractInlineFragments(el) {
@@ -221,6 +243,22 @@
               results.push({ kind: 'element', el });
               seen.add(el);
               if (stats) stats.containerWithBr = (stats.containerWithBr || 0) + 1;
+            } else if (
+              // Case C (v1.4.14)：wrapper div 只含 inline 格式元素（STRONG/B/EM 等），
+              // 沒有直接 text node、沒有 BR、沒有 block 後代，但 innerText 有候選內容。
+              // 結構特徵：CONTAINER_TAGS 元素其文字全部來自 preservable inline 子元素（非純連結）。
+              // 常見於 vBulletin 的 <div class="smallfont"><strong>標題</strong></div>，
+              // 若不在此收集，parent td 會把它跟其他內容合併成一個翻譯單元。
+              SK.CONTAINER_TAGS.has(el.tagName) &&
+              !seen.has(el) &&
+              !hasBrChild(el) &&
+              !hasDirectText &&
+              hasNonAnchorPreservableInline(el) &&
+              isCandidateText(el)
+            ) {
+              results.push({ kind: 'element', el });
+              seen.add(el);
+              if (stats) stats.inlineWrapperUnit = (stats.inlineWrapperUnit || 0) + 1;
             }
           }
           return NodeFilter.FILTER_SKIP;
@@ -248,6 +286,16 @@
               if (stats) stats.fragmentUnit = (stats.fragmentUnit || 0) + 1;
             }
           }
+          return NodeFilter.FILTER_SKIP;
+        }
+        // v1.4.14: 若 block 元素本身沒有 direct text，實質內容完全由 CONTAINER_TAGS
+        // 子元素承載（例如 vBulletin <td> 含多個 <div>：標題 div + 內文 div），
+        // skip 讓 walker 下探。否則 walker FILTER_ACCEPT 整個 block，
+        // injection 的 media-preserving path 會把非最長 text 所在的 wrapper div 清掉。
+        // 加 directTextLength 判斷是為了不誤傷「本身有段落文字 + 附帶 UI 小工具 div」
+        // 的 block（例如 Medium 留言區 <pre>留言<div><button>more</button></div></pre>）。
+        if (directTextLength(el) < 2 && hasContainerChildWithCandidateText(el)) {
+          if (stats) stats.blockWithContainerChildren = (stats.blockWithContainerChildren || 0) + 1;
           return NodeFilter.FILTER_SKIP;
         }
         if (!isCandidateText(el)) {
