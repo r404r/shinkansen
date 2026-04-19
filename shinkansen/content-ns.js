@@ -189,6 +189,8 @@ if (window.__shinkansen_loaded) {
   // 「原子保留」子樹
   SK.isAtomicPreserve = function isAtomicPreserve(el) {
     if (el.tagName === 'SUP' && el.classList && el.classList.contains('reference')) return true;
+    // v1.4.10: <hr> 是區塊分隔線，序列化時保留為 ⟦*N⟧，避免 clean slate 注入後丟失
+    if (el.tagName === 'HR') return true;
     return false;
   };
 
