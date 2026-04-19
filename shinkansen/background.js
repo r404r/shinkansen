@@ -167,6 +167,59 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
+// ─── v1.4.11: 跨 tab sticky 翻譯 ────────────────────────
+// 使用者在 tab A 按 Option+S 翻譯後，從 A 點連結開到 tab B，B 自動翻譯；
+// 跟著 openerTabId 樹傳遞，跳到完全無 opener 的新 tab（手動打網址 / bookmark）不繼承。
+// 每個 tab 記錄自己的 engine（'gemini' | 'google'）。按 Option+S 只清當前 tab。
+// 持久化於 chrome.storage.session，service worker 休眠重啟後仍保留。
+
+const stickyTabs = new Map(); // tabId → engine
+let _stickyHydrated = false;
+
+async function hydrateStickyTabs() {
+  if (_stickyHydrated) return;
+  _stickyHydrated = true;
+  try {
+    const { stickyTabs: saved } = await browser.storage.session.get('stickyTabs');
+    if (saved && typeof saved === 'object') {
+      for (const [tabId, engine] of Object.entries(saved)) {
+        stickyTabs.set(Number(tabId), engine);
+      }
+    }
+  } catch (err) {
+    debugLog('warn', 'system', 'hydrateStickyTabs failed', { error: err.message });
+  }
+}
+
+async function persistStickyTabs() {
+  try {
+    const obj = {};
+    stickyTabs.forEach((engine, tabId) => { obj[tabId] = engine; });
+    await browser.storage.session.set({ stickyTabs: obj });
+  } catch (err) {
+    debugLog('warn', 'system', 'persistStickyTabs failed', { error: err.message });
+  }
+}
+
+browser.tabs.onCreated.addListener(async (tab) => {
+  await hydrateStickyTabs();
+  const openerId = tab.openerTabId;
+  if (openerId == null) return;
+  const engine = stickyTabs.get(openerId);
+  if (!engine) return;
+  stickyTabs.set(tab.id, engine);
+  await persistStickyTabs();
+  debugLog('info', 'system', 'sticky inherited from opener', {
+    newTabId: tab.id, openerTabId: openerId, engine,
+  });
+});
+
+browser.tabs.onRemoved.addListener(async (tabId) => {
+  if (!stickyTabs.has(tabId)) return;
+  stickyTabs.delete(tabId);
+  await persistStickyTabs();
+});
+
 // ─── 訊息路由（handler map 取代 if-else 鏈） ──────────────────
 const messageHandlers = {
   TRANSLATE_BATCH: {
@@ -237,6 +290,40 @@ const messageHandlers = {
   CLEAR_BADGE: {
     async: true,
     handler: (_, sender) => clearTranslatedBadge(sender?.tab?.id),
+  },
+  // v1.4.11: 跨 tab sticky 翻譯
+  STICKY_QUERY: {
+    async: true,
+    handler: async (_, sender) => {
+      await hydrateStickyTabs();
+      const tabId = sender?.tab?.id;
+      if (tabId == null) return { ok: true, shouldTranslate: false };
+      const engine = stickyTabs.get(tabId);
+      return { ok: true, shouldTranslate: !!engine, engine: engine || null };
+    },
+  },
+  STICKY_SET: {
+    async: true,
+    handler: async (payload, sender) => {
+      await hydrateStickyTabs();
+      const tabId = sender?.tab?.id;
+      if (tabId == null) return { ok: false, error: 'no tab id' };
+      const engine = payload?.engine === 'google' ? 'google' : 'gemini';
+      stickyTabs.set(tabId, engine);
+      await persistStickyTabs();
+      return { ok: true };
+    },
+  },
+  STICKY_CLEAR: {
+    async: true,
+    handler: async (_, sender) => {
+      await hydrateStickyTabs();
+      const tabId = sender?.tab?.id;
+      if (tabId == null) return { ok: false };
+      stickyTabs.delete(tabId);
+      await persistStickyTabs();
+      return { ok: true };
+    },
   },
   LOG: {
     async: false,

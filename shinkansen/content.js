@@ -538,6 +538,8 @@
       STATE.translatedBy = 'gemini';  // v1.4.0
       STATE.stickyTranslate = true;
       browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
+      // v1.4.11: 跨 tab sticky——此 tab 進入 sticky set，opener 鏈中新開的 tab 會繼承
+      browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { engine: 'gemini' } }).catch(() => {});
 
       if (!failures.length) {
         const totalTokens = pageUsage.inputTokens + pageUsage.outputTokens;
@@ -640,6 +642,8 @@
     STATE.translatedBy = null;  // v1.4.0
     STATE.stickyTranslate = false;
     browser.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(() => {});
+    // v1.4.11: 清除跨 tab sticky（只影響當前 tab，不影響樹中其他 tab）
+    browser.runtime.sendMessage({ type: 'STICKY_CLEAR' }).catch(() => {});
     SK.showToast('success', '已還原原文', { progress: 1, autoHideMs: 2000 });
   }
 
@@ -819,6 +823,8 @@
       STATE.translatedBy = 'google';  // v1.4.0
       STATE.stickyTranslate = true;
       browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
+      // v1.4.11: 跨 tab sticky——此 tab 進入 sticky set（Google engine）
+      browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { engine: 'google' } }).catch(() => {});
 
       if (!failures.length) {
         const successMsg = truncatedCount > 0
@@ -1050,6 +1056,19 @@
           }, 800);
         }
         return; // YouTube 頁面不走一般 auto-translate
+      }
+
+      // v1.4.11: 跨 tab sticky——若本 tab 從已翻譯的 opener tab 繼承，自動翻譯
+      const stickyResp = await browser.runtime.sendMessage({ type: 'STICKY_QUERY' }).catch(() => null);
+      if (stickyResp?.shouldTranslate) {
+        const engine = stickyResp.engine === 'google' ? 'google' : 'gemini';
+        SK.sendLog('info', 'system', 'sticky translate inherited from opener tab, translating on load', { engine, url: location.href });
+        if (engine === 'google') {
+          SK.translatePageGoogle?.();
+        } else {
+          SK.translatePage();
+        }
+        return;
       }
 
       const { autoTranslate = false } = await browser.storage.sync.get('autoTranslate');
