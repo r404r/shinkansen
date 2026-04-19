@@ -19,8 +19,9 @@
 //   序列化時 <hr> 變成 ⟦*N⟧ 原子佔位符（cloneNode(true) 保留 class）。
 //   LLM 保留 ⟦*N⟧ 後，反序列化自動還原完整 <hr class="hideonmobile">。
 //
-// <!-- SANITY-PENDING: 把 isAtomicPreserve 的 HR 那行移除，
-//      預期：hrCount 從 1 降為 0，test fail。還原後 pass。 -->
+// SANITY 紀錄（已驗證）：把 isAtomicPreserve 的 `if (el.tagName === 'HR') return true;`
+// 那行移除後，序列化階段 hrSlotCount=0、text 內無 ⟦*N⟧，spec 在 hrSlotCount 斷言處 fail。
+// 還原該行後 spec pass。驗證於 v1.4.10 release 前完成。
 import { test, expect } from '../fixtures/extension.js';
 import {
   loadFixtureResponse,
