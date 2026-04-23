@@ -4,7 +4,7 @@
 
 名稱「新幹線」象徵快速、平穩、流暢的閱讀體驗。
 
-> **[下載最新版本](https://github.com/jimmysu0309/shinkansen/releases/latest)** · 安裝教學與產品介紹見 [官方網頁](https://jimmysu0309.github.io/shinkansen/)
+> **[從 Chrome Web Store 安裝](https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg)**（推薦）· [下載最新版本 zip](https://github.com/jimmysu0309/shinkansen/releases/latest) · 安裝教學與產品介紹見 [官方網頁](https://jimmysu0309.github.io/shinkansen/)
 
 ## 為什麼做這個專案
 
@@ -32,7 +32,13 @@
 - **還原原文**：按同一組快速鍵即切換回原文，隨時對照
 - **Google Docs 翻譯**：自動偵測 Google Docs，開啟可翻譯的閱讀版並翻譯（詳見下方說明）
 
-## 安裝方式（開發版）
+## 安裝方式
+
+**推薦：Chrome Web Store**
+
+前往 [Chrome Web Store 安裝頁面](https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg) 點「加到 Chrome」即可。
+
+**開發版（載入未封裝）**
 
 1. 開啟 Chrome，網址列輸入 `chrome://extensions/` 並按 Enter
 2. 右上角打開「開發人員模式」

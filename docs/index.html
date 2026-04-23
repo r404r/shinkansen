@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shinkansen — 快速、流暢的 Chrome 網頁翻譯擴充功能</title>
+  <title>Shinkansen｜極速、私密、高品質的網頁翻譯體驗</title>
   <meta name="description" content="使用 Google Gemini 將外語網頁翻譯成台灣繁體中文，原地替換文字，保留頁面原始排版。你的瀏覽資料不經過第三方伺服器。">
 
   <!-- Open Graph / Social Preview -->
@@ -52,11 +52,33 @@
       letter-spacing: -0.02em;
       margin-bottom: 12px;
     }
+    .hero h1 .hero-subtitle {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: #555;
+      letter-spacing: 0;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @media (max-width: 600px) {
+      .hero h1 .hero-subtitle {
+        display: block;
+        font-size: 0.95rem;
+        margin-top: 6px;
+      }
+      .hero h1 .hero-sep { display: none; }
+    }
     .hero .tagline {
       font-size: 1.15rem;
       color: #555;
       max-width: 520px;
       margin: 0 auto 32px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
     }
     .btn-download {
       display: inline-block;
@@ -70,6 +92,14 @@
       transition: background 0.2s;
     }
     .btn-download:hover { background: #1d4ed8; }
+    .btn-download.secondary {
+      background: #fff;
+      color: #2563eb;
+      border: 1.5px solid #2563eb;
+    }
+    .btn-download.secondary:hover {
+      background: #eff6ff;
+    }
     .hero-sub {
       margin-top: 12px;
       font-size: 0.85rem;
@@ -234,9 +264,12 @@
   <div class="hero">
     <div class="container">
       <img src="icon-128.png" alt="Shinkansen" class="hero-icon">
-      <h1>Shinkansen</h1>
+      <h1>Shinkansen<span class="hero-sep">｜</span><span class="hero-subtitle">極速、私密、高品質的網頁翻譯體驗</span></h1>
       <p class="tagline">你的瀏覽內容不該經過別人的伺服器。Shinkansen 由你的電腦直接呼叫 Google Gemini 翻譯，不經過任何第三方。</p>
-      <a href="https://github.com/jimmysu0309/shinkansen/releases/latest/download/shinkansen.zip" class="btn-download">下載最新版本</a>
+      <div class="btn-row">
+        <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝</a>
+        <a href="https://github.com/jimmysu0309/shinkansen/releases/latest/download/shinkansen.zip" class="btn-download secondary">GitHub 下載 beta 版手動安裝</a>
+      </div>
       <p class="hero-sub">v1.4.22 · 開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
     </div>
   </div>
@@ -322,7 +355,7 @@
   <!-- Install Steps -->
   <section>
     <div class="container">
-      <h2>三步驟安裝</h2>
+      <h2>Beta 版手動安裝步驟</h2>
       <div class="steps">
         <div class="step">
           <div class="step-num">1</div>
@@ -353,6 +386,7 @@
   <footer>
     <div class="container">
       <p>Shinkansen 採用 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/LICENSE">Elastic License 2.0</a> 授權 · <a href="privacy-policy.html">隱私權政策</a> · <a href="https://github.com/jimmysu0309/shinkansen">原始碼</a></p>
+      <p style="margin-top:8px; font-style:italic;">No coding skills were harmed in the making of this shit.</p>
     </div>
   </footer>
 
