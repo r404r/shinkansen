@@ -13,7 +13,7 @@
 import { test, expect } from './fixtures/extension.js';
 import { getShinkansenEvaluator } from './regression/helpers/run-inject.js';
 
-const EXPECTED_VERSION = '1.5.1';
+const EXPECTED_VERSION = '1.5.2';
 
 // 任意一個 regression fixture 就行,只是為了讓 content script load 進來、
 // 拿到 isolated world。本測試本身不依賴頁面內容。
