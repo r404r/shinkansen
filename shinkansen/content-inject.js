@@ -7,11 +7,11 @@
   const STATE = SK.STATE;
 
   /**
-   * 保證同一個 element 只快照一次原始 innerHTML。
+   * 保證同一個 element 只快照一次原始子節點。
    */
   SK.snapshotOnce = function snapshotOnce(el) {
     if (!STATE.originalHTML.has(el)) {
-      STATE.originalHTML.set(el, el.innerHTML);
+      STATE.originalHTML.set(el, SK.cloneChildSnapshot(el));
     }
   };
 
@@ -246,7 +246,7 @@
       if (ok) {
         replaceNodeInPlace(el, frag);
         el.setAttribute('data-shinkansen-translated', '1');
-        STATE.translatedHTML.set(el, el.innerHTML);
+        STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
         return;
       }
       const cleaned = SK.stripStrayPlaceholderMarkers(translation);
@@ -255,18 +255,18 @@
       if (recovered) {
         replaceNodeInPlace(el, recovered);
         el.setAttribute('data-shinkansen-translated', '1');
-        STATE.translatedHTML.set(el, el.innerHTML);
+        STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
         return;
       }
       plainTextFallback(el, cleaned);
       el.setAttribute('data-shinkansen-translated', '1');
-      STATE.translatedHTML.set(el, el.innerHTML);
+      STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
       return;
     }
 
     replaceTextInPlace(el, translation);
     el.setAttribute('data-shinkansen-translated', '1');
-    STATE.translatedHTML.set(el, el.innerHTML);
+    STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
   };
 
   function injectFragmentTranslation(unit, translation, slots) {

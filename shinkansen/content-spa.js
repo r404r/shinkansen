@@ -168,12 +168,12 @@
   function runContentGuard() {
     if (!STATE.translated) return;
     let restored = 0;
-    for (const [el, savedHTML] of STATE.translatedHTML) {
+    for (const [el, translatedSnapshot] of STATE.translatedHTML) {
       if (!el.isConnected) continue;
-      if (el.innerHTML === savedHTML) continue;
+      if (SK.childSnapshotEquals(el, translatedSnapshot)) continue;
       const rect = el.getBoundingClientRect();
       if (rect.bottom < -500 || rect.top > window.innerHeight + 500) continue;
-      el.innerHTML = savedHTML;
+      SK.restoreChildSnapshot(el, translatedSnapshot);
       restored++;
     }
     if (restored > 0) {
@@ -185,10 +185,10 @@
   SK.testRunContentGuard = function testRunContentGuard() {
     if (!STATE.translated) return 0;
     let restored = 0;
-    for (const [el, savedHTML] of STATE.translatedHTML) {
+    for (const [el, translatedSnapshot] of STATE.translatedHTML) {
       if (!el.isConnected) continue;
-      if (el.innerHTML === savedHTML) continue;
-      el.innerHTML = savedHTML;
+      if (SK.childSnapshotEquals(el, translatedSnapshot)) continue;
+      SK.restoreChildSnapshot(el, translatedSnapshot);
       restored++;
     }
     return restored;

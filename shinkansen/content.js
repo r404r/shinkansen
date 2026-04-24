@@ -520,8 +520,8 @@
       if (abortSignal.aborted) {
         SK.sendLog('info', 'translate', 'translation aborted', { done, total });
         if (STATE.originalHTML.size > 0) {
-          STATE.originalHTML.forEach((originalHTML, el) => {
-            el.innerHTML = originalHTML;
+          STATE.originalHTML.forEach((originalSnapshot, el) => {
+            SK.restoreChildSnapshot(el, originalSnapshot);
             el.removeAttribute('data-shinkansen-translated');
           });
           STATE.originalHTML.clear();
@@ -641,8 +641,8 @@
     if (editModeActive) toggleEditMode(false);
     SK.cancelRescan();
     SK.stopSpaObserver();
-    STATE.originalHTML.forEach((originalHTML, el) => {
-      el.innerHTML = originalHTML;
+    STATE.originalHTML.forEach((originalSnapshot, el) => {
+      SK.restoreChildSnapshot(el, originalSnapshot);
       el.removeAttribute('data-shinkansen-translated');
     });
     STATE.originalHTML.clear();
@@ -813,8 +813,8 @@
 
       if (abortSignal.aborted) {
         if (STATE.originalHTML.size > 0) {
-          STATE.originalHTML.forEach((originalHTML, el) => {
-            el.innerHTML = originalHTML;
+          STATE.originalHTML.forEach((originalSnapshot, el) => {
+            SK.restoreChildSnapshot(el, originalSnapshot);
             el.removeAttribute('data-shinkansen-translated');
           });
           STATE.originalHTML.clear();

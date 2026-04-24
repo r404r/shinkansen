@@ -76,6 +76,10 @@ function applyTierToInputs(tier, model) {
 
 const $ = (id) => document.getElementById(id);
 
+function clearChildren(el) {
+  el.replaceChildren();
+}
+
 async function load() {
   const saved = await browser.storage.sync.get(null);
   // v0.62 起：apiKey 改存 browser.storage.local，不跟 Google 帳號同步
@@ -639,17 +643,39 @@ let fixedGlossary = { global: [], byDomain: {} };
 let currentDomain = ''; // 目前選中的網域
 
 function renderGlossaryTable(tbody, entries) {
-  tbody.innerHTML = entries.map((e, i) =>
-    `<tr data-idx="${i}">` +
-    `<td><input type="text" class="fg-source" value="${escapeAttr(e.source)}" placeholder="英文原文"></td>` +
-    `<td><input type="text" class="fg-target" value="${escapeAttr(e.target)}" placeholder="中文譯文"></td>` +
-    `<td class="glossary-col-action"><button class="glossary-delete-row" data-idx="${i}" title="刪除">×</button></td>` +
-    `</tr>`
-  ).join('');
-}
+  const rows = entries.map((e, i) => {
+    const row = document.createElement('tr');
+    row.dataset.idx = String(i);
 
-function escapeAttr(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const sourceCell = document.createElement('td');
+    const sourceInput = document.createElement('input');
+    sourceInput.type = 'text';
+    sourceInput.className = 'fg-source';
+    sourceInput.value = e.source || '';
+    sourceInput.placeholder = '英文原文';
+    sourceCell.appendChild(sourceInput);
+
+    const targetCell = document.createElement('td');
+    const targetInput = document.createElement('input');
+    targetInput.type = 'text';
+    targetInput.className = 'fg-target';
+    targetInput.value = e.target || '';
+    targetInput.placeholder = '中文譯文';
+    targetCell.appendChild(targetInput);
+
+    const actionCell = document.createElement('td');
+    actionCell.className = 'glossary-col-action';
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'glossary-delete-row';
+    deleteButton.dataset.idx = String(i);
+    deleteButton.title = '刪除';
+    deleteButton.textContent = '×';
+    actionCell.appendChild(deleteButton);
+
+    row.append(sourceCell, targetCell, actionCell);
+    return row;
+  });
+  tbody.replaceChildren(...rows);
 }
 
 function readGlossaryTableEntries(tbody) {
@@ -697,8 +723,16 @@ $('fixed-global-tbody').addEventListener('focusout', () => {
 function updateDomainSelect() {
   const sel = $('fixed-domain-select');
   const domains = Object.keys(fixedGlossary.byDomain).sort();
-  sel.innerHTML = '<option value="">選擇網域…</option>' +
-    domains.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = '選擇網域…';
+  const domainOptions = domains.map(d => {
+    const option = document.createElement('option');
+    option.value = d;
+    option.textContent = d;
+    return option;
+  });
+  sel.replaceChildren(defaultOption, ...domainOptions);
   if (currentDomain && fixedGlossary.byDomain[currentDomain]) {
     sel.value = currentDomain;
   }
@@ -988,46 +1022,70 @@ function renderTable(records) {
   const emptyMsg = $('usage-empty');
 
   if (!records || records.length === 0) {
-    tbody.innerHTML = '';
+    clearChildren(tbody);
     emptyMsg.hidden = false;
     return;
   }
   emptyMsg.hidden = true;
 
-  tbody.innerHTML = records.map(r => {
+  const rows = records.map(r => {
     const isGoogle = r.engine === 'google';  // v1.4.0
     // v0.99: 思考 token 以 output 費率計費，加入明細計算
     const billedTokens = (r.billedInputTokens || 0) + (r.outputTokens || 0);
     const shortModel = isGoogle
       ? 'Google'
       : (r.model || '').replace('gemini-', '').replace('-preview', '');
-    const title = escapeHtml(r.title || '(無標題)');
-    const urlDisplay = escapeHtml(shortenUrl(r.url || ''));
-    const urlFull = escapeHtml(r.url || '');
+    const title = r.title || '(無標題)';
+    const urlDisplay = shortenUrl(r.url || '');
+    const urlFull = r.url || '';
     // v1.0.30: Gemini implicit cache hit rate（Google Translate 不適用）
     const inputTk = r.inputTokens || 0;
     const cachedTk = r.cachedTokens || 0;
     const hitRate = (!isGoogle && inputTk > 0) ? Math.round(cachedTk / inputTk * 100) : 0;
-    const hitHtml = hitRate > 0
-      ? `<span class="usage-cache-hit">(${hitRate}% hit)</span>`
-      : '';
-    // v1.2.60: URL 改為可點擊連結
-    const urlHtml = urlFull
-      ? `<a class="site-url" href="${urlFull}" target="_blank" rel="noopener">${urlDisplay}</a>`
-      : `<span class="site-url">${urlDisplay}</span>`;
-    // v1.4.0: Google Translate 顯示字元數和 $0（免費）
-    const tokenCell = isGoogle
-      ? `${(r.chars || 0).toLocaleString()} 字元`
-      : `${formatTokens(billedTokens)}${hitHtml}`;
     const costCell = isGoogle ? '$0（免費）' : formatUSD(r.billedCostUSD || 0);
-    return `<tr>
-      <td>${fmtTime(r.timestamp)}</td>
-      <td>${title}${urlHtml}</td>
-      <td class="col-model">${shortModel}</td>
-      <td class="num">${tokenCell}</td>
-      <td class="num">${costCell}</td>
-    </tr>`;
-  }).join('');
+    const row = document.createElement('tr');
+
+    const timeCell = document.createElement('td');
+    timeCell.textContent = fmtTime(r.timestamp);
+
+    const titleCell = document.createElement('td');
+    titleCell.appendChild(document.createTextNode(title));
+    const urlEl = urlFull ? document.createElement('a') : document.createElement('span');
+    urlEl.className = 'site-url';
+    urlEl.textContent = urlDisplay;
+    if (urlFull) {
+      urlEl.href = urlFull;
+      urlEl.target = '_blank';
+      urlEl.rel = 'noopener';
+    }
+    titleCell.appendChild(urlEl);
+
+    const modelCell = document.createElement('td');
+    modelCell.className = 'col-model';
+    modelCell.textContent = shortModel;
+
+    const tokenCell = document.createElement('td');
+    tokenCell.className = 'num';
+    if (isGoogle) {
+      tokenCell.textContent = `${(r.chars || 0).toLocaleString()} 字元`;
+    } else {
+      tokenCell.appendChild(document.createTextNode(formatTokens(billedTokens)));
+      if (hitRate > 0) {
+        const hit = document.createElement('span');
+        hit.className = 'usage-cache-hit';
+        hit.textContent = `(${hitRate}% hit)`;
+        tokenCell.appendChild(hit);
+      }
+    }
+
+    const costTd = document.createElement('td');
+    costTd.className = 'num';
+    costTd.textContent = costCell;
+
+    row.append(timeCell, titleCell, modelCell, tokenCell, costTd);
+    return row;
+  });
+  tbody.replaceChildren(...rows);
 }
 
 // v1.2.62: 從記錄陣列重算彙總卡片（讓搜尋/filter 結果同步反映在計費數字上）
@@ -1057,11 +1115,17 @@ function populateModelFilter() {
   const currentVal = sel.value;
   const models = [...new Set(allUsageRecords.map(r => r.model || '').filter(Boolean))].sort();
   // 重建選項（保留「全部模型」作為第一個選項）
-  sel.innerHTML = '<option value="">全部模型</option>' +
-    models.map(m => {
-      const short = m.replace('gemini-', '').replace('-preview', '');
-      return `<option value="${m}"${m === currentVal ? ' selected' : ''}>${short}</option>`;
-    }).join('');
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = '全部模型';
+  const modelOptions = models.map(m => {
+    const option = document.createElement('option');
+    option.value = m;
+    option.textContent = m.replace('gemini-', '').replace('-preview', '');
+    option.selected = m === currentVal;
+    return option;
+  });
+  sel.replaceChildren(defaultOption, ...modelOptions);
 }
 
 // v1.2.60: 搜尋過濾，同時比對標題與 URL；v1.3.2: 加入模型篩選
@@ -1092,10 +1156,6 @@ function shortenUrl(url) {
     const path = u.pathname.length > 40 ? u.pathname.slice(0, 40) + '…' : u.pathname;
     return u.hostname + path;
   } catch { return url; }
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ─── 事件綁定 ────────────────────────────────────────────
@@ -1233,7 +1293,7 @@ function renderLogTable() {
   }
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '';
+    clearChildren(tbody);
     emptyMsg.hidden = allLogs.length > 0 ? true : false;
     if (allLogs.length > 0 && filtered.length === 0) {
       emptyMsg.textContent = '沒有符合篩選條件的 Log';
@@ -1255,7 +1315,7 @@ function renderLogTable() {
     openSet.add(el.id);
   }
 
-  tbody.innerHTML = visible.map(entry => {
+  const rows = visible.map(entry => {
     const time = formatLogTime(entry.t);
     const catClass = `log-cat log-cat-${entry.category || 'system'}`;
     const catLabel = LOG_CAT_LABELS[entry.category] || entry.category || 'system';
@@ -1263,25 +1323,58 @@ function renderLogTable() {
     const lvlLabel = (entry.level || 'info').toUpperCase();
     const rowClass = entry.level === 'error' ? 'log-row-error' :
                      entry.level === 'warn'  ? 'log-row-warn'  : '';
-    const msg = escapeHtml(entry.message || '');
+    const row = document.createElement('tr');
+    row.className = rowClass;
+
+    const timeCell = document.createElement('td');
+    timeCell.className = 'log-col-time';
+    timeCell.textContent = time;
+
+    const catCell = document.createElement('td');
+    catCell.className = 'log-col-cat';
+    const catSpan = document.createElement('span');
+    catSpan.className = catClass;
+    catSpan.textContent = catLabel;
+    catCell.appendChild(catSpan);
+
+    const lvlCell = document.createElement('td');
+    lvlCell.className = 'log-col-lvl';
+    const lvlSpan = document.createElement('span');
+    lvlSpan.className = lvlClass;
+    lvlSpan.textContent = lvlLabel;
+    lvlCell.appendChild(lvlSpan);
+
+    const msgCell = document.createElement('td');
+    msgCell.className = 'log-col-msg';
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'log-msg-text';
+    msgSpan.textContent = entry.message || '';
+    msgCell.appendChild(msgSpan);
 
     // data 展開按鈕
-    let dataHtml = '';
     if (entry.data && Object.keys(entry.data).length > 0) {
       const dataJson = JSON.stringify(entry.data, null, 2);
       const dataId = `log-data-${entry.seq}`;
       const isOpen = openSet.has(dataId);
-      dataHtml = `<button class="log-data-toggle" data-target="${dataId}">${isOpen ? '收合' : '{…}'}</button>` +
-        `<div class="log-data-detail${isOpen ? ' open' : ''}" id="${dataId}">${escapeHtml(dataJson)}</div>`;
+
+      const toggle = document.createElement('button');
+      toggle.className = 'log-data-toggle';
+      toggle.dataset.target = dataId;
+      toggle.textContent = isOpen ? '收合' : '{…}';
+
+      const detail = document.createElement('div');
+      detail.className = 'log-data-detail';
+      if (isOpen) detail.classList.add('open');
+      detail.id = dataId;
+      detail.textContent = dataJson;
+
+      msgCell.append(toggle, detail);
     }
 
-    return `<tr class="${rowClass}">` +
-      `<td class="log-col-time">${time}</td>` +
-      `<td class="log-col-cat"><span class="${catClass}">${catLabel}</span></td>` +
-      `<td class="log-col-lvl"><span class="${lvlClass}">${lvlLabel}</span></td>` +
-      `<td class="log-col-msg"><span class="log-msg-text">${msg}</span>${dataHtml}</td>` +
-      `</tr>`;
-  }).join('');
+    row.append(timeCell, catCell, lvlCell, msgCell);
+    return row;
+  });
+  tbody.replaceChildren(...rows);
 
   // 自動捲動到底部
   if ($('log-autoscroll').checked) {

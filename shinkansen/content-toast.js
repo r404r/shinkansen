@@ -7,104 +7,124 @@
   toastHost.id = 'shinkansen-toast-host';
   toastHost.style.cssText = 'all: initial; position: fixed; z-index: 2147483647;';
   const shadow = toastHost.attachShadow({ mode: 'closed' });
-  shadow.innerHTML = `
-    <style>
-      :host, * { box-sizing: border-box; }
-      .toast {
-        position: fixed;
-        width: 280px;
-        padding: 14px 16px 12px 16px;
-        background: #ffffff;
-        color: #1d1d1f;
-        border-radius: 12px;
-        box-shadow: 0 8px 28px rgba(0,0,0,.18);
-        font: 13px -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-        display: none;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .toast.show { display: flex; }
-      .toast.pos-bottom-right { bottom: 24px; right: 24px; }
-      .toast.pos-bottom-left  { bottom: 24px; left: 24px; }
-      .toast.pos-top-right    { top: 24px; right: 24px; }
-      .toast.pos-top-left     { top: 24px; left: 24px; }
-      .row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .msg {
-        flex: 1;
-        font-weight: 500;
-        color: #1d1d1f;
-      }
-      .detail {
-        font-size: 12px;
-        color: #6e6e73;
-        font-variant-numeric: tabular-nums;
-        margin-top: -2px;
-        white-space: pre-line;
-        line-height: 1.4;
-      }
-      .detail[hidden] { display: none; }
-      .timer {
-        font-variant-numeric: tabular-nums;
-        color: #86868b;
-        font-size: 12px;
-      }
-      .close {
-        cursor: pointer;
-        background: none; border: 0;
-        font-size: 18px; line-height: 1;
-        color: #86868b;
-        padding: 0 2px;
-      }
-      .close:hover { color: #1d1d1f; }
-      .bar {
-        position: relative;
-        height: 4px;
-        width: 100%;
-        background: #e8e8ed;
-        border-radius: 2px;
-        overflow: hidden;
-      }
-      .bar-fill {
-        position: absolute;
-        left: 0; top: 0; bottom: 0;
-        width: 0%;
-        background: #0071e3;
-        border-radius: 2px;
-        transition: width .3s ease;
-      }
-      .toast.indeterminate .bar-fill {
-        width: 30%;
-        animation: slide 1.4s ease-in-out infinite;
-      }
-      @keyframes slide {
-        0%   { left: -30%; }
-        100% { left: 100%; }
-      }
-      .toast.success .bar-fill { background: #34c759; width: 100%; }
-      .toast.error   .bar-fill { background: #ff3b30; width: 100%; }
-      .toast.mismatch .bar-fill {
-        background: #ff9500;
-        animation: blink-yellow .6s ease-in-out infinite;
-      }
-      @keyframes blink-yellow {
-        0%, 100% { opacity: 1; }
-        50%      { opacity: .4; }
-      }
-    </style>
-    <div class="toast" id="toast">
-      <div class="row">
-        <span class="msg" id="msg">翻譯中…</span>
-        <span class="timer" id="timer"></span>
-        <button class="close" id="close" title="關閉">×</button>
-      </div>
-      <div class="detail" id="detail" hidden></div>
-      <div class="bar"><div class="bar-fill" id="fill"></div></div>
-    </div>
+  const style = document.createElement('style');
+  style.textContent = `
+    :host, * { box-sizing: border-box; }
+    .toast {
+      position: fixed;
+      width: 280px;
+      padding: 14px 16px 12px 16px;
+      background: #ffffff;
+      color: #1d1d1f;
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.18);
+      font: 13px -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast.show { display: flex; }
+    .toast.pos-bottom-right { bottom: 24px; right: 24px; }
+    .toast.pos-bottom-left  { bottom: 24px; left: 24px; }
+    .toast.pos-top-right    { top: 24px; right: 24px; }
+    .toast.pos-top-left     { top: 24px; left: 24px; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .msg {
+      flex: 1;
+      font-weight: 500;
+      color: #1d1d1f;
+    }
+    .detail {
+      font-size: 12px;
+      color: #6e6e73;
+      font-variant-numeric: tabular-nums;
+      margin-top: -2px;
+      white-space: pre-line;
+      line-height: 1.4;
+    }
+    .detail[hidden] { display: none; }
+    .timer {
+      font-variant-numeric: tabular-nums;
+      color: #86868b;
+      font-size: 12px;
+    }
+    .close {
+      cursor: pointer;
+      background: none; border: 0;
+      font-size: 18px; line-height: 1;
+      color: #86868b;
+      padding: 0 2px;
+    }
+    .close:hover { color: #1d1d1f; }
+    .bar {
+      position: relative;
+      height: 4px;
+      width: 100%;
+      background: #e8e8ed;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 0%;
+      background: #0071e3;
+      border-radius: 2px;
+      transition: width .3s ease;
+    }
+    .toast.indeterminate .bar-fill {
+      width: 30%;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+    @keyframes slide {
+      0%   { left: -30%; }
+      100% { left: 100%; }
+    }
+    .toast.success .bar-fill { background: #34c759; width: 100%; }
+    .toast.error   .bar-fill { background: #ff3b30; width: 100%; }
+    .toast.mismatch .bar-fill {
+      background: #ff9500;
+      animation: blink-yellow .6s ease-in-out infinite;
+    }
+    @keyframes blink-yellow {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: .4; }
+    }
   `;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.id = 'toast';
+  const row = document.createElement('div');
+  row.className = 'row';
+  const msg = document.createElement('span');
+  msg.className = 'msg';
+  msg.id = 'msg';
+  msg.textContent = '翻譯中…';
+  const timer = document.createElement('span');
+  timer.className = 'timer';
+  timer.id = 'timer';
+  const close = document.createElement('button');
+  close.className = 'close';
+  close.id = 'close';
+  close.title = '關閉';
+  close.textContent = '×';
+  const detail = document.createElement('div');
+  detail.className = 'detail';
+  detail.id = 'detail';
+  detail.hidden = true;
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  const fill = document.createElement('div');
+  fill.className = 'bar-fill';
+  fill.id = 'fill';
+  row.append(msg, timer, close);
+  bar.appendChild(fill);
+  toast.append(row, detail, bar);
+  shadow.append(style, toast);
   document.documentElement.appendChild(toastHost);
 
   // Toast 透明度
