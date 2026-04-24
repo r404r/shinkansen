@@ -329,7 +329,10 @@
   // 都會得到 HTTP 200 但 body 為空——必須由播放器自己帶 POT 發出請求，我們攔截它的 response。
 
   window.addEventListener('shinkansen-yt-captions', async (e) => {
-    const { url, responseText } = e.detail || {};
+    // detail 由 content-youtube-main.js 以 JSON.stringify 傳入（跨 page/content script 邊界）
+    let detail = e.detail;
+    if (typeof detail === 'string') { try { detail = JSON.parse(detail); } catch { return; } }
+    const { url, responseText } = detail || {};
     if (!responseText) return;
 
     const segments = parseCaptionResponse(responseText);

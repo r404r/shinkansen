@@ -36,7 +36,7 @@
       this.addEventListener('readystatechange', function () {
         if (this.readyState === 4 && this.status === 200 && this.responseText) {
           window.dispatchEvent(new CustomEvent(CAPTION_EVENT, {
-            detail: { url, responseText: this.responseText },
+            detail: JSON.stringify({ url, responseText: this.responseText }),
           }));
         }
       });
@@ -58,7 +58,7 @@
         response.clone().text().then(text => {
           if (text) {
             window.dispatchEvent(new CustomEvent(CAPTION_EVENT, {
-              detail: { url, responseText: text },
+              detail: JSON.stringify({ url, responseText: text }),
             }));
           }
         }).catch(() => {});

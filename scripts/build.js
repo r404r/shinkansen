@@ -81,12 +81,19 @@ for (const file of contentScripts) {
   cpSync(resolve(SRC, file), resolve(OUT, file));
 }
 
-// Firefox 專用: content-youtube-main-loader.js
+// Firefox ���用: 生成 content-youtube-main-loader.js（內嵌 MAIN world 腳本）
+// 使用 textContent 而非 src 注入，確保 monkey-patch 在 YouTube 發 XHR 前同步執行。
 if (target === 'firefox') {
-  const loaderPath = resolve(SRC, 'content-youtube-main-loader.js');
-  if (existsSync(loaderPath)) {
-    cpSync(loaderPath, resolve(OUT, 'content-youtube-main-loader.js'));
-  }
+  const mainScript = readFileSync(resolve(SRC, 'content-youtube-main.js'), 'utf8');
+  const loaderCode = `// [AUTO-GENERATED] Firefox MAIN world 內嵌注入器
+(function () {
+  var s = document.createElement('script');
+  s.textContent = ${JSON.stringify(mainScript)};
+  (document.head || document.documentElement).appendChild(s);
+  s.remove();
+})();
+`;
+  writeFileSync(resolve(OUT, 'content-youtube-main-loader.js'), loaderCode, 'utf8');
 }
 
 // ─── 3. 複製靜態資源 ───────────────────────────────────
