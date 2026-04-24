@@ -23,7 +23,9 @@ const path = require('path');
 
 // v1.1.9: content script 拆分為 7 個檔案，按 manifest.json 的 js 陣列順序依序載入。
 // 所有檔案共用同一個 window（jsdom），透過 window.__SK 命名空間互動。
-const SHINKANSEN_DIR = path.resolve(__dirname, '../../../shinkansen');
+const SHINKANSEN_DIR = process.env.EXTENSION_DIR
+  ? path.resolve(process.env.EXTENSION_DIR)
+  : path.resolve(__dirname, '../../../shinkansen');
 const CONTENT_SCRIPT_FILES = [
   'content-ns.js',
   'content-toast.js',

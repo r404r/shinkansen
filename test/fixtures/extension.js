@@ -22,8 +22,10 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// repo 根目錄下的 shinkansen/ 資料夾就是 extension 本體
-const EXTENSION_PATH = path.resolve(__dirname, '../../shinkansen');
+// EXTENSION_DIR 環境變數可指向 build/chrome 等構建產物目錄；預設為原始 shinkansen/
+const EXTENSION_PATH = process.env.EXTENSION_DIR
+  ? path.resolve(process.env.EXTENSION_DIR)
+  : path.resolve(__dirname, '../../shinkansen');
 // 回歸測試的靜態 fixture 目錄（HTML / canned LLM response 等）
 const REGRESSION_FIXTURES_DIR = path.resolve(__dirname, '../regression/fixtures');
 
