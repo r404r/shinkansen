@@ -609,14 +609,23 @@ $('import-input').addEventListener('change', async (e) => {
   }
 });
 
-// v1.3.16: Safari 沒有 chrome://extensions/shortcuts，偵測平台後隱藏連結
-if (typeof globalThis.chrome !== 'undefined') {
+// v1.5: 快捷鍵設定連結——Chrome / Firefox / Safari 三分支
+const _isFirefox = typeof globalThis.browser !== 'undefined'
+  && typeof globalThis.browser.runtime?.getBrowserInfo === 'function';
+const _isChrome = typeof globalThis.chrome !== 'undefined' && !_isFirefox;
+
+if (_isChrome) {
   $('open-shortcuts').addEventListener('click', (e) => {
     e.preventDefault();
     browser.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
+} else if (_isFirefox) {
+  $('open-shortcuts').addEventListener('click', (e) => {
+    e.preventDefault();
+    browser.tabs.create({ url: 'about:addons' });
+  });
 } else {
-  // Safari：隱藏快捷鍵設定連結（Safari 不支援 chrome:// URL）
+  // Safari：隱藏快捷鍵設定連結
   const shortcutsLink = $('open-shortcuts');
   if (shortcutsLink) shortcutsLink.style.display = 'none';
 }
