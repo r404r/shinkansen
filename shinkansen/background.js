@@ -11,6 +11,7 @@ import { RateLimiter } from './lib/rate-limiter.js';
 import { getLimitsForSettings } from './lib/tier-limits.js';
 import * as usageDB from './lib/usage-db.js'; // v0.86: 用量紀錄 IndexedDB
 import { getPricingForModel } from './lib/model-pricing.js';  // v1.4.12: preset 依 model 查定價
+import { sessionStore } from './lib/session-storage.js';  // v1.5: 跨平台 session storage
 
 debugLog('info', 'system', 'service worker started', { version: browser.runtime.getManifest().version });
 
@@ -182,8 +183,10 @@ let _stickyHydrated = false;
 async function hydrateStickyTabs() {
   if (_stickyHydrated) return;
   _stickyHydrated = true;
+  // Firefox fallback: 先清除上次 session 殘留，再讀取（Chrome 為 no-op）
+  await sessionStore.clearOnStartup();
   try {
-    const { stickyTabs: saved } = await browser.storage.session.get('stickyTabs');
+    const saved = await sessionStore.get('stickyTabs');
     if (saved && typeof saved === 'object') {
       for (const [tabId, slot] of Object.entries(saved)) {
         // v1.4.12 前的舊值是 'gemini'/'google' 字串，重啟後忽略舊格式避免誤觸發
@@ -199,7 +202,7 @@ async function persistStickyTabs() {
   try {
     const obj = {};
     stickyTabs.forEach((slot, tabId) => { obj[tabId] = slot; });
-    await browser.storage.session.set({ stickyTabs: obj });
+    await sessionStore.set('stickyTabs', obj);
   } catch (err) {
     debugLog('warn', 'system', 'persistStickyTabs failed', { error: err.message });
   }
