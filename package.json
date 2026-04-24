@@ -5,6 +5,9 @@
   "description": "Shinkansen Chrome Extension 的 Playwright 自動化測試 harness",
   "type": "module",
   "scripts": {
+    "build:chrome": "node scripts/build.js chrome",
+    "build:firefox": "node scripts/build.js firefox",
+    "build:all": "node scripts/build.js chrome && node scripts/build.js firefox",
     "test": "playwright test",
     "test:regression": "playwright test test/regression/",
     "test:unit": "playwright test test/unit/",
@@ -14,6 +17,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
+    "esbuild": "^0.25.0",
     "jest": "^29.7.0",
     "jsdom": "^25.0.1"
   }
