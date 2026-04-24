@@ -1,0 +1,103 @@
+{
+  "manifest_version": 3,
+  "name": "Shinkansen",
+  "version": "1.4.22",
+  "description": "快速、流暢的網頁翻譯擴充功能，使用 Google Gemini 將外語網頁翻譯成台灣繁體中文。",
+  "default_locale": "zh_TW",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://generativelanguage.googleapis.com/*",
+    "https://translate.googleapis.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content-youtube-main-loader.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-ns.js",
+        "content-toast.js",
+        "content-detect.js",
+        "content-serialize.js",
+        "content-inject.js",
+        "content-spa.js",
+        "content-youtube.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Shinkansen 翻譯",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "translate-preset-1": {
+      "suggested_key": {
+        "default": "Alt+A",
+        "mac": "Alt+A"
+      },
+      "description": "翻譯預設 1（預設 Gemini Flash Lite）"
+    },
+    "translate-preset-2": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "翻譯預設 2（預設 Gemini Flash）"
+    },
+    "translate-preset-3": {
+      "suggested_key": {
+        "default": "Alt+D",
+        "mac": "Alt+D"
+      },
+      "description": "翻譯預設 3（預設 Google Translate）"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["content-youtube-main.js"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "shinkansen@r404r.github.io",
+      "strict_min_version": "109.0"
+    }
+  }
+}
