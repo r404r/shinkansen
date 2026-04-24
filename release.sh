@@ -1,12 +1,16 @@
 #!/bin/bash
 # 用法: ./release.sh "改了什麼"
-# 自動 commit、tag、push，GitHub Actions 會自動建 Release 並附 zip
+# 自動 build、commit、tag、push，GitHub Actions 會自動建 Release 並附 zip
 
 set -e
 cd "$(dirname "$0")"
 
 VERSION=$(grep '"version"' shinkansen/manifest.json | head -1 | sed 's/[^0-9.]//g')
 MSG="${1:-v${VERSION}}"
+
+# ─── 雙平台構建 ───────────────────────────────────��──────
+echo "Building Chrome & Firefox..."
+npm run build:all
 
 git add -A
 git commit -m "v${VERSION} — ${MSG}"

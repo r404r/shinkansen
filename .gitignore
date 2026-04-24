@@ -8,6 +8,9 @@ playwright-report/
 playwright/.cache/
 test/reports/
 
+# 構建產物（npm run build:chrome / build:firefox）
+build/
+
 # Chrome Web Store 上傳用的本機打包
 dist/
 
