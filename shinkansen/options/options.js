@@ -1118,7 +1118,7 @@ function populateModelFilter() {
   // 重建選項（保留「全部模型」作為第一個選項）
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
-  defaultOption.textContent = '全部模型';
+  defaultOption.textContent = t('opt_usage_model_all');
   const modelOptions = models.map(m => {
     const option = document.createElement('option');
     option.value = m;
