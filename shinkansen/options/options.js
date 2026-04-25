@@ -2,9 +2,10 @@
 // v1.0.4: 改為 ES module，從 lib/ 匯入共用常數與工具函式，消除重複程式碼。
 
 import { browser } from '../lib/compat.js';
-import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT, DEFAULT_SUBTITLE_SYSTEM_PROMPT } from '../lib/storage.js';
+import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT, DEFAULT_SUBTITLE_SYSTEM_PROMPT, getDefaultPromptsForLocale } from '../lib/storage.js';
 import { TIER_LIMITS } from '../lib/tier-limits.js';
 import { formatTokens, formatUSD } from '../lib/format.js';
+import { t, setLocale, initLocale, applyLocale, getLocale } from '../lib/i18n.js';
 
 // 向下相容：舊程式碼大量使用 DEFAULTS，保留別名避免大範圍搜尋取代
 const DEFAULTS = DEFAULT_SETTINGS;
@@ -1447,4 +1448,21 @@ $('log-tbody').addEventListener('click', (e) => {
 
 // ─── 初始化 ──────────────────────────────────────────────
 initUsageDateRange();
-load();
+
+// v1.5: 多語言初始化
+initLocale().then(() => {
+  // 設定語言下拉框
+  const localeSelect = $('uiLocale');
+  if (localeSelect) localeSelect.value = getLocale();
+  // 套用 data-i18n 屬性
+  applyLocale(document);
+  load();
+});
+
+// 語言切換事件
+$('uiLocale')?.addEventListener('change', async (e) => {
+  const locale = e.target.value;
+  setLocale(locale);
+  await browser.storage.sync.set({ uiLocale: locale });
+  applyLocale(document);
+});
