@@ -73,6 +73,7 @@ export const DEFAULT_SUBTITLE_SYSTEM_PROMPT = `你是專業的影片字幕翻譯
 </critical_rules>`;
 
 export const DEFAULT_SETTINGS = {
+  uiLocale: 'zh-TW',   // v1.5: 介面語言 ('zh-TW' | 'zh-CN' | 'ja')
   apiKey: '',
   geminiConfig: {
     model: 'gemini-3-flash-preview',       // v0.83: 預設模型升級至 Gemini 3 Flash
