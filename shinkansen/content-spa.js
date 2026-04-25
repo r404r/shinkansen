@@ -117,7 +117,7 @@
   const SPA_URL_POLL_MS = 500;
   setInterval(() => {
     if (location.href !== spaLastUrl) {
-      if (STATE.translated && !STATE.stickyTranslate && document.querySelector('[data-shinkansen-translated]')) {
+      if (STATE.translated && !STATE.stickyTranslate && STATE.translationScope !== 'selection' && document.querySelector('[data-shinkansen-translated]')) {
         SK.sendLog('info', 'spa', 'URL changed while translated content present — scroll-based update, skipping reset', { newUrl: location.href, oldUrl: spaLastUrl });
         spaLastUrl = location.href;
         return;
