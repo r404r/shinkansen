@@ -63,10 +63,19 @@
   function injectIntoTarget(target, content) {
     const isString = typeof content === 'string';
 
-    // (B) 條件：含媒體 && target 無 CONTAINER_TAGS 直屬子元素
+    // (B) 條件：含媒體 && (target 是 heading [H1-H6] || target 無 CONTAINER_TAGS 直屬子元素)
+    //
+    // v1.5.7: heading 例外。WordPress 主題（如 nippper.com）會把 hero 圖塞進 <h1> 內：
+    //   <h1><img class="wp-post-image"><div><span>標題</span></div></h1>
+    // hasContainerChild 在這 case 是 true（DIV 是 CONTAINER），原本會走 (A) clean slate
+    // 把 IMG 一起清掉。但 heading 結構通常很簡單（單一 wrapper 包文字），不會有
+    // 「文字節點分散在多個結構容器」的 vBulletin 情境，所以強制走 (B) media-preserving
+    // 把譯文塞進最長文字節點、IMG 保留位置不動。
+    // 用 tag name 規範（HTML5 語意層）判斷不是站點 class，屬結構性通則（CLAUDE.md §8）。
+    const isHeading = /^H[1-6]$/.test(target.tagName);
     const hasContainerChild = Array.from(target.children).some(c =>
       SK.CONTAINER_TAGS.has(c.tagName));
-    if (SK.containsMedia(target) && !hasContainerChild) {
+    if (SK.containsMedia(target) && (isHeading || !hasContainerChild)) {
       // (B) media-preserving path
       if (!isString) {
         let fragHasBr = false;

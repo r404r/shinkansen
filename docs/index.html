@@ -103,6 +103,13 @@
     .btn-download.secondary:hover {
       background: #eff6ff;
     }
+    .btn-download .btn-version {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-top: 3px;
+    }
     @media (max-width: 600px) {
       .btn-download {
         width: 100%;
@@ -276,10 +283,10 @@
       <h1>Shinkansen<span class="hero-sep">｜</span><span class="hero-subtitle">極速、私密、高品質的網頁翻譯體驗</span></h1>
       <p class="tagline">你的瀏覽內容不該經過別人的伺服器<br>Shinkansen 由你的電腦直接呼叫 Google Gemini 翻譯，不經過任何第三方</p>
       <div class="btn-row">
-        <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝</a>
-        <a href="https://github.com/jimmysu0309/shinkansen/releases/download/v1.5.5/shinkansen-v1.5.5.zip" class="btn-download secondary">GitHub 下載 beta 版手動安裝</a>
+        <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝<span class="btn-version">v<!-- cws-version-start -->1.4.22<!-- cws-version-end --> · 已上架</span></a>
+        <a href="https://github.com/jimmysu0309/shinkansen/releases/download/v1.5.7/shinkansen-v1.5.7.zip" class="btn-download secondary">GitHub 下載 beta 版手動安裝<span class="btn-version">v1.5.7 · beta</span></a>
       </div>
-      <p class="hero-sub">v1.5.5 · 開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
+      <p class="hero-sub">開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
     </div>
   </div>
 
@@ -342,8 +349,8 @@
           <p>翻譯過的頁面點連結開新分頁、按返回鍵回上一頁都自動翻譯，不用每頁再按一次</p>
         </div>
         <div class="feature">
-          <h3>雙翻譯引擎</h3>
-          <p>Gemini + Google Translate 並存，重要內容用 Gemini，隨手瀏覽用 Google Translate 省費用<br>三組可自訂快速鍵（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一鍵切換翻譯引擎</p>
+          <h3>三翻譯引擎</h3>
+          <p>Gemini + Google Translate + <strong>自訂模型</strong>（OpenAI 相容端點，可接 OpenRouter / Together / DeepSeek / Ollama 本機等百種模型）並存，依場景自由切換<br>三組可自訂快速鍵（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一鍵切換翻譯引擎與模型</p>
         </div>
         <div class="feature">
           <h3>固定術語表</h3>

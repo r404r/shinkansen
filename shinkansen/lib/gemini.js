@@ -3,40 +3,11 @@
 // v0.69: 新增 extractGlossary() 術語表擷取功能。
 
 import { debugLog } from './logger.js';
-import { DEFAULT_UNITS_PER_BATCH, DEFAULT_CHARS_PER_BATCH } from './constants.js';
+// v1.5.7: DELIMITER / packChunks / buildEffectiveSystemInstruction 抽到共用模組，
+// 與 lib/openai-compat.js 共用同一份「翻譯 batch 構建」邏輯。
+import { DELIMITER, packChunks, buildEffectiveSystemInstruction } from './system-instruction.js';
 
-const DELIMITER = '\n<<<SHINKANSEN_SEP>>>\n';
-// v0.37 起改為「段數 + 字元預算」雙門檻（雙重保險層 — content.js 已先打包過）
-// 數值與 content-ns.js SK.DEFAULT_UNITS/CHARS_PER_BATCH 一致，統一來源見 lib/constants.js
-const MAX_UNITS_PER_CHUNK = DEFAULT_UNITS_PER_BATCH;
-const MAX_CHARS_PER_CHUNK = DEFAULT_CHARS_PER_BATCH;
 const MAX_BACKOFF_MS = 8000;
-
-/**
- * Greedy 打包：對 texts 陣列用字元預算 + 段數上限雙門檻切成連續子批次，
- * 回傳「起始 index 陣列」讓呼叫端可以對齊結果。
- */
-function packChunks(texts) {
-  const batches = [];
-  let cur = null;
-  const flush = () => { if (cur && cur.end > cur.start) batches.push(cur); cur = null; };
-  for (let i = 0; i < texts.length; i++) {
-    const len = (texts[i] || '').length;
-    if (len > MAX_CHARS_PER_CHUNK) {
-      flush();
-      batches.push({ start: i, end: i + 1 });
-      continue;
-    }
-    if (cur && (cur.chars + len > MAX_CHARS_PER_CHUNK || (cur.end - cur.start) >= MAX_UNITS_PER_CHUNK)) {
-      flush();
-    }
-    if (!cur) cur = { start: i, end: i, chars: 0 };
-    cur.end = i + 1;
-    cur.chars += len;
-  }
-  flush();
-  return batches;
-}
 
 /** 自訂錯誤:RPD 每日配額用盡,不應該被重試。 */
 export class DailyQuotaExceededError extends Error {
@@ -315,61 +286,7 @@ export async function extractGlossary(compressedText, settings) {
   return { glossary, usage };
 }
 
-/**
- * 組合最終的 system instruction。
- * 基礎翻譯指令 → 多段分隔符規則 → 段內換行規則 → 佔位符規則 → 術語表（最後）。
- * 順序很重要：行為規則緊跟基礎指令，術語表是「參考資料」放末端。
- *
- * @param {string} baseSystem 使用者設定的基礎 system instruction
- * @param {string[]} texts 本批原文陣列
- * @param {string} joined 已用 DELIMITER join 過的完整文字
- * @param {Array<{source:string, target:string}>} [glossary] 可選的自動擷取術語對照表
- * @param {Array<{source:string, target:string}>} [fixedGlossary] 可選的使用者固定術語表（優先級高於 glossary）
- * @returns {string} 完整的 effectiveSystem
- */
-function buildEffectiveSystemInstruction(baseSystem, texts, joined, glossary, fixedGlossary) {
-  const parts = [baseSystem];
-
-  // 多段翻譯分隔符與序號規則
-  if (texts.length > 1) {
-    parts.push(
-      `額外規則（多段翻譯分隔符與序號，極重要）:\n本批次包含 ${texts.length} 段文字。每段開頭有序號標記 «N»（N 為 1 到 ${texts.length}），段與段之間以分隔符 <<<SHINKANSEN_SEP>>> 隔開。\n你的輸出必須：\n- 每段譯文開頭也加上對應的序號標記 «N»（N 與輸入的序號一一對應）\n- 段與段之間用完全相同的分隔符 <<<SHINKANSEN_SEP>>> 隔開\n- 恰好輸出 ${texts.length} 段譯文和 ${texts.length - 1} 個分隔符\n- 不可合併段落、不可省略分隔符、不可增減段數`
-    );
-  }
-
-  // 段內換行保留規則
-  if (texts.some(t => t && t.indexOf('\n') !== -1)) {
-    parts.push(
-      '額外規則（段落分隔）:\n輸入中可能含有段內換行符 \\n（例如 "第一段\\n\\n第二段"）,代表原文有對應的段落或行分隔（通常是 <br> 或 <br><br>）。翻譯時必須在對應位置原樣保留 \\n 字元——譯文段落數與輸入段落數一致,連續兩個 \\n 也要保留兩個。不可把段落合併成一行,也不可把空白行多塞或少塞。'
-    );
-  }
-
-  // 佔位符保留規則
-  if (joined.indexOf('\u27E6') !== -1) {
-    parts.push(
-      '額外規則（極重要，處理佔位符標記）:\n輸入中可能含有兩種佔位符標記，都是用來保留原文結構，必須原樣保留、不可翻譯、不可省略、不可改寫、不可新增、不可重排。佔位符裡的數字、斜線、星號 **必須是半形 ASCII 字元**（0-9、/、*），絕對不可改成全形（０-９、／、＊），否則程式無法配對會整段崩壞。\n\n（A）配對型 ⟦數字⟧…⟦/數字⟧（例如 ⟦0⟧Tokugawa Ieyasu⟦/0⟧)：\n- 把標記視為透明外殼。外殼「內部」的文字跟外殼「外部」的文字一樣，全部都要翻譯成繁體中文。\n- ⟦數字⟧ 與 ⟦/數字⟧ 兩個標記本身原樣保留，數字不變。\n- **配對型可以巢狀嵌套**（例如 ⟦0⟧may incorporate text from a ⟦1⟧large language model⟦/1⟧, which is ...⟦/0⟧）。巢狀代表原文是 `<b>text <a>link</a> more text</b>` 這類嵌套結構。翻譯時必須**同時**保留外層與內層兩組標記、不可扁平化成單層、不可交換順序、不可遺漏任何一層。外層與內層的內部文字全部要翻成繁體中文。\n\n（B）自閉合 ⟦*數字⟧（例如 ⟦*5⟧)：\n- 這是「原子保留」位置記號，代表原文裡有一段不可翻譯的小區塊（例如維基百科腳註參照 [2])。\n- 整個 ⟦*數字⟧ token 原樣保留，不可拆開、不可翻譯、不可省略，數字不變。\n- 它的位置代表那段內容應該插在譯文的哪裡。\n\n具體範例 1（單層）：\n輸入： ⟦0⟧Tokugawa Ieyasu⟦/0⟧ won the ⟦1⟧Battle of Sekigahara⟦/1⟧ in 1600.⟦*2⟧\n正確輸出： ⟦0⟧德川家康⟦/0⟧於 1600 年贏得⟦1⟧關原之戰⟦/1⟧。⟦*2⟧\n錯誤輸出 1： ⟦0⟧Tokugawa Ieyasu⟦/0⟧於 1600 年贏得⟦1⟧Battle of Sekigahara⟦/1⟧。⟦*2⟧（配對型內部英文沒翻）\n錯誤輸出 2： ⟦0⟧德川家康⟦/0⟧於 1600 年贏得⟦1⟧關原之戰⟦/1⟧。[2]（自閉合 ⟦*2⟧ 被擅自還原成 [2])\n\n具體範例 2（巢狀）：\n輸入： This article ⟦0⟧may incorporate text from a ⟦1⟧large language model⟦/1⟧, which is ⟦2⟧prohibited in Wikipedia articles⟦/2⟧⟦/0⟧.\n正確輸出： 本條目⟦0⟧可能包含來自⟦1⟧大型語言模型⟦/1⟧的文字，這在⟦2⟧維基百科條目中是被禁止的⟦/2⟧⟦/0⟧。\n錯誤輸出 3： 本條目可能包含來自⟦1⟧大型語言模型⟦/1⟧的文字，這在⟦2⟧維基百科條目中是被禁止的⟦/2⟧。（外層 ⟦0⟧…⟦/0⟧ 被扁平化丟掉）'
-    );
-  }
-
-  // 自動擷取術語對照表
-  if (glossary && glossary.length > 0) {
-    const lines = glossary.map(e => `${e.source} → ${e.target}`).join('\n');
-    parts.push(
-      '以下是本篇文章的術語對照表，遇到這些原文一律使用指定譯名，不可自行改寫，也不需加註英文原文：\n' + lines
-    );
-  }
-
-  // v1.0.29: 使用者固定術語表（優先級最高，放在最末端讓 LLM 給予最高權重）
-  if (fixedGlossary && fixedGlossary.length > 0) {
-    const lines = fixedGlossary.map(e => `${e.source} → ${e.target}`).join('\n');
-    parts.push(
-      '以下是使用者指定的固定術語表，優先級高於上方所有術語對照。遇到這些原文一律使用指定譯名，不可自行改寫，也不需加註英文原文：\n' + lines
-    );
-  }
-
-  return parts.join('\n\n');
-}
-
+// v1.5.7: buildEffectiveSystemInstruction 已移至 lib/system-instruction.js（兩個 adapter 共用）。
 /**
  * 批次翻譯文字陣列（會自動切成多批送出）。
  * @param {string[]} texts 原文陣列
@@ -386,7 +303,7 @@ function buildEffectiveSystemInstruction(baseSystem, texts, joined, glossary, fi
  * 本地快取命中的段落根本不會送 API，而 implicit cache 命中的段落有送 API
  * 但前綴（system prompt 那一大段）被 Gemini 內部 cache 省下。
  */
-export async function translateBatch(texts, settings, glossary, fixedGlossary) {
+export async function translateBatch(texts, settings, glossary, fixedGlossary, forbiddenTerms) {
   if (!texts?.length) return { translations: [], usage: { inputTokens: 0, outputTokens: 0, cachedTokens: 0 }, hadMismatch: false };
   const out = new Array(texts.length);
   const usage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
@@ -394,7 +311,7 @@ export async function translateBatch(texts, settings, glossary, fixedGlossary) {
   const chunks = packChunks(texts);
   for (const { start, end } of chunks) {
     const slice = texts.slice(start, end);
-    const result = await translateChunk(slice, settings, glossary, fixedGlossary);
+    const result = await translateChunk(slice, settings, glossary, fixedGlossary, forbiddenTerms);
     for (let j = 0; j < result.parts.length; j++) out[start + j] = result.parts[j];
     usage.inputTokens += result.usage.inputTokens;
     usage.outputTokens += result.usage.outputTokens;
@@ -404,7 +321,7 @@ export async function translateBatch(texts, settings, glossary, fixedGlossary) {
   return { translations: out, usage, hadMismatch };
 }
 
-async function translateChunk(texts, settings, glossary, fixedGlossary) {
+async function translateChunk(texts, settings, glossary, fixedGlossary, forbiddenTerms) {
   if (!texts?.length) return [];
   const { apiKey, geminiConfig } = settings;
   const {
@@ -433,7 +350,7 @@ async function translateChunk(texts, settings, glossary, fixedGlossary) {
   // v0.71: 建構順序很重要——行為規則（換行、佔位符）必須緊跟在基礎翻譯指令後面，
   // 術語表是「參考資料」放最後。若術語表夾在中間會稀釋 LLM 對佔位符規則的注意力，
   // 導致 ⟦*N⟧ 標記洩漏到譯文裡（v0.70 的 bug）。
-  const effectiveSystem = buildEffectiveSystemInstruction(systemInstruction, texts, joined, glossary, fixedGlossary);
+  const effectiveSystem = buildEffectiveSystemInstruction(systemInstruction, texts, joined, glossary, fixedGlossary, forbiddenTerms);
 
   const body = {
     contents: [{ role: 'user', parts: [{ text: joined }] }],
@@ -464,7 +381,11 @@ async function translateChunk(texts, settings, glossary, fixedGlossary) {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-  await debugLog('info', 'api', 'gemini request', { model, serviceTier, segments: texts.length, chars: joined.length });
+  await debugLog('info', 'api', 'gemini request', {
+    model, serviceTier, segments: texts.length, chars: joined.length,
+    // v1.5.7: 送進 LLM 的原文前 300 字 — 將來任何「譯文沒按預期出現」都能對照原文 / 譯文確認 LLM 行為
+    inputPreview: joined.slice(0, 300),
+  });
 
   const t0 = Date.now();
   const maxRetries = typeof settings?.maxRetries === 'number' ? settings.maxRetries : 3;
@@ -545,6 +466,9 @@ async function translateChunk(texts, settings, glossary, fixedGlossary) {
     outputTokens: chunkUsage.outputTokens,
     cachedTokens: chunkUsage.cachedTokens,
     finishReason,
+    // v1.5.7: LLM 回應的譯文前 300 字 — 與 'gemini request' 的 inputPreview 對照即可診斷
+    // 「LLM echo 原文」「譯文被截斷」「譯文跟期望不一樣」這類 case，不必 attach 真實 API 中介。
+    outputPreview: text.slice(0, 300),
   });
 
   // v0.89: split 後移除序號標記 «N»（若有）
@@ -567,7 +491,7 @@ async function translateChunk(texts, settings, glossary, fixedGlossary) {
     const tFallback0 = Date.now();
     for (let fi = 0; fi < texts.length; fi++) {
       const tSeg0 = Date.now();
-      const r = await translateChunk([texts[fi]], settings, glossary, fixedGlossary);
+      const r = await translateChunk([texts[fi]], settings, glossary, fixedGlossary, forbiddenTerms);
       await debugLog('info', 'api', `fallback segment ${fi + 1}/${texts.length}`, { elapsed: Date.now() - tSeg0 });
       aligned.push(r.parts[0] || '');
       aggUsage.inputTokens += r.usage.inputTokens;

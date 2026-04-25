@@ -126,6 +126,65 @@ export async function upsertYouTubeUsage(record, mergeWindowMs = 3600000) {
 }
 
 /**
+ * v1.5.7: 合併同一篇 URL 的 Google Translate 用量紀錄。
+ * 翻譯一篇文章常分 5–20 批送出，每批 1 個 URL；如果照 logTranslation 寫，會在用量
+ * 紀錄表炸出十幾筆同 URL/同分鐘的 Google MT entry，無法閱讀。改用「(url + 'google',
+ * 1 小時視窗)」合併成一筆——同一頁短時間多次按翻譯也會合併，跨頁與超過視窗會拆。
+ *
+ * 對齊 v1.4.18 upsertYouTubeUsage 設計，但合併鍵從 videoId+model 換成
+ * url+engine（model 永遠 'google-translate'，不需要再判 model 變化）。
+ *
+ * @param {Object} record — 必須含 url、engine='google'、timestamp
+ * @param {number} [mergeWindowMs=180000] 預設 3 分鐘——一篇文章從按下快速鍵到所有
+ *   批次完成通常 < 1 分鐘；3 分鐘留給「翻完馬上重翻一次」這類連續操作合併。超過
+ *   3 分鐘代表使用者可能離開又回來，當作不同工作 session 拆開記錄。
+ * @returns {Promise<number>} 被寫入 / 更新的紀錄 id
+ */
+export async function upsertGoogleUsage(record, mergeWindowMs = 180000) {
+  const url = record?.url;
+  if (!url || record?.engine !== 'google') {
+    return logTranslation(record);
+  }
+  const now = record.timestamp || Date.now();
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const index = store.index('timestamp');
+    const range = IDBKeyRange.lowerBound(now - mergeWindowMs);
+    const req = index.openCursor(range, 'prev');
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        const v = cursor.value;
+        if (v.engine === 'google' && v.url === url) {
+          const merged = {
+            ...v,
+            chars:     (v.chars     || 0) + (record.chars     || 0),
+            segments:  (v.segments  || 0) + (record.segments  || 0),
+            cacheHits: (v.cacheHits || 0) + (record.cacheHits || 0),
+            durationMs:(v.durationMs|| 0) + (record.durationMs|| 0),
+            timestamp: now,
+            // title 用最新非空的（首批可能拿到 title，後續批次來自同 URL 也保留）
+            title:     record.title || v.title || '',
+          };
+          const putReq = cursor.update(merged);
+          putReq.onsuccess = () => resolve(v.id);
+          putReq.onerror = () => reject(putReq.error);
+          return;
+        }
+        cursor.continue();
+      } else {
+        const addReq = store.add(record);
+        addReq.onsuccess = () => resolve(addReq.result);
+        addReq.onerror = () => reject(addReq.error);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
  * 依時間範圍查詢紀錄（按時間倒序）。
  * @param {Object} opts
  * @param {number} [opts.from] — 起始 timestamp（含）

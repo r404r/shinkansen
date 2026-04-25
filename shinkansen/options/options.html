@@ -17,7 +17,9 @@
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="settings" data-i18n="opt_tab_general">一般設定</button>
       <button class="tab-btn" data-tab="gemini">Gemini</button>
+      <button class="tab-btn" data-tab="custom-provider" data-i18n="opt_tab_custom_provider">自訂模型</button>
       <button class="tab-btn" data-tab="glossary" data-i18n="opt_tab_glossary">術語表</button>
+      <button class="tab-btn" data-tab="forbidden" data-i18n="opt_tab_forbidden">禁用詞清單</button>
       <button class="tab-btn" data-tab="youtube" data-i18n="opt_tab_youtube">YouTube 字幕</button>
       <button class="tab-btn" data-tab="usage" data-i18n="opt_tab_usage">用量紀錄</button>
       <button class="tab-btn" data-tab="log">Debug</button>
@@ -44,7 +46,9 @@
         <div class="api-key-row">
           <input type="password" id="apiKey" placeholder="貼上您的 Gemini API Key" data-i18n-placeholder="opt_api_key_placeholder">
           <button type="button" id="toggle-api-key" class="ghost-btn" aria-label="顯示 API Key" data-i18n="opt_api_key_show">顯示</button>
+          <button type="button" id="test-api-key" class="ghost-btn" aria-label="測試 API Key" data-i18n="opt_api_key_test">測試</button>
         </div>
+        <div id="test-api-key-result" class="api-test-result" hidden></div>
         <small class="muted">還沒有 API Key？請參考 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" target="_blank" rel="noopener">Gemini API Key 申請教學</a>（含帳單設定等容易遺漏的步驟）</small>
       </label>
     </section>
@@ -71,6 +75,7 @@
             <select id="preset-engine-1">
               <option value="gemini" data-i18n="opt_val_engine_gemini">Gemini（AI 翻譯）</option>
               <option value="google" data-i18n="opt_val_engine_google">Google Translate（免費機器翻譯）</option>
+              <option value="openai-compat" data-i18n="opt_val_engine_custom">自訂模型</option>
             </select>
           </label>
           <label class="preset-model-label" id="preset-model-row-1">
@@ -97,6 +102,7 @@
             <select id="preset-engine-2">
               <option value="gemini" data-i18n="opt_val_engine_gemini">Gemini（AI 翻譯）</option>
               <option value="google" data-i18n="opt_val_engine_google">Google Translate（免費機器翻譯）</option>
+              <option value="openai-compat" data-i18n="opt_val_engine_custom">自訂模型</option>
             </select>
           </label>
           <label class="preset-model-label" id="preset-model-row-2">
@@ -123,6 +129,7 @@
             <select id="preset-engine-3">
               <option value="gemini" data-i18n="opt_val_engine_gemini">Gemini（AI 翻譯）</option>
               <option value="google" data-i18n="opt_val_engine_google">Google Translate（免費機器翻譯）</option>
+              <option value="openai-compat" data-i18n="opt_val_engine_custom">自訂模型</option>
             </select>
           </label>
           <label class="preset-model-label" id="preset-model-row-3">
@@ -456,29 +463,155 @@
 
     </div><!-- /tab-glossary -->
 
+    <!-- ═══ 自訂 Provider 分頁（v1.5.7 新增） ═══ -->
+    <div id="tab-custom-provider" class="tab-panel">
+
+    <section>
+      <h2>自訂 OpenAI 相容模型</h2>
+      <p class="muted">
+        想用 Gemini 之外的模型？設定一組 OpenAI 相容端點即可接
+        OpenRouter（含 Anthropic / Gemini / DeepSeek / Llama / Qwen / Grok 等百種模型）、
+        Ollama 本機、Together、Groq、Fireworks、OpenAI 自家、DeepSeek 直連等。
+      </p>
+      <p class="muted">
+        設定完成後，到「一般設定」分頁的「翻譯快速鍵」把任一組預設引擎改為「自訂模型」即可使用快速鍵啟動翻譯。
+      </p>
+      <label>
+        Base URL
+        <input type="text" id="cp-baseUrl" placeholder="例如：https://openrouter.ai/api/v1">
+        <small class="muted">
+          OpenAI-compatible 端點的根目錄。系統會自動接 <code>/chat/completions</code>。
+          常見：<code>https://openrouter.ai/api/v1</code>、<code>https://api.together.xyz/v1</code>、
+          <code>http://localhost:11434/v1</code>（Ollama）。
+        </small>
+      </label>
+      <label>
+        模型 ID
+        <input type="text" id="cp-model" placeholder="例如：anthropic/claude-sonnet-4-5">
+        <small class="muted">
+          OpenRouter 的 model ID 格式為 <code>provider/model</code>（如
+          <code>anthropic/claude-sonnet-4-5</code>、<code>google/gemini-2.5-flash</code>、
+          <code>deepseek/deepseek-chat</code>）；其他端點直接填 model 名稱。
+        </small>
+      </label>
+      <label>
+        API Key
+        <div class="api-key-row">
+          <input type="password" id="cp-apiKey" placeholder="貼上對應 provider 的 API Key">
+          <button type="button" id="cp-toggle-apiKey" class="ghost-btn" aria-label="顯示 API Key">顯示</button>
+          <button type="button" id="cp-test-apiKey" class="ghost-btn" aria-label="測試 API Key">測試</button>
+        </div>
+        <div id="cp-test-apiKey-result" class="api-test-result" hidden></div>
+        <small class="muted">
+          僅存在你的瀏覽器本機（與 Gemini API Key 同樣不跨裝置同步、不上傳任何伺服器）。
+        </small>
+      </label>
+      <label>
+        翻譯 Prompt
+        <textarea id="cp-systemPrompt" rows="8" placeholder="留空使用內建簡短預設 prompt"></textarea>
+        <small class="muted">
+          自訂模型用獨立的翻譯 prompt（不繼承 Gemini 分頁的設定）；
+          但「固定術語表」與「禁用詞清單」會自動共用注入到 prompt 末端。
+        </small>
+      </label>
+      <label>
+        Temperature
+        <input type="number" id="cp-temperature" step="0.1" min="0" max="2" placeholder="0.7">
+      </label>
+    </section>
+
+    <section>
+      <h2>模型計價（USD）</h2>
+      <p class="muted">
+        請填入 input / output 單價，
+        系統會用來估算翻譯費用顯示在 toast / 用量紀錄。填 <strong>0</strong> 代表不顯示費用
+        （token 數仍會記錄）。
+      </p>
+      <label>
+        Input tokens 單價（USD / 1M tokens）
+        <input type="number" id="cp-inputPerMTok" step="0.01" min="0" placeholder="0">
+      </label>
+      <label>
+        Output tokens 單價（USD / 1M tokens）
+        <input type="number" id="cp-outputPerMTok" step="0.01" min="0" placeholder="0">
+      </label>
+    </section>
+
+    <div class="actions">
+      <button id="save-custom-provider" class="primary">儲存設定</button>
+      <span id="save-custom-provider-status"></span>
+    </div>
+
+    </div><!-- /tab-custom-provider -->
+
+    <!-- ═══ 禁用詞清單分頁（v1.5.6 新增） ═══ -->
+    <div id="tab-forbidden" class="tab-panel">
+
+    <section>
+      <h2>禁用詞清單</h2>
+      <p class="muted">
+        針對 LLM 容易漏網的中國大陸用語自訂禁用對照表。內容會以高顯著性區塊
+        注入 Gemini 的 system prompt 末端，明確要求譯文不可使用左欄詞彙、
+        必須改用右欄。修改清單後會自動讓既有翻譯快取分區，不再命中舊譯文。
+      </p>
+      <div class="glossary-table-wrapper">
+        <table class="glossary-edit-table" id="forbidden-terms-table">
+          <thead>
+            <tr>
+              <th class="forbidden-col-word">禁用詞</th>
+              <th class="forbidden-col-word">替換詞</th>
+              <th>備註</th>
+              <th class="glossary-col-action"></th>
+            </tr>
+          </thead>
+          <tbody id="forbidden-terms-tbody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top: 8px;">
+        <button id="forbidden-terms-add" class="secondary glossary-add-btn">＋ 新增一條</button>
+        <button id="forbidden-terms-reset" class="secondary glossary-add-btn">還原預設清單</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="save-forbidden" class="primary">儲存設定</button>
+      <span id="save-forbidden-status"></span>
+    </div>
+
+    </div><!-- /tab-forbidden -->
+
     <!-- ═══ 用量紀錄分頁 ═══ -->
     <div id="tab-usage" class="tab-panel">
 
       <p class="muted" id="usage-desc">以下為 Shinkansen-Nozomi 根據模型計價設定估算的用量，僅供參考。實際帳單金額請至 <a href="https://aistudio.google.com/spend" target="_blank" rel="noopener">Gemini API Spend</a> 查詢</p>
 
       <!-- 日期範圍與粒度選擇 -->
+      <!-- v1.5.7: 拆成 date + 自訂 HH/MM select 兩段——Chrome datetime-local 的 12/24 制
+           完全跟 OS locale 走、HTML 無法 override，改用獨立 select 控制 24h 顯示。 -->
       <div class="usage-controls">
         <label class="usage-date-label">
           <span data-i18n="opt_label_usage_from">從</span>
-          <input type="datetime-local" id="usage-from">
+          <input type="date" id="usage-from-date">
+          <select id="usage-from-hour" class="usage-time-select" aria-label="從 — 小時"></select>
+          <span class="usage-time-sep">:</span>
+          <select id="usage-from-min" class="usage-time-select" aria-label="從 — 分鐘"></select>
         </label>
         <label class="usage-date-label">
           <span data-i18n="opt_label_usage_to">到</span>
-          <input type="datetime-local" id="usage-to">
+          <input type="date" id="usage-to-date">
+          <select id="usage-to-hour" class="usage-time-select" aria-label="到 — 小時"></select>
+          <span class="usage-time-sep">:</span>
+          <select id="usage-to-min" class="usage-time-select" aria-label="到 — 分鐘"></select>
         </label>
+        <button id="usage-to-now" class="ghost-btn" title="把「到」設為現在時間">現在時間</button>
+      </div>
+      <!-- v1.2.60: 搜尋框（比對標題 / 網址 / 網域）；v1.3.2: 加入模型篩選；v1.5.7: 日/週/月併入此列 -->
+      <div class="usage-search-row">
         <div class="usage-granularity">
           <button class="gran-btn active" data-gran="day" data-i18n="opt_val_gran_day">日</button>
           <button class="gran-btn" data-gran="week" data-i18n="opt_val_gran_week">週</button>
           <button class="gran-btn" data-gran="month" data-i18n="opt_val_gran_month">月</button>
         </div>
-      </div>
-      <!-- v1.2.60: 搜尋框（比對標題 / 網址 / 網域）；v1.3.2: 加入模型篩選 -->
-      <div class="usage-search-row">
         <input type="text" id="usage-search" placeholder="搜尋標題、網址或網域…" autocomplete="off" data-i18n-placeholder="opt_usage_search">
         <select id="usage-model-filter">
           <option value="" data-i18n="opt_usage_model_all">全部模型</option>
@@ -578,7 +711,7 @@
           <option value="warn">warn</option>
           <option value="error">error</option>
         </select>
-        <input type="text" id="log-search" placeholder="搜尋 Log⋯" autocomplete="off" data-i18n-placeholder="opt_placeholder_log_search">
+        <input type="text" id="log-search" placeholder="搜尋 Log（含批次內容）⋯" autocomplete="off" data-i18n-placeholder="opt_placeholder_log_search">
         <button id="log-clear" class="secondary" data-i18n="opt_btn_log_clear">清除</button>
         <button id="log-export" class="secondary" data-i18n="opt_btn_log_export">匯出 JSON</button>
         <label class="log-autoscroll-label">

@@ -2,7 +2,7 @@
 // v1.0.4: 改為 ES module，從 lib/ 匯入共用常數與工具函式，消除重複程式碼。
 
 import { browser } from '../lib/compat.js';
-import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT, DEFAULT_SUBTITLE_SYSTEM_PROMPT, getDefaultPromptsForLocale } from '../lib/storage.js';
+import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_FORBIDDEN_TERMS, getDefaultPromptsForLocale } from '../lib/storage.js';
 import { TIER_LIMITS } from '../lib/tier-limits.js';
 import { formatTokens, formatUSD } from '../lib/format.js';
 import { t, setLocale, initLocale, applyLocale, getLocale } from '../lib/i18n.js';
@@ -166,6 +166,23 @@ async function load() {
   updateDomainSelect();
   showDomainPanel('');
 
+  // v1.5.6: 中國用語黑名單
+  forbiddenTerms = Array.isArray(s.forbiddenTerms) ? s.forbiddenTerms : DEFAULT_FORBIDDEN_TERMS;
+  renderForbiddenTermsTable();
+
+  // v1.5.7: 自訂 OpenAI-compatible Provider
+  // apiKey 走 storage.local（不在 sync 也不在 saved 物件，獨立讀取）
+  const cp = { ...DEFAULTS.customProvider, ...(s.customProvider || {}) };
+  $('cp-baseUrl').value = cp.baseUrl || '';
+  $('cp-model').value = cp.model || '';
+  $('cp-systemPrompt').value = cp.systemPrompt || '';
+  $('cp-temperature').value = (typeof cp.temperature === 'number') ? cp.temperature : 0.7;
+  $('cp-inputPerMTok').value = cp.inputPerMTok != null ? cp.inputPerMTok : '';
+  $('cp-outputPerMTok').value = cp.outputPerMTok != null ? cp.outputPerMTok : '';
+  // 從 storage.local 讀 customProviderApiKey
+  const { customProviderApiKey = '' } = await browser.storage.local.get('customProviderApiKey');
+  $('cp-apiKey').value = customProviderApiKey;
+
   // v1.2.11: YouTube 字幕設定
   const yt = { ...DEFAULTS.ytSubtitle, ...(s.ytSubtitle || {}) };
   // v1.4.0: 字幕翻譯引擎
@@ -192,13 +209,15 @@ async function load() {
   $('ytOutputPerMTok').value = ytPricing?.outputPerMTok != null ? ytPricing.outputPerMTok : '';
 
   // v1.4.13: 三組 preset 快速鍵
+  // v1.5.7: engine 接受三種 'gemini' / 'google' / 'openai-compat'，不認識的回退 'gemini'
+  const VALID_ENGINES = ['gemini', 'google', 'openai-compat'];
   const presets = Array.isArray(s.translatePresets) && s.translatePresets.length > 0
     ? s.translatePresets
     : DEFAULTS.translatePresets;
   for (const slot of [1, 2, 3]) {
     const p = presets.find(x => x.slot === slot) || DEFAULTS.translatePresets.find(x => x.slot === slot);
     $(`preset-label-${slot}`).value = p.label || '';
-    $(`preset-engine-${slot}`).value = p.engine === 'google' ? 'google' : 'gemini';
+    $(`preset-engine-${slot}`).value = VALID_ENGINES.includes(p.engine) ? p.engine : 'gemini';
     const modelSel = $(`preset-model-${slot}`);
     if (p.model && [...modelSel.options].some(o => o.value === p.model)) {
       modelSel.value = p.model;
@@ -208,6 +227,10 @@ async function load() {
     updatePresetModelVisibility(slot);
   }
   refreshPresetKeyBindings();
+
+  // v1.5.7: cache presets 與 customProvider 給用量紀錄「模型」欄的 modelToLabel() 用
+  _presetsCache = presets;
+  _customProviderCache = cp || { model: '' };
 }
 
 // v1.5.0: 雙語視覺標記預覽更新
@@ -223,10 +246,11 @@ function getSelectedMarkStyle() {
 }
 
 // v1.4.13: engine='google' 時隱藏 model 欄
+// v1.5.7: engine='openai-compat' 也隱藏（model 由「自訂 Provider」分頁設定）
 function updatePresetModelVisibility(slot) {
   const engine = $(`preset-engine-${slot}`).value;
   const row = $(`preset-model-row-${slot}`);
-  if (row) row.hidden = engine === 'google';
+  if (row) row.hidden = (engine === 'google' || engine === 'openai-compat');
 }
 
 // v1.4.13: 從 chrome.commands.getAll() 讀取實際綁定鍵位顯示在每張 card 右上角
@@ -324,9 +348,13 @@ async function save() {
       })(),
     },
     // v1.4.13: 三組 preset 快速鍵
+    // v1.5.7: engine 接受三種 'gemini' / 'google' / 'openai-compat'，不認識的回退 'gemini'。
+    // 之前只認 'google' / 'gemini' → 使用者改成 'openai-compat' 儲存後被強制 reset。
     translatePresets: [1, 2, 3].map(slot => {
-      const engine = $(`preset-engine-${slot}`).value === 'google' ? 'google' : 'gemini';
-      const model = engine === 'google' ? null : ($(`preset-model-${slot}`).value || null);
+      const raw = $(`preset-engine-${slot}`).value;
+      const engine = (raw === 'google' || raw === 'openai-compat') ? raw : 'gemini';
+      // model 欄只對 gemini 有意義（google 與 openai-compat 都用各自分頁的設定）
+      const model = engine === 'gemini' ? ($(`preset-model-${slot}`).value || null) : null;
       const label = ($(`preset-label-${slot}`).value || '').trim() || `預設 ${slot}`;
       return { slot, engine, model, label };
     }),
@@ -347,7 +375,24 @@ async function save() {
       }
       return { global: cleanGlobal, byDomain: cleanByDomain };
     })(),
+    // v1.5.6: 中國用語黑名單（save 前先同步 UI → 記憶體；過濾兩欄都空的列）
+    forbiddenTerms: (() => {
+      forbiddenTerms = readForbiddenTableEntries();
+      return forbiddenTerms.filter(t => t.forbidden || t.replacement);
+    })(),
+    // v1.5.7: 自訂 OpenAI-compatible Provider
+    customProvider: {
+      baseUrl: ($('cp-baseUrl').value || '').trim(),
+      model: ($('cp-model').value || '').trim(),
+      systemPrompt: $('cp-systemPrompt').value || '',
+      temperature: Number($('cp-temperature').value) || 0.7,
+      inputPerMTok: Number($('cp-inputPerMTok').value) || 0,
+      outputPerMTok: Number($('cp-outputPerMTok').value) || 0,
+    },
   };
+  // v1.5.7: customProvider.apiKey 走 storage.local（與主 apiKey 同樣設計），先抽出再寫 sync
+  const cpApiKeyValue = ($('cp-apiKey').value || '').trim();
+  await browser.storage.local.set({ customProviderApiKey: cpApiKeyValue });
   await browser.storage.sync.set(settings);
   $('save-status').textContent = t('opt_saved');
   setTimeout(() => { $('save-status').textContent = ''; }, 2000);
@@ -360,6 +405,39 @@ $('save').addEventListener('click', save);
 $('save-gemini').addEventListener('click', save);
 // v1.0.29: 術語表分頁也共用同一個 save()
 $('save-glossary').addEventListener('click', save);
+// v1.5.6: 禁用詞清單分頁
+$('save-forbidden').addEventListener('click', save);
+// v1.5.7: 自訂 Provider 分頁
+$('save-custom-provider').addEventListener('click', save);
+
+// v1.5.7: 自訂 Provider API Key 顯示 / 隱藏切換
+$('cp-toggle-apiKey').addEventListener('click', () => {
+  const input = $('cp-apiKey');
+  const btn = $('cp-toggle-apiKey');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '隱藏';
+  } else {
+    input.type = 'password';
+    btn.textContent = '顯示';
+  }
+});
+
+// v1.5.7: 自訂模型 API 測試
+$('cp-test-apiKey').addEventListener('click', async () => {
+  await runApiTest({
+    btn: $('cp-test-apiKey'),
+    resultEl: $('cp-test-apiKey-result'),
+    sendMessage: () => browser.runtime.sendMessage({
+      type: 'TEST_CUSTOM_PROVIDER',
+      payload: {
+        baseUrl: ($('cp-baseUrl').value || '').trim(),
+        model: ($('cp-model').value || '').trim(),
+        apiKey: ($('cp-apiKey').value || '').trim(),
+      },
+    }),
+  });
+});
 // v1.2.11: YouTube 字幕分頁
 $('save-youtube').addEventListener('click', save);
 // Debug 分頁
@@ -415,6 +493,12 @@ document.getElementById('tab-gemini').addEventListener('input', markDirty);
 document.getElementById('tab-gemini').addEventListener('change', markDirty);
 document.getElementById('tab-glossary').addEventListener('input', markDirty);
 document.getElementById('tab-glossary').addEventListener('change', markDirty);
+// v1.5.6: 禁用詞清單分頁
+document.getElementById('tab-forbidden').addEventListener('input', markDirty);
+document.getElementById('tab-forbidden').addEventListener('change', markDirty);
+// v1.5.7: 自訂 Provider 分頁
+document.getElementById('tab-custom-provider').addEventListener('input', markDirty);
+document.getElementById('tab-custom-provider').addEventListener('change', markDirty);
 // v1.2.13: YouTube 字幕分頁也需要 dirty 偵測
 document.getElementById('tab-youtube').addEventListener('input', markDirty);
 document.getElementById('tab-youtube').addEventListener('change', markDirty);
@@ -438,6 +522,48 @@ $('toggle-api-key').addEventListener('click', () => {
     btn.textContent = t('opt_api_key_show');
     btn.setAttribute('aria-label', t('opt_api_key_show') + ' API Key');
   }
+});
+
+// v1.5.7: 通用「測試 API」UI helper — 兩個測試按鈕共用 loading / 結果顯示流程
+async function runApiTest({ btn, resultEl, sendMessage }) {
+  btn.disabled = true;
+  btn.dataset.state = 'loading';
+  btn.textContent = '測試中⋯';
+  resultEl.hidden = false;
+  resultEl.dataset.state = 'loading';
+  resultEl.textContent = '正在連線測試⋯';
+  try {
+    const resp = await sendMessage();
+    if (resp?.ok) {
+      resultEl.dataset.state = 'ok';
+      resultEl.textContent = '✓ ' + (resp.message || '連線成功');
+    } else {
+      resultEl.dataset.state = 'fail';
+      resultEl.textContent = '✗ ' + (resp?.message || resp?.error || '未知錯誤');
+    }
+  } catch (err) {
+    resultEl.dataset.state = 'fail';
+    resultEl.textContent = '✗ ' + (err?.message || String(err));
+  } finally {
+    btn.disabled = false;
+    btn.dataset.state = '';
+    btn.textContent = '測試';
+  }
+}
+
+// v1.5.7: Gemini API Key 測試
+$('test-api-key').addEventListener('click', async () => {
+  await runApiTest({
+    btn: $('test-api-key'),
+    resultEl: $('test-api-key-result'),
+    sendMessage: () => browser.runtime.sendMessage({
+      type: 'TEST_GEMINI_KEY',
+      payload: {
+        apiKey: $('apiKey').value,
+        model: getSelectedModel(),
+      },
+    }),
+  });
 });
 
 // Tier 或 Model 變更 → 自動更新 RPM/TPM/RPD 顯示
@@ -594,6 +720,42 @@ function sanitizeImport(raw) {
     if (typeof gl.blockingThreshold === 'number' && Number.isInteger(gl.blockingThreshold) && gl.blockingThreshold >= 1) glClean.blockingThreshold = gl.blockingThreshold;
     if (typeof gl.maxTerms === 'number' && Number.isInteger(gl.maxTerms) && gl.maxTerms >= 1 && gl.maxTerms <= 500) glClean.maxTerms = gl.maxTerms;
     if (Object.keys(glClean).length > 0) clean.glossary = glClean;
+  }
+
+  // v1.5.6: 中國用語黑名單。整個 array 替換（不做 per-entry merge），
+  // 但會逐筆過濾掉 forbidden 欄位非字串的髒資料。
+  if (Array.isArray(raw.forbiddenTerms)) {
+    const cleanTerms = [];
+    for (const t of raw.forbiddenTerms) {
+      if (!t || typeof t !== 'object') continue;
+      const forbidden = typeof t.forbidden === 'string' ? t.forbidden.trim() : '';
+      const replacement = typeof t.replacement === 'string' ? t.replacement.trim() : '';
+      const note = typeof t.note === 'string' ? t.note : '';
+      if (!forbidden) continue; // 沒有禁用詞欄位的不收
+      cleanTerms.push({ forbidden, replacement, note });
+    }
+    clean.forbiddenTerms = cleanTerms;
+    if (cleanTerms.length !== raw.forbiddenTerms.length) {
+      warnings.push(`forbiddenTerms：${raw.forbiddenTerms.length - cleanTerms.length} 筆格式錯誤，已略過`);
+    }
+  }
+
+  // v1.5.7: customProvider 子物件（apiKey 不在匯入範圍——同 Gemini apiKey 設計）
+  if (raw.customProvider && typeof raw.customProvider === 'object') {
+    const cp = raw.customProvider;
+    const cpClean = {};
+    if (typeof cp.baseUrl === 'string') cpClean.baseUrl = cp.baseUrl.trim();
+    if (typeof cp.model === 'string') cpClean.model = cp.model.trim();
+    if (typeof cp.systemPrompt === 'string') cpClean.systemPrompt = cp.systemPrompt;
+    if (typeof cp.temperature === 'number' && cp.temperature >= 0 && cp.temperature <= 2) {
+      cpClean.temperature = cp.temperature;
+    }
+    if (typeof cp.inputPerMTok === 'number' && cp.inputPerMTok >= 0) cpClean.inputPerMTok = cp.inputPerMTok;
+    if (typeof cp.outputPerMTok === 'number' && cp.outputPerMTok >= 0) cpClean.outputPerMTok = cp.outputPerMTok;
+    if (Object.prototype.hasOwnProperty.call(cp, 'apiKey')) {
+      warnings.push('customProvider.apiKey：匯入不含 API Key，請至設定頁自行填入');
+    }
+    if (Object.keys(cpClean).length > 0) clean.customProvider = cpClean;
   }
 
   // domainRules 子物件
@@ -839,6 +1001,68 @@ $('fixed-domain-tbody').addEventListener('focusout', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// v1.5.6: 中國用語黑名單 CRUD
+// ═══════════════════════════════════════════════════════════
+
+let forbiddenTerms = []; // 記憶體中的清單；load 時從 storage 讀入，save 時寫回
+
+function renderForbiddenTermsTable() {
+  const tbody = $('forbidden-terms-tbody');
+  tbody.innerHTML = forbiddenTerms.map((t, i) =>
+    `<tr data-idx="${i}">` +
+    `<td><input type="text" class="ft-forbidden" value="${escapeAttr(t.forbidden)}" placeholder="禁用詞（簡中）"></td>` +
+    `<td><input type="text" class="ft-replacement" value="${escapeAttr(t.replacement)}" placeholder="替換詞（台灣）"></td>` +
+    `<td><input type="text" class="ft-note" value="${escapeAttr(t.note || '')}" placeholder="（可選）"></td>` +
+    `<td class="glossary-col-action"><button class="glossary-delete-row" data-idx="${i}" title="刪除">×</button></td>` +
+    `</tr>`
+  ).join('');
+}
+
+function readForbiddenTableEntries() {
+  const rows = $('forbidden-terms-tbody').querySelectorAll('tr');
+  const entries = [];
+  for (const row of rows) {
+    const forbidden = (row.querySelector('.ft-forbidden')?.value || '').trim();
+    const replacement = (row.querySelector('.ft-replacement')?.value || '').trim();
+    const note = (row.querySelector('.ft-note')?.value || '').trim();
+    entries.push({ forbidden, replacement, note });
+  }
+  return entries;
+}
+
+$('forbidden-terms-add').addEventListener('click', () => {
+  forbiddenTerms = readForbiddenTableEntries();
+  forbiddenTerms.push({ forbidden: '', replacement: '', note: '' });
+  renderForbiddenTermsTable();
+  // focus 新增列的禁用詞欄
+  const rows = $('forbidden-terms-tbody').querySelectorAll('tr');
+  if (rows.length) rows[rows.length - 1].querySelector('.ft-forbidden')?.focus();
+  markDirty();
+});
+
+$('forbidden-terms-reset').addEventListener('click', () => {
+  if (!confirm('確定要還原預設禁用詞清單嗎？目前的自訂內容會被覆蓋。')) return;
+  // deep copy 預設清單避免 user 編輯後改到 module-level 常數
+  forbiddenTerms = DEFAULT_FORBIDDEN_TERMS.map(t => ({ ...t }));
+  renderForbiddenTermsTable();
+  markDirty();
+});
+
+$('forbidden-terms-tbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('.glossary-delete-row');
+  if (!btn) return;
+  const idx = Number(btn.dataset.idx);
+  forbiddenTerms = readForbiddenTableEntries();
+  forbiddenTerms.splice(idx, 1);
+  renderForbiddenTermsTable();
+  markDirty();
+});
+
+$('forbidden-terms-tbody').addEventListener('focusout', () => {
+  forbiddenTerms = readForbiddenTableEntries();
+});
+
+// ═══════════════════════════════════════════════════════════
 // v0.86: Tab 切換 + 用量紀錄頁面
 // ═══════════════════════════════════════════════════════════
 
@@ -863,29 +1087,77 @@ let usageChart = null;
 let currentGranularity = 'day';
 let allUsageRecords = [];   // v1.2.60: client-side 搜尋用，保留完整記錄
 
-// v1.2.60: 預設日期範圍：近 30 天（datetime-local 格式 YYYY-MM-DDTHH:MM）
+// v1.5.7: 用量紀錄「模型」欄改用「翻譯快速鍵」三組 preset 的 label 標記。
+// 在 load() 結尾把當前 presets / customProvider 寫進這裡，供 modelToLabel() 渲染時查表。
+let _presetsCache = [];
+let _customProviderCache = { model: '' };
+
+/**
+ * 把 record.model 對映成 preset 的 label（顯示用）。
+ * - 'google-translate' → engine='google' 的 preset 標籤
+ * - 等於 customProvider.model → engine='openai-compat' 的 preset 標籤
+ * - 等於某 preset.model（engine='gemini'）→ 該 preset 標籤
+ * - 都不命中 → 回退原本的 short model（去掉 gemini-/-preview 前後綴）
+ */
+function modelToLabel(modelId) {
+  if (!modelId) return '—';
+  if (modelId === 'google-translate') {
+    const p = _presetsCache.find(x => x.engine === 'google');
+    return p?.label || 'Google MT';
+  }
+  if (_customProviderCache.model && modelId === _customProviderCache.model) {
+    const p = _presetsCache.find(x => x.engine === 'openai-compat');
+    if (p) return p.label;
+  }
+  const p = _presetsCache.find(x => x.engine === 'gemini' && x.model === modelId);
+  if (p) return p.label;
+  return modelId.replace('gemini-', '').replace('-preview', '');
+}
+
+// v1.2.60: 預設日期範圍：近 30 天
+// v1.5.7: 改用「<input type="date"> + HH/MM <select>」拆兩段，24 小時制完全在我們控制下
+//         （Chrome datetime-local 的 12/24 制跟 OS locale 走、HTML 無法 override）。
+
+const _pad2 = n => String(n).padStart(2, '0');
+
+// 一次性建好 HH (00–23) 與 MM (00–59) 的 <option>；只跑一次（initUsageDateRange 第一次呼叫）
+let _timeSelectsBuilt = false;
+function buildTimeSelectOptions() {
+  if (_timeSelectsBuilt) return;
+  _timeSelectsBuilt = true;
+  const hourOptions = Array.from({ length: 24 }, (_, h) => `<option value="${_pad2(h)}">${_pad2(h)}</option>`).join('');
+  const minOptions  = Array.from({ length: 60 }, (_, m) => `<option value="${_pad2(m)}">${_pad2(m)}</option>`).join('');
+  for (const id of ['usage-from-hour', 'usage-to-hour']) $(id).innerHTML = hourOptions;
+  for (const id of ['usage-from-min',  'usage-to-min'])  $(id).innerHTML = minOptions;
+}
+
+function setDateTimeFields(prefix, d) {
+  $(`${prefix}-date`).value = `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
+  $(`${prefix}-hour`).value = _pad2(d.getHours());
+  $(`${prefix}-min`).value  = _pad2(d.getMinutes());
+}
+
+function readDateTimeFields(prefix, fallbackHHMM = '00:00') {
+  const date = $(`${prefix}-date`).value;
+  if (!date) return null;
+  const hh = $(`${prefix}-hour`).value || fallbackHHMM.slice(0, 2);
+  const mm = $(`${prefix}-min`).value  || fallbackHHMM.slice(3, 5);
+  return new Date(`${date}T${hh}:${mm}`).getTime();
+}
+
 function initUsageDateRange() {
+  buildTimeSelectOptions();
   const to = new Date();
   const from = new Date();
   from.setDate(from.getDate() - 30);
   from.setHours(0, 0, 0, 0);
-  $('usage-from').value = fmtDateTimeInput(from);
-  $('usage-to').value = fmtDateTimeInput(to);
-}
-
-function fmtDateTimeInput(d) {
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  setDateTimeFields('usage-from', from);
+  setDateTimeFields('usage-to', to);
 }
 
 function getUsageDateRange() {
-  const fromStr = $('usage-from').value;
-  const toStr = $('usage-to').value;
-  // datetime-local 格式已含時間，直接 parse；不含時間（舊存值）加預設時間
-  const from = fromStr ? new Date(fromStr.includes('T') ? fromStr : fromStr + 'T00:00').getTime()
-                       : Date.now() - 30 * 86400000;
-  const to   = toStr   ? new Date(toStr.includes('T')   ? toStr   : toStr   + 'T23:59').getTime()
-                       : Date.now();
+  const from = readDateTimeFields('usage-from', '00:00') ?? (Date.now() - 30 * 86400000);
+  const to   = readDateTimeFields('usage-to',   '23:59') ?? Date.now();
   return { from, to };
 }
 
@@ -923,7 +1195,8 @@ async function loadUsageData() {
     for (const [m, info] of Object.entries(s.byModel || {})) {
       if (info.count > topCount) { topCount = info.count; topModel = m; }
     }
-    $('usage-top-model').textContent = topModel;
+    // v1.5.7: 最常用模型卡片用 preset label 顯示
+    $('usage-top-model').textContent = modelToLabel(topModel);
   }
 
   // 折線圖
@@ -1062,9 +1335,8 @@ function renderTable(records) {
     const isGoogle = r.engine === 'google';  // v1.4.0
     // v0.99: 思考 token 以 output 費率計費，加入明細計算
     const billedTokens = (r.billedInputTokens || 0) + (r.outputTokens || 0);
-    const shortModel = isGoogle
-      ? 'Google'
-      : (r.model || '').replace('gemini-', '').replace('-preview', '');
+    // v1.5.7: 模型欄顯示 preset label；查不到才回退 model id 短名
+    const shortModel = modelToLabel(r.model);
     const title = r.title || '(無標題)';
     const urlDisplay = shortenUrl(r.url || '');
     const urlFull = r.url || '';
@@ -1072,7 +1344,8 @@ function renderTable(records) {
     const inputTk = r.inputTokens || 0;
     const cachedTk = r.cachedTokens || 0;
     const hitRate = (!isGoogle && inputTk > 0) ? Math.round(cachedTk / inputTk * 100) : 0;
-    const costCell = isGoogle ? '$0（免費）' : formatUSD(r.billedCostUSD || 0);
+    // v1.5.7: Google Translate 費用單寫 $0
+    const costCell = isGoogle ? '$0' : formatUSD(r.billedCostUSD || 0);
     const row = document.createElement('tr');
 
     const timeCell = document.createElement('td');
@@ -1097,7 +1370,7 @@ function renderTable(records) {
     const tokenCell = document.createElement('td');
     tokenCell.className = 'num';
     if (isGoogle) {
-      tokenCell.textContent = `${(r.chars || 0).toLocaleString()} 字元`;
+      tokenCell.textContent = String(r.chars || 0);
     } else {
       tokenCell.appendChild(document.createTextNode(formatTokens(billedTokens)));
       if (hitRate > 0) {
@@ -1135,7 +1408,8 @@ function updateSummaryFromRecords(records) {
   $('usage-total-cost').textContent   = formatUSD(totalCost);
   $('usage-total-tokens').textContent = formatTokens(totalTokens);
   $('usage-total-count').textContent  = String(records.length);
-  $('usage-top-model').textContent    = topModel;
+  // v1.5.7: 最常用模型卡片也用 preset label 顯示
+  $('usage-top-model').textContent    = modelToLabel(topModel);
 }
 
 // v1.3.2: 從 allUsageRecords 動態建立模型篩選下拉選項
@@ -1145,13 +1419,14 @@ function populateModelFilter() {
   const currentVal = sel.value;
   const models = [...new Set(allUsageRecords.map(r => r.model || '').filter(Boolean))].sort();
   // 重建選項（保留「全部模型」作為第一個選項）
+  // v1.5.7: option text 用 preset label 顯示；option value 仍是 model id 維持 filter 行為
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
   defaultOption.textContent = t('opt_usage_model_all');
   const modelOptions = models.map(m => {
     const option = document.createElement('option');
     option.value = m;
-    option.textContent = m.replace('gemini-', '').replace('-preview', '');
+    option.textContent = modelToLabel(m);
     option.selected = m === currentVal;
     return option;
   });
@@ -1189,8 +1464,16 @@ function shortenUrl(url) {
 }
 
 // ─── 事件綁定 ────────────────────────────────────────────
-$('usage-from').addEventListener('change', loadUsageData);
-$('usage-to').addEventListener('change', loadUsageData);
+// v1.5.7: 6 個欄位 (date + hour select + min select) × 2，任一變動都重 load
+for (const id of ['usage-from-date', 'usage-from-hour', 'usage-from-min',
+                  'usage-to-date',   'usage-to-hour',   'usage-to-min']) {
+  $(id)?.addEventListener('change', loadUsageData);
+}
+// v1.5.7: 「現在時間」按鈕 — 一鍵把「到」設為當下時間方便看最新紀錄
+$('usage-to-now')?.addEventListener('click', () => {
+  setDateTimeFields('usage-to', new Date());
+  loadUsageData();
+});
 // v1.2.60: 搜尋框即時過濾
 $('usage-search')?.addEventListener('input', applyUsageSearch);
 $('usage-model-filter')?.addEventListener('change', applyUsageSearch);
@@ -1276,6 +1559,9 @@ async function fetchLogs() {
 }
 
 // ─── 篩選 ───────────────────────────────────────────────
+// 回傳同時帶「命中位置」資訊：_searchHitInData = true 代表 search 字串只在 data 內命中
+// （不在 message / category），render 端會自動展開該行 data detail，免得使用者
+// 搜尋了還要逐筆點 {…} 開來看 inputPreview / outputPreview。
 function getFilteredLogs() {
   const catFilter = $('log-category-filter').value;
   const lvlFilter = $('log-level-filter').value;
@@ -1288,12 +1574,28 @@ function getFilteredLogs() {
       const msg = (entry.message || '').toLowerCase();
       const cat = (entry.category || '').toLowerCase();
       const dataStr = entry.data ? JSON.stringify(entry.data).toLowerCase() : '';
-      if (!msg.includes(search) && !cat.includes(search) && !dataStr.includes(search)) {
-        return false;
-      }
+      const hitMsg = msg.includes(search) || cat.includes(search);
+      const hitData = dataStr.includes(search);
+      if (!hitMsg && !hitData) return false;
+      // 標記「只在 data 命中」讓 render 自動展開該行 data
+      entry._searchHitInData = !hitMsg && hitData;
+    } else {
+      entry._searchHitInData = false;
     }
     return true;
   });
+}
+
+// 把 jsonText 中所有 search 字串包成 <mark>，與 escapeHtml 兼容
+// （先 escapeHtml，再對 escape 後字串做大小寫不敏感的 mark 包裝）。
+// search 為空時直接回傳 escapeHtml 結果不動。
+function highlightSearch(text, searchLower) {
+  const escaped = escapeHtml(text);
+  if (!searchLower) return escaped;
+  // 在 escaped 字串中以大小寫不敏感方式包 <mark>。
+  // 用 RegExp 但要 escape regex meta 字。
+  const safe = searchLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace(new RegExp(safe, 'gi'), m => `<mark class="log-search-hit">${m}</mark>`);
 }
 
 // ─── 渲染 ───────────────────────────────────────────────
@@ -1345,6 +1647,9 @@ function renderLogTable() {
     openSet.add(el.id);
   }
 
+  // v1.5.7: search 命中 data 時自動展開該行 data，並把命中字串包 <mark> 高亮
+  const searchLower = ($('log-search').value || '').trim().toLowerCase();
+
   const rows = visible.map(entry => {
     const time = formatLogTime(entry.t);
     const catClass = `log-cat log-cat-${entry.category || 'system'}`;
@@ -1385,7 +1690,8 @@ function renderLogTable() {
     if (entry.data && Object.keys(entry.data).length > 0) {
       const dataJson = JSON.stringify(entry.data, null, 2);
       const dataId = `log-data-${entry.seq}`;
-      const isOpen = openSet.has(dataId);
+      // v1.5.7: 「使用者手動展開過」或「搜尋只在 data 命中」兩種情況都展開
+      const isOpen = openSet.has(dataId) || entry._searchHitInData;
 
       const toggle = document.createElement('button');
       toggle.className = 'log-data-toggle';

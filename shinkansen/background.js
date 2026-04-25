@@ -3,6 +3,7 @@
 
 import { browser } from './lib/compat.js';
 import { translateBatch, extractGlossary } from './lib/gemini.js';
+import { translateBatch as translateBatchCustom } from './lib/openai-compat.js'; // v1.5.7
 import { translateGoogleBatch } from './lib/google-translate.js';
 import { getSettings, DEFAULT_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
 import { debugLog, getLogs, clearLogs, getPersistedLogs, clearPersistedLogs } from './lib/logger.js';
@@ -12,6 +13,7 @@ import { getLimitsForSettings } from './lib/tier-limits.js';
 import * as usageDB from './lib/usage-db.js'; // v0.86: 用量紀錄 IndexedDB
 import { getPricingForModel } from './lib/model-pricing.js';  // v1.4.12: preset 依 model 查定價
 import { sessionStore } from './lib/session-storage.js';  // v1.5: 跨平台 session storage
+import { detectForbiddenTermLeaks } from './lib/forbidden-terms.js'; // v1.5.6
 
 debugLog('info', 'system', 'service worker started', { version: browser.runtime.getManifest().version });
 
@@ -276,6 +278,23 @@ const messageHandlers = {
     async: true,
     handler: (payload, sender) => handleTranslateGoogle(payload, sender, '_gt'),
   },
+  // v1.5.7: OpenAI-compatible 自訂 Provider 翻譯（chat.completions endpoint）
+  // 不走 rate limiter，cache key 加 baseUrl hash + model 分區。
+  TRANSLATE_BATCH_CUSTOM: {
+    async: true,
+    handler: (payload, sender) => handleTranslateCustom(payload, sender),
+  },
+  // v1.5.7: API Key 測試 — 設定頁「測試」按鈕觸發。
+  // Gemini 走 GET models/<model>?key=<key> 不耗 token；
+  // OpenAI-compat 走 POST /chat/completions max_tokens=1 ping，耗 ~1 token。
+  TEST_GEMINI_KEY: {
+    async: true,
+    handler: (payload) => testGeminiKey(payload),
+  },
+  TEST_CUSTOM_PROVIDER: {
+    async: true,
+    handler: (payload) => testCustomProvider(payload),
+  },
   // v1.4.0: Google Translate 字幕翻譯（快取 key 用 _gt_yt 後綴）
   TRANSLATE_SUBTITLE_BATCH_GOOGLE: {
     async: true,
@@ -426,10 +445,20 @@ const messageHandlers = {
     async: true,
     handler: async (payload) => {
       const settings = await getSettings();
+      // v1.5.7: 依 payload.engine 決定 model 該從哪裡取——這樣 Alt+A/S 切不同 preset
+      // 寫入紀錄的 model 才會是該批 API 真實使用的模型。
+      // - 'openai-compat'：自訂模型，model 從 settings.customProvider.model
+      // - 其他（gemini）：優先 payload.model（preset modelOverride），否則 fallback 全域
+      let resolvedModel;
+      if (payload.engine === 'openai-compat') {
+        resolvedModel = settings.customProvider?.model || 'unknown';
+      } else {
+        resolvedModel = payload.model || settings.geminiConfig?.model || 'unknown';
+      }
       const record = {
         ...payload,
-        // v1.2.39: payload.model 優先（例如 YouTube 字幕用獨立模型時由 content 端傳入）
-        model: payload.model || settings.geminiConfig?.model || 'unknown',
+        engine: payload.engine || 'gemini',
+        model: resolvedModel,
       };
       // v1.4.18: YouTube 字幕一支影片會分成多批翻譯，逐批寫入會變幾十筆。
       // 改由 upsertYouTubeUsage 以 (videoId + model, 1 小時視窗) 合併成一筆；
@@ -538,6 +567,11 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
     }
   }
 
+  // v1.5.6: 中國用語黑名單。從 settings 讀清單後一路傳到 translateBatch（注入到 systemInstruction），
+  // 同時計算 hash 加進 cache key 後綴，讓使用者修改清單後既有快取自動失效。
+  // 空清單時 hash 為空字串，不附加後綴，向下相容既有 v1.5.5 之前的快取 key。
+  const forbiddenTermsList = Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : [];
+
   // v0.70: 若有術語表，快取 key 加上 glossary hash 後綴，
   // 確保「有術語表」與「無術語表」的翻譯分開快取。
   // v1.4.12: cacheTag 由呼叫端明確指定（'_yt' = 字幕模式 / '' = 網頁翻譯含 preset）。
@@ -551,6 +585,11 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
   if (allGlossaryForHash.length > 0) {
     const fullHash = await cache.hashText(allGlossaryForHash.join('|'));
     glossaryKeySuffix = '_g' + fullHash.slice(0, 12);
+  }
+  // v1.5.6: 黑名單 hash。空清單時回傳 ''，不附加後綴。
+  const forbiddenHash = await cache.hashForbiddenTerms(forbiddenTermsList);
+  if (forbiddenHash) {
+    glossaryKeySuffix += '_b' + forbiddenHash;
   }
   // v1.4.12: 把 model 字串納入 cache key，避免同段文字在不同 preset 之間共用快取
   // （例如先按 Alt+A 走 Flash Lite 翻過，再按 Alt+S 走 Flash 應該重新打 API，不該命中 Flash Lite 的舊譯文）。
@@ -599,10 +638,17 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
     const t0 = Date.now();
     const totalChars = missingTexts.reduce((s, t) => s + (t?.length || 0), 0);
     debugLog('info', 'api', 'translateBatch start', { texts: missingTexts.length, chars: totalChars });
-    const res = await translateBatch(missingTexts, effectiveSettings, glossary, fixedGlossaryEntries);
+    const res = await translateBatch(missingTexts, effectiveSettings, glossary, fixedGlossaryEntries, forbiddenTermsList);
     fresh = res.translations;
     batchUsage = res.usage;
     batchHadMismatch = res.hadMismatch || false; // v0.94: mismatch 旗標
+
+    // v1.5.6: 翻譯成功後掃描黑名單詞，命中時用 debugLog 寫一條 forbidden-term-leak warn。
+    // 純記錄、不修改譯文（修改交給 prompt，硬規則 §7）。adapter 把 detect 函式的
+    // logger.warn(category, message, data) 介面轉成 debugLog('warn', category, message, data)。
+    detectForbiddenTermLeaks(fresh, missingTexts, forbiddenTermsList, {
+      warn: (category, message, data) => debugLog('warn', category, message, data),
+    });
     batchCostUSD = computeCostUSD(batchUsage.inputTokens, batchUsage.outputTokens, effectivePricing);
     const batchMs = Date.now() - t0;
     debugLog('info', 'api', 'translateBatch done', {
@@ -662,6 +708,225 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
   };
 }
 
+// ─── v1.5.7: API Key 測試（設定頁「測試」按鈕觸發）─────────────
+//
+// 設計：兩條 endpoint 各有對應的最便宜驗證方式。回傳統一結構
+// { ok: boolean, status?: number, message: string }，options 端只看訊息顯示綠/紅。
+
+/**
+ * 測試 Gemini API Key 有效性。
+ * 走 `GET models/<model>?key=<apiKey>`——不耗 token，能驗 key 有效 + model 存在。
+ */
+async function testGeminiKey(payload) {
+  const apiKey = (payload?.apiKey || '').trim();
+  const model = (payload?.model || 'gemini-3-flash-preview').trim();
+  if (!apiKey) return { ok: false, message: 'API Key 為空，請先填入再測試。' };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}?key=${encodeURIComponent(apiKey)}`;
+  try {
+    const resp = await fetch(url, { method: 'GET' });
+    if (resp.ok) {
+      const j = await resp.json().catch(() => ({}));
+      return { ok: true, status: resp.status, message: `連線成功（model: ${j?.name || model}）` };
+    }
+    let errMsg = `HTTP ${resp.status}`;
+    try { const j = await resp.json(); errMsg = j?.error?.message || errMsg; } catch { /* noop */ }
+    return { ok: false, status: resp.status, message: errMsg };
+  } catch (err) {
+    return { ok: false, message: '網路錯誤：' + (err?.message || String(err)) };
+  }
+}
+
+/**
+ * 測試自訂 OpenAI-compatible Provider。
+ * 走 `POST /chat/completions` 帶 max_tokens=1 + 「ping」訊息——耗 ~1 token，
+ * 同時驗證 baseUrl / model / apiKey 三者皆正確。比 GET /models 通用（部分
+ * provider 不支援 GET /models）。
+ */
+async function testCustomProvider(payload) {
+  const baseUrl = (payload?.baseUrl || '').trim().replace(/\/+$/, '');
+  const model = (payload?.model || '').trim();
+  const apiKey = (payload?.apiKey || '').trim();
+  if (!baseUrl) return { ok: false, message: 'Base URL 為空。' };
+  if (!model) return { ok: false, message: '模型 ID 為空。' };
+  if (!apiKey) return { ok: false, message: 'API Key 為空。' };
+
+  const url = /\/chat\/completions$/.test(baseUrl) ? baseUrl : baseUrl + '/chat/completions';
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+        stream: false,
+      }),
+    });
+    if (resp.ok) {
+      const j = await resp.json().catch(() => ({}));
+      const used = j?.usage?.total_tokens || j?.usage?.prompt_tokens || 0;
+      return { ok: true, status: resp.status, message: `連線成功（${model}，本次用量約 ${used} tokens）` };
+    }
+    let errMsg = `HTTP ${resp.status}`;
+    try {
+      const j = await resp.json();
+      errMsg = j?.error?.message || j?.message || errMsg;
+    } catch { /* noop */ }
+    return { ok: false, status: resp.status, message: errMsg };
+  } catch (err) {
+    return { ok: false, message: '網路錯誤：' + (err?.message || String(err)) };
+  }
+}
+
+// ─── v1.5.7: OpenAI-compatible 自訂 Provider 批次處理 ─────────
+// 與 handleTranslate（Gemini）不同：bypass rate limiter（OpenRouter 等
+// provider 自己處理配額；既有 fetchWithRetry 的 429 退避已能應付），cache key
+// 用 _oc base tag + baseUrl hash + safe model 分區，計價來自 customProvider 自填。
+// 與 Gemini 共用：fixedGlossary、forbiddenTerms、自動 glossary 注入、cache module。
+async function handleTranslateCustom(payload, sender) {
+  const settings = await getSettings();
+  const cp = settings.customProvider || {};
+  if (!cp.apiKey) throw new Error('尚未設定自訂 Provider 的 API Key，請至設定頁填入。');
+  if (!cp.baseUrl) throw new Error('尚未設定自訂 Provider 的 Base URL。');
+  if (!cp.model) throw new Error('尚未設定自訂 Provider 的模型 ID。');
+
+  const texts = payload.texts;
+  const glossary = payload.glossary || null;
+
+  // 重用 handleTranslate 內的 fixedGlossary 合併邏輯
+  let fixedGlossaryEntries = null;
+  const fg = settings.fixedGlossary;
+  if (fg) {
+    const globalEntries = Array.isArray(fg.global) ? fg.global.filter(e => e.source && e.target) : [];
+    let domainEntries = [];
+    if (fg.byDomain && sender?.tab?.url) {
+      try {
+        const hostname = new URL(sender.tab.url).hostname;
+        domainEntries = Array.isArray(fg.byDomain[hostname]) ? fg.byDomain[hostname].filter(e => e.source && e.target) : [];
+      } catch { /* 無效 URL，略過 */ }
+    }
+    if (globalEntries.length > 0 || domainEntries.length > 0) {
+      const merged = new Map();
+      for (const e of globalEntries) merged.set(e.source, e.target);
+      for (const e of domainEntries) merged.set(e.source, e.target);
+      fixedGlossaryEntries = [...merged.entries()].map(([source, target]) => ({ source, target }));
+    }
+  }
+
+  const forbiddenTermsList = Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : [];
+
+  // Cache key：'_oc' base tag + glossary/forbidden hash + baseUrl hash + safe model
+  let suffix = '_oc';
+  const allGlossaryForHash = [
+    ...(glossary || []).map(e => `${e.source}:${e.target}`),
+    ...(fixedGlossaryEntries || []).map(e => `F:${e.source}:${e.target}`),
+  ];
+  if (allGlossaryForHash.length > 0) {
+    const fullHash = await cache.hashText(allGlossaryForHash.join('|'));
+    suffix += '_g' + fullHash.slice(0, 12);
+  }
+  const forbiddenHash = await cache.hashForbiddenTerms(forbiddenTermsList);
+  if (forbiddenHash) {
+    suffix += '_b' + forbiddenHash;
+  }
+  // baseUrl hash 6 字元 + safe model — 避免不同 provider 同 model name 共用快取
+  const baseUrlHash = (await cache.hashText(cp.baseUrl)).slice(0, 6);
+  const safeModel = String(cp.model).replace(/[^a-z0-9.\-]/gi, '_');
+  suffix += `_m${baseUrlHash}_${safeModel}`;
+
+  // 1. 撈快取
+  const cached = await cache.getBatch(texts, suffix);
+  const missingIdxs = [];
+  const missingTexts = [];
+  cached.forEach((tr, i) => {
+    if (tr == null) {
+      missingIdxs.push(i);
+      missingTexts.push(texts[i]);
+    }
+  });
+  const cacheHits = texts.length - missingTexts.length;
+  debugLog('info', 'cache', 'openai-compat batch cache lookup', {
+    total: texts.length, hits: cacheHits, misses: missingTexts.length,
+  });
+
+  // 2. 缺的部分送 OpenAI-compat
+  let fresh = [];
+  let batchUsage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
+  let batchCostUSD = 0;
+  let batchHadMismatch = false;
+  if (missingTexts.length) {
+    const t0 = Date.now();
+    const totalChars = missingTexts.reduce((s, t) => s + (t?.length || 0), 0);
+    debugLog('info', 'api', 'openai-compat translateBatch start', {
+      texts: missingTexts.length, chars: totalChars, baseUrl: cp.baseUrl, model: cp.model,
+    });
+    const res = await translateBatchCustom(missingTexts, settings, glossary, fixedGlossaryEntries, forbiddenTermsList);
+    fresh = res.translations;
+    batchUsage = res.usage;
+    batchHadMismatch = res.hadMismatch || false;
+    batchCostUSD = computeCostUSD(batchUsage.inputTokens, batchUsage.outputTokens, {
+      inputPerMTok: cp.inputPerMTok || 0,
+      outputPerMTok: cp.outputPerMTok || 0,
+    });
+    const batchMs = Date.now() - t0;
+    debugLog('info', 'api', 'openai-compat translateBatch done', {
+      count: missingTexts.length,
+      chars: totalChars,
+      elapsed: batchMs,
+      inputTokens: batchUsage.inputTokens,
+      outputTokens: batchUsage.outputTokens,
+      cachedTokens: batchUsage.cachedTokens || 0,
+      costUSD: batchCostUSD,
+    });
+
+    // 3. 翻譯成功後掃黑名單漏網（純記錄）
+    detectForbiddenTermLeaks(fresh, missingTexts, forbiddenTermsList, {
+      warn: (category, message, data) => debugLog('warn', category, message, data),
+    });
+
+    // 4. 寫回快取
+    await cache.setBatch(missingTexts, fresh, suffix);
+
+    // 5. 累計用量（cachedTokens 走 25% 折扣與 Gemini 同邏輯——OpenAI cache 命中折扣率類似）
+    const billedInput = Math.max(
+      0, Math.round(batchUsage.inputTokens - (batchUsage.cachedTokens || 0) * 0.75),
+    );
+    const billedCost = computeBilledCostUSD(
+      batchUsage.inputTokens,
+      batchUsage.cachedTokens || 0,
+      batchUsage.outputTokens,
+      { inputPerMTok: cp.inputPerMTok || 0, outputPerMTok: cp.outputPerMTok || 0 },
+    );
+    await addUsage(billedInput, batchUsage.outputTokens, billedCost);
+  }
+
+  // 6. 合併結果
+  const result = cached.slice();
+  missingIdxs.forEach((idx, k) => { result[idx] = fresh[k]; });
+
+  return {
+    result,
+    usage: {
+      inputTokens: batchUsage.inputTokens,
+      outputTokens: batchUsage.outputTokens,
+      cachedTokens: batchUsage.cachedTokens || 0,
+      costUSD: batchCostUSD,
+      billedInputTokens: Math.max(
+        0, Math.round(batchUsage.inputTokens - (batchUsage.cachedTokens || 0) * 0.75),
+      ),
+      billedCostUSD: computeBilledCostUSD(
+        batchUsage.inputTokens,
+        batchUsage.cachedTokens || 0,
+        batchUsage.outputTokens,
+        { inputPerMTok: cp.inputPerMTok || 0, outputPerMTok: cp.outputPerMTok || 0 },
+      ),
+      cacheHits,
+    },
+    rpdExceeded: false, // 不走 rate limiter
+    hadMismatch: batchHadMismatch,
+  };
+}
+
 // ─── v1.4.0: Google Translate 批次處理 ────────────────────────
 // 與 handleTranslate 不同：不走 rate limiter、不走術語表、費用 $0。
 // cacheSuffix：網頁翻譯用 '_gt'，字幕翻譯用 '_gt_yt'，確保快取與 Gemini 分開存放。
@@ -710,7 +975,9 @@ async function handleTranslateGoogle(payload, sender, cacheSuffix) {
     await cache.setBatch(missingTexts, fresh, cacheSuffix);
 
     // 4. 記錄用量（費用 $0，以字元計）
-    await usageDB.logTranslation({
+    // v1.5.7: 走 upsertGoogleUsage 合併同一篇 URL 一小時內的批次到單一紀錄，
+    // 避免一篇 BBC 長文炸出 5–20 筆同 URL Google MT entry。
+    await usageDB.upsertGoogleUsage({
       url: sender?.tab?.url || '',
       title: '',
       engine: 'google',

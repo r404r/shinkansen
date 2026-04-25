@@ -7,6 +7,54 @@
 
 ## v1.5.x
 
+**v1.5.7** — 新增自訂 OpenAI 相容模型功能 + 用量紀錄多項改進 + WordPress 含 hero 圖標題的偵測/注入修法 + 設定頁版面對齊與多處文字調整。
+
+  - **新功能：自訂 OpenAI 相容模型**：除了 Gemini 與 Google Translate，可設定一組 OpenAI-compatible 端點（chat.completions），接 OpenRouter / Together / DeepSeek / Groq / Fireworks / Ollama 本機 / OpenAI 自家等百種 provider。`translatePresets` 任一 slot 的 `engine` 設成 `'openai-compat'` 即可由對應快速鍵啟動。設定頁新增獨立「自訂模型」分頁（Gemini 右側）。API Key 走 `chrome.storage.local`（與 Gemini Key 同樣不跨裝置同步）。Bearer auth、自動接 `/chat/completions` 尾綴、429/5xx 退避重試、segment mismatch fallback、usage 結構抽取（含 `prompt_tokens_details.cached_tokens`）全部對齊 Gemini adapter。Cache key 加 `_oc_g<gh>_b<bh>_m<urlHash6>_<safeModel>` 避免不同 provider 同 model name 污染快取。
+  - **共用模組 `lib/system-instruction.js`**：把 `DELIMITER` / `packChunks` / `buildEffectiveSystemInstruction` 從 `lib/gemini.js` 抽出，Gemini 與自訂模型兩條 adapter 共用——固定術語表 + 中國用語黑名單 + 多段分隔符 / 段內換行 / 佔位符規則只實作一次，未來新規則只改一處。
+  - **API Key「測試」按鈕**（Gemini + 自訂模型）：Gemini 走 `GET models/<model>?key=<key>` 不耗 token；自訂模型走 `POST /chat/completions` + `max_tokens:1` 耗 ~1 token。結果以綠/紅訊息列顯示在按鈕下方。
+  - **修法：WordPress 含 hero 圖標題沒翻**（`mediaCardSkip` + `injectIntoTarget` 兩處）：nippper.com 等 WordPress 主題把 hero 封面圖塞進 `<h1>` 內 → `<h1><img wp-post-image><div><span>標題</span></div></h1>`。原本兩條判斷都誤殺：(1) `mediaCardSkip` 命中 → 整個 H1 `FILTER_SKIP` 從未進翻譯流程；(2) 即使進了，`injectIntoTarget` 因 `hasContainerChild=true` 走 clean-slate 把 IMG 一起清掉。修法：兩處都加 `!/^H[1-6]$/.test(el.tagName)` 例外（HTML5 語意上 heading 永遠是「標題」、不可能是 grid item / 附件清單，屬結構性通則 §8）。新 fixture `heading-with-hero-image.html` + spec 兩條斷言（detect + inject 各一），SANITY 兩條都驗過。
+  - **修法：「進程→線程」既有對映**（v1.5.6 已修一半，v1.5.7 補完）：v0.83 起 `DEFAULT_SYSTEM_PROMPT` 的對映清單把兩個簡中詞「進程→線程」放一起（process 在台灣應為「行程」、thread 應為「執行緒」）。v1.5.6 已從 prompt 移除並補進中國用語黑名單，本版未再動相關邏輯。
+  - **用量紀錄改進**：
+    - 「模型」欄改用 preset 標籤顯示（不再顯示 model id 縮寫），同時涵蓋彙總卡片「最常用模型」與篩選下拉
+    - **Bug 修正**：`LOG_USAGE` payload 之前缺 `model` / `engine`，導致按 Alt+A（Flash Lite）和 Alt+S（Flash）寫進紀錄的 model 一樣；修法：`content.js` 把 `options.engine` / `options.modelOverride` 帶進 payload，`background.js` LOG_USAGE handler 依 `engine` 路由 model 來源（`'openai-compat'` 用 `customProvider.model`、其他用 `payload.model || geminiConfig.model`）
+    - **Bug 修正**：preset.engine 儲存後被強制 reset：`save()` 端 whitelist 只認 `'google'/'gemini'`，`'openai-compat'` 被改回 `'gemini'` 寫進 storage——換言之，過去使用者設定的「自訂模型」preset 從未真正生效。修法：擴 whitelist 為三選項，model 欄只對 gemini 有意義
+    - **Google MT 同篇 URL 批次合併**：新加 `usageDB.upsertGoogleUsage`，3 分鐘視窗合併同 URL 的多批 Google MT entry（避免 BBC 長文炸出十幾筆同 URL 紀錄）
+    - 用量明細「TOKENS」欄 Google MT 顯示從「3,403 字元」改為「3403」、「費用」欄「$0（免費）」改為「$0」
+  - **用量紀錄時間 filter UI**：
+    - **24 小時制**：放棄 `<input type="datetime-local">`（Chrome 對它的時間制完全跟 OS locale 走、HTML 無法 override），改成「`<input type="date">` + 兩個 `<select>` (HH 00–23 / MM 00–59)」拆三段，24h 制完全由 select option 控制
+    - 新加「現在時間」按鈕一鍵把「到」設為當下時間
+    - 整列版面對齊：所有 widget 統一 `height: 32px` + 同 border / radius / padding；「現在時間」貼右、日週月按鈕貼第二列左邊與搜尋框同 x 起點；模型篩選 select 收斂為固定 200px 寬不再被內容撐爆觸發 wrap
+  - **Log 系統強化**：
+    - `api: gemini request` / `api: gemini response` log 加 `inputPreview` / `outputPreview`（前 300 字），「LLM echo 原文」「譯文被截斷」「譯文跟期望不一樣」這類 case 都能直接從 Debug 分頁對照看到送進去 / 回什麼出來。`openai-compat` 兩條 log 同步加
+    - Debug 分頁搜尋命中 `data` 欄位時自動展開該行 detail，且命中字串包 `<mark>` 高亮
+    - 搜尋 input placeholder 改為「搜尋 Log（含批次內容）⋯」讓使用者知道功能涵蓋每筆 data
+  - **設定頁多項文字 / 版面調整**：
+    - 「自訂 Provider」tab 改名「自訂模型」、移到 Gemini 右側
+    - 「自訂 OpenAI-compatible Provider」改「自訂 OpenAI 相容模型」
+    - 翻譯快速鍵預設 engine 下拉「自訂 Provider（OpenAI-compatible）」改「自訂模型」（三組 preset 一致）
+    - 「System Prompt」改「翻譯 Prompt」
+    - 「計價（USD / 1M tokens）」改「模型計價（USD）」
+    - 計價說明文字「OpenRouter / Together 等百種模型不可能內建查表」改「請填入 input / output 單價」
+    - 「Input/Output tokens 單價」加「（USD / 1M tokens）」尾綴
+    - 自訂模型分頁說明文字優化（「OpenAI-compatible 端點」→「OpenAI 相容端點」、「翻譯快速鍵」section 引導文字精簡）
+    - **預設值改進**：`DEFAULT_SETTINGS.customProvider.systemPrompt` 從空字串改為與 Gemini 同 `DEFAULT_SYSTEM_PROMPT`，全新使用者第一次打開分頁就有完整可用 prompt
+  - **3 條新 unit spec + 1 條新 regression spec + SANITY 全綠**：
+    - `openai-compat-injection`（7 條，黑名單/固定術語表共用注入、systemPrompt 獨立、apiKey 缺失 throw、baseUrl 接尾綴、Bearer auth、message 結構）
+    - `openai-compat-usage`（5 條，prompt_tokens_details.cached_tokens 抽取、fallback 空 usage 不噴 NaN、多 chunk 累加）
+    - `openai-compat-segment-mismatch`（3 條，多段不對齊觸發 per-segment fallback、單段不觸發、對齊不觸發）
+    - `detect-heading-with-hero-image`（2 條，detect 不被 mediaCardSkip 攔 + inject 後 IMG 保留）
+  - Full `npm test` 187 條（Playwright）+ 26 條（Jest）全綠。
+
+**v1.5.6** — 新增中國用語黑名單功能 + 修正 v0.83 起 prompt 內錯誤的「進程→線程」對映。
+
+  - **新功能：中國用語黑名單**：可由使用者編輯的禁用詞對照表（預設 25 條：視頻 / 軟件 / 數據 / 網絡 / 質量 / 用戶 / 默認 / 創建 / 實現 / 運行 / 發布 / 屏幕 / 界面 / 文檔 / 操作系統 / 進程 / 線程 / 程序 等）。內容會以 `<forbidden_terms_blacklist>` XML 區塊注入到 systemInstruction 末端（高於 fixedGlossary 的最高顯著性位置），明確要求譯文不可使用左欄詞彙、必須改用右欄。設定頁新增獨立的「禁用詞清單」分頁可編輯。
+  - **修正 prompt 錯字**：v0.83 起 `DEFAULT_SYSTEM_PROMPT` 的 `<linguistic_guidelines>` 第 2 條對映清單中誤寫「進程→線程」——兩者都是中國大陸用語（process 在台灣應為「行程」、thread 應為「執行緒」），原本等於要求 LLM 把 process 翻成另一個簡中詞 thread。新版分開列出兩條正確對映進黑名單，並把 `<linguistic_guidelines>` 第 2 條改寫為指向末端黑名單區塊（避免兩處規則打架）。
+  - **Debug 偵測層**：`lib/forbidden-terms.js` 的 `detectForbiddenTermLeaks()` 在每次翻譯回應後掃描譯文，命中黑名單詞時用 `debugLog('warn', 'forbidden-term-leak', ...)` 寫一筆診斷訊息（含原文與譯文 snippet），方便從 Debug 分頁追查 LLM 漏網案例。**純記錄、不修改譯文**（遵守 CLAUDE.md 硬規則 §7）。
+  - **快取分區**：`lib/cache.js` 新增 `hashForbiddenTerms()` 對清單做穩定 hash（依 `forbidden` 欄位排序後 JSON.stringify 取前 12 字元 SHA-1），加進 cache key 後綴 `_b<hash>`。修改清單後既有快取自動失效；空清單時不附加後綴，向下相容 v1.5.5 之前的快取。`getBatch` / `setBatch` 同步擴充支援結構化 `{ glossaryHash, forbiddenHash, baseSuffix }` 物件 API（向下相容字串 API）。
+  - **3 條新 unit spec + SANITY 全綠**：`forbidden-terms-injection`（4 條）/ `forbidden-terms-leak-detect`（5 條）/ `forbidden-terms-cache-key`（8 條），總 17 條。每條都驗過「破壞 fix → spec fail / 還原 → pass」。
+  - **UI**：「禁用詞清單」拆成獨立分頁（位於「術語表」與「YouTube 字幕」之間），三欄表格（禁用詞 / 替換詞 / 備註）+ 新增 / 還原預設 / 刪除按鈕。tab-bar CSS 加 `white-space: nowrap` + `flex-shrink: 0` 防止 7 個 tab 後文字折行。
+  - Full `npm test` 166 條（Playwright）+ 26 條（Jest）全綠。
+
 **v1.5.5** — 修「編輯譯文」功能與 Content Guard 衝突。
 
   - **Bug**：popup 按「編輯譯文」進入編輯模式後，刪除 + 輸入單字會在 1 秒內被自動還原回原譯文；按「結束編輯」按鈕後，使用者編輯也會被蓋回原譯文。

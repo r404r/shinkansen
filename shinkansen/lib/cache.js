@@ -188,14 +188,57 @@ async function proactiveEvictionCheck() {
 }
 
 /**
+ * v1.5.6: 把 keySuffix 參數正規化為單一字串。
+ * 兩種接受形式：
+ *   - 字串：直接當 suffix（既有 v0.70 ~ v1.4.x API，向下相容）
+ *   - 物件：{ baseSuffix, glossaryHash, forbiddenHash }
+ *           → baseSuffix + (glossaryHash ? '_g' + ... : '') + (forbiddenHash ? '_b' + ... : '')
+ *           空字串 / null hash 一律不附加，向下相容既有快取。
+ * 實作位置：放這邊可以讓 getBatch / setBatch 共用同一條規則，避免兩端組鍵不一致。
+ */
+function resolveKeySuffix(arg) {
+  if (arg == null) return '';
+  if (typeof arg === 'string') return arg;
+  if (typeof arg !== 'object') return '';
+  let s = arg.baseSuffix || '';
+  if (arg.glossaryHash) s += '_g' + arg.glossaryHash;
+  if (arg.forbiddenHash) s += '_b' + arg.forbiddenHash;
+  return s;
+}
+
+/**
+ * v1.5.6: 計算 forbiddenTerms 清單的穩定 hash（前 12 字元 SHA-1 hex）。
+ * 排序後 JSON.stringify 確保「同一份清單不同順序」會得到相同 hash，
+ * 讓使用者只是把清單裡某條搬位置不會重打整批 API。
+ * 空清單回傳空字串，呼叫端可直接拿來當 forbiddenHash 欄位（resolveKeySuffix 會略過空值）。
+ *
+ * @param {Array<{forbidden:string, replacement:string}>} terms
+ * @returns {Promise<string>} 12 字元 hex，或 ''（清單空時）
+ */
+export async function hashForbiddenTerms(terms) {
+  if (!Array.isArray(terms) || terms.length === 0) return '';
+  const sorted = [...terms]
+    .filter(t => t && t.forbidden)
+    .sort((a, b) => String(a.forbidden).localeCompare(String(b.forbidden)));
+  if (sorted.length === 0) return '';
+  const canonical = JSON.stringify(
+    sorted.map(t => ({ forbidden: String(t.forbidden), replacement: String(t.replacement || '') })),
+  );
+  const full = await hashText(canonical);
+  return full.slice(0, 12);
+}
+
+/**
  * 一次取多段譯文。回傳與輸入等長的陣列，缺的位置為 null。
  * @param {string[]} texts 原文陣列
- * @param {string} [keySuffix=''] 可選的 key 後綴（v0.70: 用來區分有/無術語表的快取）
+ * @param {string|{baseSuffix?:string, glossaryHash?:string, forbiddenHash?:string}} [keySuffix='']
+ *        可選的 key 後綴。字串 = 既有 API；物件 = v1.5.6 起的結構化 API。
  */
 export async function getBatch(texts, keySuffix = '') {
   if (!texts.length) return [];
+  const suffix = resolveKeySuffix(keySuffix);
   const hashes = await Promise.all(texts.map(hashText));
-  const keys = hashes.map(h => KEY_PREFIX + h + keySuffix);
+  const keys = hashes.map(h => KEY_PREFIX + h + suffix);
   const stored = await browser.storage.local.get(keys);
   // v0.85 → v1.0.4: 讀取時累積命中條目的時間戳到 pendingTouches，
   // 由 debounce 計時器統一 flush，減少寫入頻率（原本每次 getBatch 都寫一次）。
@@ -217,15 +260,17 @@ export async function getBatch(texts, keySuffix = '') {
  * 一次寫多段譯文。texts 與 translations 必須等長。
  * @param {string[]} texts 原文陣列
  * @param {string[]} translations 譯文陣列
- * @param {string} [keySuffix=''] 可選的 key 後綴（v0.70: 用來區分有/無術語表的快取）
+ * @param {string|{baseSuffix?:string, glossaryHash?:string, forbiddenHash?:string}} [keySuffix='']
+ *        同 getBatch — 字串或結構化物件兩種形式皆可。
  */
 export async function setBatch(texts, translations, keySuffix = '') {
   if (!texts.length) return;
+  const suffix = resolveKeySuffix(keySuffix);
   const hashes = await Promise.all(texts.map(hashText));
   const updates = {};
   for (let i = 0; i < texts.length; i++) {
     if (translations[i]) {
-      updates[KEY_PREFIX + hashes[i] + keySuffix] = wrapValue(translations[i]);
+      updates[KEY_PREFIX + hashes[i] + suffix] = wrapValue(translations[i]);
     }
   }
   if (Object.keys(updates).length) {

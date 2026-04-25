@@ -270,7 +270,15 @@
         // 典型案例：XenForo 附件 LI：li > [a.file-preview > img, div.file-content]
         // 注意：刻意用 img/picture/video 而非 containsMedia（後者含 svg/canvas/audio），
         // 避免誤傷含 SVG icon 的標題（如 Substack h2.header-anchor-post 內有 SVG + div.anchor）。
+        //
+        // v1.5.7: 排除 H1–H6。HTML5 語意上 heading 永遠是「標題」，不會是 grid item /
+        // 附件清單卡片。WordPress 主題（如 nippper.com）會把 hero 圖塞進 <h1> 內：
+        //   <h1><img class="wp-post-image"><div><span>標題文字</span></div></h1>
+        // 這結構直屬子節點是 [IMG, DIV]，不加 heading exclusion 會被 mediaCardSkip 誤殺，
+        // 整個 H1 跳過、標題完全不翻。判定條件用 tag name 規範（語意層）而非站點 class，
+        // 屬於結構性通則（CLAUDE.md 硬規則 §8）。
         if (
+          !/^H[1-6]$/.test(el.tagName) &&
           el.querySelector('img, picture, video') &&
           Array.from(el.children).some(c => SK.CONTAINER_TAGS.has(c.tagName))
         ) {

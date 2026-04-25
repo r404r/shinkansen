@@ -207,7 +207,7 @@
 
   // ─── translateUnits ──────────────────────────────────
 
-  SK.translateUnits = async function translateUnits(units, { onProgress, glossary, signal, modelOverride } = {}) {
+  SK.translateUnits = async function translateUnits(units, { onProgress, glossary, signal, modelOverride, engine } = {}) {
     const total = units.length;
     const serialized = units.map(unit => {
       if (unit.kind === 'fragment') {
@@ -262,10 +262,14 @@
       const t0 = Date.now();
       SK.sendLog('info', 'translate', `batch ${batchIdx + 1}/${jobs.length} start`, { units: job.texts.length, chars: job.chars });
       try {
+        // v1.5.7: engine='openai-compat' 時走 TRANSLATE_BATCH_CUSTOM 走 lib/openai-compat.js；
+        // 預設 'gemini' 維持既有 TRANSLATE_BATCH 行為。
+        const messageType = engine === 'openai-compat' ? 'TRANSLATE_BATCH_CUSTOM' : 'TRANSLATE_BATCH';
         const response = await Promise.race([
           browser.runtime.sendMessage({
-            type: 'TRANSLATE_BATCH',
-            // v1.4.12: modelOverride 來自 preset 快速鍵，覆蓋全域 geminiConfig.model
+            type: messageType,
+            // v1.4.12: modelOverride 來自 preset 快速鍵，覆蓋全域 geminiConfig.model（僅 Gemini 路徑生效，
+            // OpenAI-compat 路徑以 customProvider 整組為準）
             payload: { texts: job.texts, glossary: glossary || null, modelOverride: modelOverride || null },
           }),
           new Promise((_, reject) =>
@@ -549,6 +553,8 @@
         glossary,
         signal: abortSignal,
         modelOverride: options.modelOverride || null,
+        // v1.5.7: engine='openai-compat' 走自訂 Provider 的 chat.completions endpoint
+        engine: options.engine || 'gemini',
         onProgress: (d, t, mismatch) => SK.showToast('loading', SK.t('cs_progress', labelPrefix, d, t), {
           progress: d / t,
           mismatch: !!mismatch,
@@ -650,6 +656,12 @@
             cacheHits: pageUsage.cacheHits,
             durationMs: Date.now() - translateStartTime,
             timestamp: Date.now(),
+            // v1.5.7: 帶上實際使用的 engine + model（preset modelOverride / openai-compat 引擎），
+            // 讓 background 端 LOG_USAGE handler 寫進紀錄的 model 欄位真實對應該批 API 走的模型。
+            // 之前缺這兩欄，handler 永遠 fallback 全域 geminiConfig.model，導致 Alt+A/S 切換不同
+            // preset 模型在用量紀錄看到同一個。
+            engine: options.engine || 'gemini',
+            model: options.modelOverride || null,
           },
         }).catch(() => {});
       }
@@ -1025,6 +1037,10 @@
     }
     if (preset.engine === 'google') {
       SK.translatePageGoogle({ slot, label: preset.label || null });
+    } else if (preset.engine === 'openai-compat') {
+      // v1.5.7: 自訂 OpenAI-compatible Provider。model / baseUrl / API Key 全部從
+      // settings.customProvider 拿（preset.model 略過），preset 只決定 engine + label。
+      SK.translatePage({ engine: 'openai-compat', slot, label: preset.label || null });
     } else {
       SK.translatePage({ modelOverride: preset.model || null, slot, label: preset.label || null });
     }
