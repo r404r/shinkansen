@@ -258,10 +258,10 @@
     }
 
     SK.sendLog('info', 'spa', `SPA observer rescan #${spaObserverRescanCount}`, { newUnits: newUnits.length });
-    SK.showToast('loading', `翻譯新內容… 0 / ${newUnits.length}`, { progress: 0, startTimer: true });
+    SK.showToast('loading', SK.t('cs_spa_progress', 0, newUnits.length), { progress: 0, startTimer: true });
     try {
       const { done, failures } = await SK.translateUnits(newUnits, {
-        onProgress: (d, t) => SK.showToast('loading', `翻譯新內容… ${d} / ${t}`, {
+        onProgress: (d, t) => SK.showToast('loading', SK.t('cs_spa_progress', d, t), {
           progress: d / t,
         }),
       });
@@ -270,14 +270,14 @@
         SK.sendLog('info', 'spa', `SPA observer rescan #${spaObserverRescanCount} done`, { done, failures: failures.length });
         const failedCount = failures.length;
         if (failedCount > 0) {
-          SK.showToast('error', `新內容翻譯部分失敗:${failedCount} / ${newUnits.length} 段`, { stopTimer: true });
+          SK.showToast('error', SK.t('cs_spa_partial_fail', failedCount, newUnits.length), { stopTimer: true });
         } else {
-          SK.showToast('success', `已翻譯 ${done} 段新內容`, { progress: 1, stopTimer: true, autoHideMs: 2000 });
+          SK.showToast('success', SK.t('cs_spa_complete', done), { progress: 1, stopTimer: true, autoHideMs: 2000 });
         }
       }
     } catch (err) {
       SK.sendLog('warn', 'spa', 'SPA observer rescan failed', { error: err.message });
-      SK.showToast('error', `新內容翻譯失敗:${err.message}`, { stopTimer: true });
+      SK.showToast('error', SK.t('cs_spa_fail', err.message), { stopTimer: true });
     }
   }
 

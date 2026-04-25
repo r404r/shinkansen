@@ -254,14 +254,14 @@
             payload: { texts: job.texts, glossary: glossary || null, modelOverride: modelOverride || null },
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`批次逾時（${BATCH_TIMEOUT_MS / 1000}s）`)), BATCH_TIMEOUT_MS)
+            setTimeout(() => reject(new Error(SK.t('cs_batch_timeout', BATCH_TIMEOUT_MS / 1000))), BATCH_TIMEOUT_MS)
           ),
         ]);
         const elapsed = Date.now() - t0;
         const cacheHit = response?.usage?.cacheHits || 0;
         const apiCalls = job.texts.length - cacheHit;
         SK.sendLog('info', 'translate', `batch ${batchIdx + 1}/${jobs.length} done`, { elapsed, cacheHits: cacheHit, apiCalls });
-        if (!response?.ok) throw new Error(response?.error || '未知錯誤');
+        if (!response?.ok) throw new Error(response?.error || SK.t('cs_unknown_error'));
         const translations = response.result;
         if (response.usage) {
           pageUsage.inputTokens += response.usage.inputTokens || 0;
@@ -326,7 +326,7 @@
       const mobileUrl = getGoogleDocsMobileBasicUrl();
       if (mobileUrl) {
         SK.sendLog('info', 'translate', 'Google Docs detected, redirecting to mobilebasic', { mobileUrl });
-        SK.showToast('loading', '偵測到 Google Docs，正在開啟可翻譯的閱讀版⋯');
+        SK.showToast('loading', SK.t('cs_google_docs_redirect'));
         browser.runtime.sendMessage({
           type: 'OPEN_GDOC_MOBILE',
           payload: { url: mobileUrl },
@@ -338,12 +338,12 @@
     if (STATE.translating) {
       SK.sendLog('info', 'translate', 'aborting in-progress translation');
       STATE.abortController?.abort();
-      SK.showToast('loading', '正在取消翻譯⋯');
+      SK.showToast('loading', SK.t('cs_cancelling'));
       return;
     }
 
     if (!navigator.onLine) {
-      SK.showToast('error', '目前處於離線狀態，無法翻譯。請確認網路連線後再試', { autoHideMs: 5000 });
+      SK.showToast('error', SK.t('cs_offline'), { autoHideMs: 5000 });
       return;
     }
 
@@ -364,7 +364,7 @@
           document.body;
         const pageSample = (contentRoot.innerText || '').slice(0, 2000);
         if (pageSample.length > 20 && SK.isTraditionalChinese(pageSample)) {
-          SK.showToast('error', '此頁面已是繁體中文，不需翻譯', { autoHideMs: 3000 });
+          SK.showToast('error', SK.t('cs_already_target_lang', SK.t('cs_target_lang_name')), { autoHideMs: 3000 });
           return;
         }
       }
@@ -377,7 +377,7 @@
 
     let units = SK.collectParagraphs();
     if (units.length === 0) {
-      SK.showToast('error', '找不到可翻譯的內容', { autoHideMs: 3000 });
+      SK.showToast('error', SK.t('cs_no_content'), { autoHideMs: 3000 });
       STATE.translating = false;
       STATE.abortController = null;
       return;
@@ -451,7 +451,7 @@
       SK.sendLog('info', 'glossary', 'glossary preprocessing', { batchCount, mode: batchCount > blockingThreshold ? 'blocking' : 'fire-and-forget', compressedChars: compressedText.length, hash: inputHash.slice(0, 8) });
 
       if (batchCount > blockingThreshold) {
-        SK.showToast('loading', '建立術語表⋯', { progress: 0, startTimer: true });
+        SK.showToast('loading', SK.t('cs_building_glossary'), { progress: 0, startTimer: true });
         try {
           const glossaryResult = await Promise.race([
             browser.runtime.sendMessage({
@@ -459,7 +459,7 @@
               payload: { compressedText, inputHash },
             }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('術語表逾時')), glossaryTimeout)
+              setTimeout(() => reject(new Error(SK.t('cs_glossary_timeout'))), glossaryTimeout)
             ),
           ]);
           if (glossaryResult?.ok && glossaryResult.glossary?.length > 0) {
@@ -491,7 +491,7 @@
       }
     }
 
-    SK.showToast('loading', `${labelPrefix}翻譯中… 0 / ${total}`, {
+    SK.showToast('loading', SK.t('cs_progress', labelPrefix, 0, total), {
       progress: 0,
       startTimer: true,
     });
@@ -511,7 +511,7 @@
         glossary,
         signal: abortSignal,
         modelOverride: options.modelOverride || null,
-        onProgress: (d, t, mismatch) => SK.showToast('loading', `${labelPrefix}翻譯中… ${d} / ${t}`, {
+        onProgress: (d, t, mismatch) => SK.showToast('loading', SK.t('cs_progress', labelPrefix, d, t), {
           progress: d / t,
           mismatch: !!mismatch,
         }),
@@ -527,14 +527,14 @@
           STATE.originalHTML.clear();
         }
         STATE.translated = false;
-        SK.showToast('success', '已取消翻譯', { progress: 1, stopTimer: true, autoHideMs: 2000 });
+        SK.showToast('success', SK.t('cs_cancelled'), { progress: 1, stopTimer: true, autoHideMs: 2000 });
         return;
       }
 
       if (failures.length) {
         const failedSegs = failures.reduce((s, f) => s + f.count, 0);
         const firstErr = failures[0].error;
-        SK.showToast('error', `翻譯部分失敗:${failedSegs} / ${total} 段失敗`, {
+        SK.showToast('error', SK.t('cs_partial_fail', failedSegs, total), {
           stopTimer: true,
           detail: firstErr.slice(0, 120),
         });
@@ -553,8 +553,8 @@
       if (!failures.length) {
         const totalTokens = pageUsage.inputTokens + pageUsage.outputTokens;
         const successMsg = truncatedCount > 0
-          ? `翻譯完成 （${total} 段，另有 ${truncatedCount} 段因頁面過長被略過）`
-          : `翻譯完成 （${total} 段）`;
+          ? SK.t('cs_complete_truncated', total, truncatedCount)
+          : SK.t('cs_complete', total);
         let detail;
         if (totalTokens > 0) {
           const billedTotalTokens = pageUsage.billedInputTokens + pageUsage.outputTokens;
@@ -570,7 +570,7 @@
           }
           detail = `${line1}\n${line2}`;
         } else if (pageUsage.cacheHits === total) {
-          detail = '全部快取命中 · 本次未計費';
+          detail = SK.t('cs_all_cache_hit');
         }
         SK.sendLog('info', 'translate', 'page translation usage', {
           segments: total,
@@ -615,8 +615,8 @@
 
       if (rpdWarning) {
         setTimeout(() => {
-          SK.showToast('error', '提醒：今日 API 請求次數已超過預算上限', {
-            detail: '翻譯仍可正常使用，但請留意用量。每日計數於太平洋時間午夜重置（約台灣時間下午 3 點）',
+          SK.showToast('error', SK.t('cs_rpd_warning_title'), {
+            detail: SK.t('cs_rpd_warning_body'),
             autoHideMs: 6000,
           });
         }, 1500);
@@ -627,7 +627,7 @@
     } catch (err) {
       SK.sendLog('error', 'translate', 'translatePage error', { error: err.message || String(err) });
       if (!abortSignal.aborted) {
-        SK.showToast('error', `翻譯失敗:${err.message}`, { stopTimer: true });
+        SK.showToast('error', SK.t('cs_translate_fail', err.message), { stopTimer: true });
       }
     } finally {
       STATE.translating = false;
@@ -654,7 +654,7 @@
     browser.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(() => {});
     // v1.4.11: 清除跨 tab sticky（只影響當前 tab，不影響樹中其他 tab）
     browser.runtime.sendMessage({ type: 'STICKY_CLEAR' }).catch(() => {});
-    SK.showToast('success', '已還原原文', { progress: 1, autoHideMs: 2000 });
+    SK.showToast('success', SK.t('cs_restored'), { progress: 1, autoHideMs: 2000 });
   }
 
   // ─── v1.4.0: Google Translate 批次送出 ──────────────────────
@@ -699,10 +699,10 @@
             payload: { texts: job.texts },
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('批次逾時（90s）')), BATCH_TIMEOUT_MS)
+            setTimeout(() => reject(new Error(SK.t('cs_batch_timeout', 90))), BATCH_TIMEOUT_MS)
           ),
         ]);
-        if (!response?.ok) throw new Error(response?.error || '未知錯誤');
+        if (!response?.ok) throw new Error(response?.error || SK.t('cs_unknown_error'));
         totalChars += response.usage?.chars || 0;
         const translations = response.result;
         translations.forEach((tr, j) => {
@@ -744,7 +744,7 @@
     // 若正在翻譯中（任何引擎）→ 中止
     if (STATE.translating) {
       STATE.abortController?.abort();
-      SK.showToast('loading', '正在取消翻譯⋯');
+      SK.showToast('loading', SK.t('cs_cancelling'));
       return;
     }
 
@@ -754,7 +754,7 @@
     }
 
     if (!navigator.onLine) {
-      SK.showToast('error', '目前處於離線狀態，無法翻譯。請確認網路連線後再試', { autoHideMs: 5000 });
+      SK.showToast('error', SK.t('cs_offline'), { autoHideMs: 5000 });
       return;
     }
 
@@ -771,7 +771,7 @@
           document.body;
         const pageSample = (contentRoot.innerText || '').slice(0, 2000);
         if (pageSample.length > 20 && SK.isTraditionalChinese(pageSample)) {
-          SK.showToast('error', '此頁面已是繁體中文，不需翻譯', { autoHideMs: 3000 });
+          SK.showToast('error', SK.t('cs_already_target_lang', SK.t('cs_target_lang_name')), { autoHideMs: 3000 });
           return;
         }
       }
@@ -784,7 +784,7 @@
 
     let units = SK.collectParagraphs();
     if (units.length === 0) {
-      SK.showToast('error', '找不到可翻譯的內容', { autoHideMs: 3000 });
+      SK.showToast('error', SK.t('cs_no_content'), { autoHideMs: 3000 });
       STATE.translating = false;
       STATE.abortController = null;
       return;
@@ -801,12 +801,12 @@
     }
     const total = units.length;
 
-    SK.showToast('loading', `${labelPrefix}Google 翻譯中… 0 / ${total}`, { progress: 0, startTimer: true });
+    SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, 0, total), { progress: 0, startTimer: true });
 
     try {
       const { done, failures, chars } = await SK.translateUnitsGoogle(units, {
         signal: abortSignal,
-        onProgress: (d, t) => SK.showToast('loading', `${labelPrefix}Google 翻譯中… ${d} / ${t}`, {
+        onProgress: (d, t) => SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, d, t), {
           progress: d / t,
         }),
       });
@@ -820,13 +820,13 @@
           STATE.originalHTML.clear();
         }
         STATE.translated = false;
-        SK.showToast('success', '已取消翻譯', { progress: 1, stopTimer: true, autoHideMs: 2000 });
+        SK.showToast('success', SK.t('cs_cancelled'), { progress: 1, stopTimer: true, autoHideMs: 2000 });
         return;
       }
 
       if (failures.length) {
         const failedSegs = failures.reduce((s, f) => s + f.count, 0);
-        SK.showToast('error', `翻譯部分失敗：${failedSegs} / ${total} 段失敗`, {
+        SK.showToast('error', SK.t('cs_partial_fail', failedSegs, total), {
           stopTimer: true,
           detail: failures[0].error.slice(0, 120),
         });
@@ -844,12 +844,12 @@
 
       if (!failures.length) {
         const successMsg = truncatedCount > 0
-          ? `Google 翻譯完成（${total} 段，另有 ${truncatedCount} 段因頁面過長被略過）`
-          : `Google 翻譯完成（${total} 段）`;
+          ? SK.t('cs_google_complete_truncated', total, truncatedCount)
+          : SK.t('cs_google_complete', total);
         SK.showToast('success', successMsg, {
           progress: 1,
           stopTimer: true,
-          detail: `${chars.toLocaleString()} 字元 · 免費`,
+          detail: SK.t('cs_google_chars', chars.toLocaleString()),
         });
       }
 
@@ -863,7 +863,7 @@
     } catch (err) {
       SK.sendLog('error', 'translate', 'translatePageGoogle error', { error: err.message || String(err) });
       if (!abortSignal.aborted) {
-        SK.showToast('error', `翻譯失敗：${err.message}`, { stopTimer: true });
+        SK.showToast('error', SK.t('cs_translate_fail', err.message), { stopTimer: true });
       }
     } finally {
       STATE.translating = false;
@@ -911,7 +911,7 @@
     if (STATE.translating) {
       SK.sendLog('info', 'translate', 'aborting in-progress translation (preset key)');
       STATE.abortController?.abort();
-      SK.showToast('loading', '正在取消翻譯⋯');
+      SK.showToast('loading', SK.t('cs_cancelling'));
       return;
     }
     // 閒置：讀 preset 定義。若 storage 還沒寫入（例如從 v1.4.11 升級第一次按快捷鍵）
@@ -1156,7 +1156,7 @@
       if (await SK.isDomainWhitelisted()) {
         SK.sendLog('info', 'system', 'domain in auto-translate list, translating on load', { url: location.href });
         // v1.4.16: toast 前綴顯示「[自動翻譯]」讓使用者知道本次是 whitelist 觸發的，不是自己按的
-        SK.translatePage({ label: '自動翻譯' });
+        SK.translatePage({ label: SK.t('cs_auto_translate') });
       }
     } catch (err) {
       SK.sendLog('warn', 'system', 'auto-translate check failed on load', { error: err.message });

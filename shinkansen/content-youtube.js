@@ -53,17 +53,17 @@
     const _curWinTranslating = YT.translatingWindows?.has(_curWinStart);
     const _curWinDone        = YT.translatedWindows?.has(_curWinStart);
     const bufStr  = (_curWinTranslating && !_curWinDone)
-      ? '翻譯中…'
+      ? SK.t('yt_translating')
       : bufMs >= 0
         ? `+${(bufMs / 1000).toFixed(1)}s ✓`
-        : `${(bufMs / 1000).toFixed(1)}s ⚠️ 落後`;
+        : SK.t('yt_behind', (bufMs / 1000).toFixed(1));
     // v1.2.43: 各批次耗時，格式如「5230 / 7110 / 16770ms」，進行中的批次顯示「…」
     const batchArr = YT.batchApiMs || [];
     const batchStr = batchArr.length === 0
       ? (YT.lastApiMs > 0 ? `${YT.lastApiMs}ms` : '—')
       : batchArr.map(t => t > 0 ? `${t}` : '…').join(' / ') + 'ms';
     _debugEl.textContent = [
-      '🔍 Shinkansen 字幕 Debug',
+      SK.t('yt_debug_title'),
       `active      : ${YT.active}`,
       `translating : ${YT.translatingWindows.size > 0}（${YT.translatingWindows.size} 視窗）`,
       `speed       : ${speed}`,
@@ -356,7 +356,7 @@
       const windowSizeMs = (config.windowSizeS || 30) * 1000;
       const windowStartMs = Math.floor(currentMs / windowSizeMs) * windowSizeMs;
       _debugUpdate(`XHR 攔截 ${segments.length} 條字幕（至 ${Math.round(lastMs / 1000)}s），開始翻譯`);
-      showCaptionStatus('翻譯中…');
+      showCaptionStatus(SK.t('yt_translating'));
       translateWindowFrom(windowStartMs);
     }
   });
@@ -532,7 +532,7 @@
           }).then(res => {
             const elapsed = Date.now() - _t0;
             _batchApiMs[b] = elapsed;
-            if (!res?.ok) throw new Error(res?.error || '翻譯失敗');
+            if (!res?.ok) throw new Error(res?.error || SK.t('yt_translate_fail'));
             _logWindowUsage(batchUnits.length, res.usage);
             for (let j = 0; j < batchUnits.length; j++) {
               const unit     = batchUnits[j];
@@ -705,7 +705,7 @@
     // v1.2.57: 若跳到尚未翻譯的視窗，立刻顯示「翻譯中…」提示
     // （translateWindowFrom 內部有防重入，已翻視窗會直接 return，不需要提示）
     if (!YT.translatedWindows.has(newWindowStart)) {
-      showCaptionStatus('翻譯中…');
+      showCaptionStatus(SK.t('yt_translating'));
     }
     // v1.2.54: translateWindowFrom 內部用 translatingWindows Set 防重入，無需外部 guard
     translateWindowFrom(newWindowStart);
@@ -842,7 +842,7 @@
         type: 'TRANSLATE_SUBTITLE_BATCH',
         payload: { texts, glossary: null },
       });
-      if (!res?.ok) throw new Error(res?.error || '翻譯失敗');
+      if (!res?.ok) throw new Error(res?.error || SK.t('yt_translate_fail'));
       // v1.2.39: 累積並記錄 on-the-fly 批次用量
       _logWindowUsage(texts.length, res.usage);
 
@@ -980,7 +980,7 @@
     // 切換：再按一次還原
     if (YT.active) {
       stopYouTubeTranslation();
-      SK.showToast('success', '已還原原文字幕');
+      SK.showToast('success', SK.t('yt_restored'));
       setTimeout(() => SK.hideToast(), 2000);
       return;
     }
@@ -1008,7 +1008,7 @@
     attachVideoListener();
 
     const config = await getYtConfig();
-    _debugUpdate('字幕翻譯已啟動，等待 CC 字幕資料…');
+    _debugUpdate(SK.t('yt_waiting_cc'));
 
     // observer 提前啟動：captionMap 尚空時 cache miss → 字幕保持原文
     // 待 shinkansen-yt-captions 填入 rawSegments 後，translateWindowFrom 寫入 captionMap，字幕瞬間替換
@@ -1016,8 +1016,8 @@
 
     if (YT.rawSegments.length > 0) {
       // 已有快取（interceptor 在 activate 之前就攔截到了）→ 直接開始翻譯
-      _debugUpdate(`已有 ${YT.rawSegments.length} 條字幕，開始翻譯`);
-      showCaptionStatus('翻譯中…');
+      _debugUpdate(SK.t('yt_starting', YT.rawSegments.length));
+      showCaptionStatus(SK.t('yt_translating'));
       const video = document.querySelector('video');
       const currentMs = video ? Math.floor(video.currentTime * 1000) : 0;
       const windowSizeMs = (config.windowSizeS || 30) * 1000;
@@ -1027,7 +1027,7 @@
     } else {
       // 尚未攔截到字幕：CC 可能還沒開，或播放器尚未發出 XHR
       // → shinkansen-yt-captions 事件的 handler 會在字幕到來時接手翻譯
-      showCaptionStatus('等待字幕資料…');
+      showCaptionStatus(SK.t('yt_waiting_data'));
 
       // 1 秒後若仍無 XHR → 主動 toggle CC 讓播放器重新抓字幕
       setTimeout(() => {
@@ -1045,7 +1045,7 @@
           } else {
             // captionMap 也是空的 → CC 可能真的沒開
             hideCaptionStatus();
-            SK.showToast('success', '字幕翻譯已開啟。請開啟 YouTube 字幕（CC），翻譯將自動開始。');
+            SK.showToast('success', SK.t('yt_activated'));
           }
         }
       }, 5000);

@@ -103,14 +103,14 @@
   const msg = document.createElement('span');
   msg.className = 'msg';
   msg.id = 'msg';
-  msg.textContent = '翻譯中…';
+  msg.textContent = SK.t('cs_translating');
   const timer = document.createElement('span');
   timer.className = 'timer';
   timer.id = 'timer';
   const close = document.createElement('button');
   close.className = 'close';
   close.id = 'close';
-  close.title = '關閉';
+  close.title = SK.t('cs_close');
   close.textContent = '×';
   const detail = document.createElement('div');
   detail.className = 'detail';
@@ -183,9 +183,9 @@
 
   SK.formatElapsed = function formatElapsed(ms) {
     const s = Math.floor(ms / 1000);
-    if (s < 60) return s + ' 秒';
+    if (s < 60) return s + SK.t('cs_seconds');
     const m = Math.floor(s / 60);
-    return m + ' 分 ' + (s % 60) + ' 秒';
+    return m + SK.t('cs_minutes') + (s % 60) + SK.t('cs_seconds');
   };
 
   SK.formatTokens = function formatTokens(n) {
@@ -235,7 +235,7 @@
     if (opts.startTimer) {
       toastStartTime = Date.now();
       clearInterval(toastTickHandle);
-      toastTimerEl.textContent = '0 秒';
+      toastTimerEl.textContent = SK.t('cs_zero_seconds');
       toastTickHandle = setInterval(() => {
         toastTimerEl.textContent = SK.formatElapsed(Date.now() - toastStartTime);
       }, 500);
