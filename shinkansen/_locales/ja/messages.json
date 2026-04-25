@@ -1,0 +1,9 @@
+{
+  "extName": {
+    "message": "Shinkansen",
+    "description": "拡張機能名"
+  },
+  "extDescription": {
+    "message": "高速でスムーズなウェブページ翻訳拡張機能。Google Gemini を使用。"
+  }
+}

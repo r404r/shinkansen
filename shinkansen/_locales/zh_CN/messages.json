@@ -1,0 +1,9 @@
+{
+  "extName": {
+    "message": "Shinkansen",
+    "description": "扩展名称"
+  },
+  "extDescription": {
+    "message": "快速、流畅的网页双语翻译扩展，使用 Google Gemini。"
+  }
+}
