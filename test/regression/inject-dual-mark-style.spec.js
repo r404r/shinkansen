@@ -48,6 +48,8 @@ test('dual-mark-style: 4 種 mark 各自 attribute + 對應 CSS 生效', async (
         borderLeftStyle: cs.borderLeftStyle,
         borderLeftWidth: cs.borderLeftWidth,
         borderBottomStyle: cs.borderBottomStyle,
+        textDecorationLine: cs.textDecorationLine,
+        textDecorationStyle: cs.textDecorationStyle,
         display: cs.display,
       };
     }
@@ -72,14 +74,16 @@ test('dual-mark-style: 4 種 mark 各自 attribute + 對應 CSS 生效', async (
   expect(after.bar?.borderLeftStyle).toBe('solid');
   expect(after.bar?.borderLeftWidth).toBe('2px');
 
-  // dashed：底線 dashed
-  expect(after.dashed?.borderBottomStyle).toBe('dashed');
+  // dashed：v1.5.3 起改為波浪底線 wavy（從 v1.5.0 的 border-bottom dashed 換）
+  expect(after.dashed?.textDecorationLine).toBe('underline');
+  expect(after.dashed?.textDecorationStyle).toBe('wavy');
 
   // none：背景透明 + 無左邊條 + 無底線（border-style 預設 'none' 或空）
   // rgba(0, 0, 0, 0) 是 transparent；'none' 是 border 預設
   expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(after.none?.bgColor);
   expect(after.none?.borderLeftStyle).toBe('none');
   expect(after.none?.borderBottomStyle).toBe('none');
+  expect(after.none?.textDecorationLine).toBe('none');
 
   await page.close();
 });

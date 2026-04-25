@@ -79,5 +79,20 @@
       <span id="bbc-byline-span">Inside Health presenter, BBC Radio 4</span>
     </div>
   </div>
+
+  <!-- v1.5.3: 原段落有水平 layout（margin-left / padding-left / max-width）的 case。
+       真實案例：macstories.net Newsletter 的 <p> 有 margin-left 把段落擠到中段，
+       wrapper 是 sibling 不繼承，譯文拉滿整行不對齊。 -->
+  <style>
+    #layout-source {
+      margin-left: 200px;
+      padding-left: 30px;
+      padding-right: 40px;
+      max-width: 600px;
+    }
+  </style>
+  <div id="layout-container">
+    <p id="layout-source">Paragraph with horizontal layout offset.</p>
+  </div>
 </body>
 </html>

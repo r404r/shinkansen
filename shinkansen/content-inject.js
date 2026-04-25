@@ -506,6 +506,22 @@
     wrapper.setAttribute('data-sk-mark', mark);
     wrapper.appendChild(inner);
 
+    // v1.5.3: copy 原段落的水平 layout 屬性到 wrapper。
+    // 真實案例（macstories.net Newsletter）：原 <p> 有 margin-left / padding-left
+    // 把段落擠到頁面中段，wrapper 是 sibling、不繼承這些屬性，所以譯文拉滿整行
+    // 跟原 <p> 不對齊。typography copy（v1.5.2）只搬字型相關 6 屬性，layout 沒搬。
+    // 只 copy 水平方向：保留 wrapper 自有的「上下間距」（margin-top:0.25em CSS rule）
+    // 與「不固定 width」（讓 wrapper 隨 parent 撐開），避免動到段間距與整體寬度。
+    const winLayout = original.ownerDocument?.defaultView;
+    const csLayout = winLayout?.getComputedStyle?.(original);
+    if (csLayout) {
+      if (csLayout.marginLeft)   wrapper.style.marginLeft   = csLayout.marginLeft;
+      if (csLayout.marginRight)  wrapper.style.marginRight  = csLayout.marginRight;
+      if (csLayout.paddingLeft)  wrapper.style.paddingLeft  = csLayout.paddingLeft;
+      if (csLayout.paddingRight) wrapper.style.paddingRight = csLayout.paddingRight;
+      if (csLayout.maxWidth && csLayout.maxWidth !== 'none') wrapper.style.maxWidth = csLayout.maxWidth;
+    }
+
     let insertMode;
     if (tag === 'LI' || tag === 'TD' || tag === 'TH') {
       original.appendChild(wrapper);
@@ -549,11 +565,14 @@
     const style = document.createElement('style');
     style.id = 'shinkansen-dual-style';
     // 樣式設計原則：display:block 確保 wrapper 自成一行；mark 用 attribute selector 區分
+    // v1.5.3: dashed 從「底部虛線」（block border-bottom 只在最後一行出現、跟連結
+    // 底線易混淆）改為「波浪底線」（每行字底下都有，跟連結直線底線視覺區分）。
+    // mark value 保留 'dashed' 不改名，避免 storage migration 問題；只改視覺實作。
     style.textContent =
       `${tag} { display: block; margin-top: 0.25em; }\n` +
       `${tag}[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 2px 4px; }\n` +
       `${tag}[data-sk-mark="bar"]    { border-left: 2px solid #9CA3AF; padding-left: 8px; }\n` +
-      `${tag}[data-sk-mark="dashed"] { border-bottom: 1px dashed #9CA3AF; }\n` +
+      `${tag}[data-sk-mark="dashed"] { text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px; }\n` +
       `${tag}[data-sk-mark="none"]   {}\n`;
     (document.head || document.documentElement).appendChild(style);
   };

@@ -657,10 +657,14 @@
     SK.stopSpaObserver();
 
     // v1.5.0: dual 模式還原——只移除 wrapper，原文未動所以不需 innerHTML 還原。
+    // v1.5.3: 改呼叫 SK.removeDualWrappers()——它同時清除 wrapper 與原段落上的
+    // data-shinkansen-dual-source attribute。先前手寫 querySelectorAll 只刪 wrapper、
+    // 沒清 attribute，導致下一輪 translatePage 時 injectDual 入口的
+    // `if (hasAttribute('data-shinkansen-dual-source')) return;` 命中所有段落，
+    // 全部早期 return，使用者「按 Opt+A 翻譯 → 再按還原 → 再按只看到原文」。
     // single 模式維持原本反向覆寫 originalHTML 邏輯。
     if (STATE.translatedMode === 'dual') {
-      const tag = SK.TRANSLATION_WRAPPER_TAG;
-      document.querySelectorAll(tag).forEach(n => n.remove());
+      SK.removeDualWrappers?.();
       // dual 也可能有少數 fallback 元素走了 single 路徑（fragment unit 不支援 dual），
       // 一併還原。
       STATE.originalHTML.forEach((originalHTML, el) => {
@@ -1147,6 +1151,12 @@
       STATE.translationCache?.clear?.();
       STATE.translated = false;
       STATE.translatedMode = null;
+    },
+    // v1.5.3: 暴露真正的 restorePage 給 spec 直接測（不走 testRestoreDual 簡化版）。
+    // 用途：驗 restorePage 的 dual 分支會清乾淨原段落上的 data-shinkansen-dual-source
+    // attribute，避免下一輪 translatePage 時 injectDual 入口因 attribute 殘留早期 return。
+    testRestorePage() {
+      restorePage();
     },
     selectBestSlotOccurrences(text) {
       return SK.selectBestSlotOccurrences(text);

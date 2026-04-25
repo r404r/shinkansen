@@ -7,6 +7,16 @@
 
 ## v1.5.x
 
+**v1.5.3** — 雙語對照模式三項小修。
+
+  1. **wrapper 未繼承原段落水平 layout**：Jimmy 在 macstories.net Newsletter（https://www.macstories.net/club/macstories-weekly-issue-510/）觀察到原 `<p>` 有 `margin-left` 把段落擠到頁面中段，但譯文 wrapper 從左邊拉滿整行，視覺不對齊。根因：v1.5.2 typography copy 只搬字型相關 6 屬性（font-family/size/weight/line-height/letter-spacing/color），layout 屬性沒搬。修法（`content-inject.js` `injectDual`）：建立 wrapper 後從 originalEl computed style 抓水平 layout 屬性 inline 寫到 wrapper：`marginLeft / marginRight / paddingLeft / paddingRight / maxWidth`。**不**動垂直方向（保留 wrapper 自有的 `margin-top: 0.25em` 段間距與不固定 width）。新增 `inject-dual-horizontal-layout.spec.js`。
+
+  2. **restorePage 漏清 attribute → 第二次翻譯只看到原文**：Jimmy 觀察「Opt+A 翻譯（雙語）→ Opt+A 還原 → Opt+A 再翻譯」第三次只看到原文不會進入雙語對照。根因：`restorePage` 的 dual 分支手寫 `querySelectorAll(tag).forEach(n => n.remove())` 只刪 wrapper，**沒清**原段落上的 `data-shinkansen-dual-source` attribute。第二次 `translatePage` → `injectDual` 入口 `if (original.hasAttribute('data-shinkansen-dual-source')) return;` 命中所有段落 → 全部早期 return → 沒注入。`testRestoreDual` debug API（呼叫 `SK.removeDualWrappers`，正確清 attribute）跟 `restorePage` 邏輯不一致，所以既有 `inject-dual-restore.spec.js` 用 testRestoreDual 過了但沒覆蓋到實際 bug。修法（`content.js`）：dual 分支改呼叫 `SK.removeDualWrappers()`，邏輯與 testRestoreDual 統一；新加 `testRestorePage` debug API 暴露真正的 restorePage 給 spec 測。新增 `restore-page-clears-dual-attr.spec.js`（驗：注入 → restorePage → attribute 清空 → 第二次注入應成功）。
+
+  3. **`dashed` mark 改為波浪底線**：原本「虛線底線」（`border-bottom: 1px dashed`）視覺問題：(a) block 的 border-bottom 只在最後一行出現，看起來像「結束分隔線」而不是「整段標記」；(b) 跟連結直線底線易混淆。改為**波浪底線**：`text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px;`——每行字底下都有，跟連結直線視覺區分。`mark` value 仍叫 `dashed` 不改名（避免破 storage migration），只改視覺實作 + UI label（options.html「虛線底線」→「波浪底線」、options.css 預覽 demo 同步、storage.js 註解）。`inject-dual-mark-style.spec.js` 斷言從 `borderBottomStyle === 'dashed'` 改為 `textDecorationStyle === 'wavy'`。
+
+  Full `npm test` 146 → 148 全綠（含 2 條新 spec + mark-style spec 斷言更新）。
+
 **v1.5.2** — 修正 v1.5.0 雙語對照模式四個獨立問題（全部由 Jimmy 在 https://www.bbc.com/news/articles/clyepyy82kxo 觀察到），並改善測試環境效能。
 
   1. **譯文 typography 不繼承**：`<shinkansen-translation>` wrapper 在 block 段落情況走 `insertAdjacentElement('afterend')` 插在原段落「後面」當 sibling，wrapper 內的 inner 不在原 `<p>` 裡——無法繼承 BBC 等網站設在 `p` selector 上的 `font-family / font-size / font-weight / line-height / letter-spacing / color`，視覺上譯文字距 / 行距比原段落緊。修法（`content-inject.js` `buildDualInner`）：所有 dual 注入路徑的 inner 在 build 時用 `getComputedStyle(originalEl)` 抓 6 個 typography 屬性，inline 寫到 inner 上。新增 `inject-dual-typography.spec.js`。

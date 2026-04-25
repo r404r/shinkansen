@@ -689,7 +689,7 @@ shinkansen-translation {
 }
 shinkansen-translation[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 2px 4px; }
 shinkansen-translation[data-sk-mark="bar"]    { border-left: 2px solid #9CA3AF; padding-left: 8px; }
-shinkansen-translation[data-sk-mark="dashed"] { border-bottom: 1px dashed #9CA3AF; }
+shinkansen-translation[data-sk-mark="dashed"] { text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px; }
 shinkansen-translation[data-sk-mark="none"]   {}
 
 .dual-mark-options {
