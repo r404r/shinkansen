@@ -152,6 +152,7 @@ const zhTW = {
   cs_google_complete: 'Google 翻譯完成（{0} 段）',
   cs_google_chars: '{0} 字元 · 免費',
   cs_auto_translate: '自動翻譯',
+  cs_selection: '選取翻譯',
   cs_target_lang_name: '繁體中文',
   // SPA
   cs_spa_progress: '翻譯新內容… {0} / {1}',
@@ -498,6 +499,7 @@ const zhCN = {
   cs_google_complete: 'Google 翻译完成（{0} 段）',
   cs_google_chars: '{0} 字符 · 免费',
   cs_auto_translate: '自动翻译',
+  cs_selection: '选区翻译',
   cs_target_lang_name: '简体中文',
   cs_spa_progress: '翻译新内容… {0} / {1}',
   cs_spa_partial_fail: '新内容翻译部分失败：{0} / {1} 段',
@@ -837,6 +839,7 @@ const ja = {
   cs_google_complete: 'Google 翻訳完了（{0} 段）',
   cs_google_chars: '{0} 文字・無料',
   cs_auto_translate: '自動翻訳',
+  cs_selection: '選択範囲を翻訳',
   cs_target_lang_name: '日本語',
   cs_spa_progress: '新しいコンテンツを翻訳中… {0} / {1}',
   cs_spa_partial_fail: '新コンテンツの翻訳が部分的に失敗：{0} / {1} 段',

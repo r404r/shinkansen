@@ -188,6 +188,23 @@
     return jobs;
   }
 
+  // ─── 選區過濾 ────────────────────────────────────────
+  // 檢查是否有選取文字。若有，從 units 中只保留與選區有交集的單元。
+  function filterUnitsBySelection(units) {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null; // 無選區
+    const range = sel.getRangeAt(0);
+    const filtered = units.filter(unit => {
+      if (unit.kind === 'fragment') {
+        // fragment: 檢查 startNode 和 endNode 是否與選區交集
+        return range.intersectsNode(unit.startNode) || range.intersectsNode(unit.endNode);
+      }
+      // element: 檢查整個元素是否與選區交集
+      return range.intersectsNode(unit.el);
+    });
+    return filtered.length > 0 ? filtered : null;
+  }
+
   // ─── translateUnits ──────────────────────────────────
 
   SK.translateUnits = async function translateUnits(units, { onProgress, glossary, signal, modelOverride } = {}) {
@@ -313,7 +330,8 @@
     // v1.4.12: options.modelOverride / options.slot 由 preset 快速鍵注入，
     // modelOverride 覆蓋 geminiConfig.model，slot 用於 STICKY_SET。
     // v1.4.13: options.label 由 preset 傳入，在 loading toast 顯示讓使用者知道目前哪個 preset 在跑。
-    const labelPrefix = options.label ? `[${options.label}] ` : '';
+    let labelPrefix = options.label ? `[${options.label}] ` : '';
+    if (selectionMode) labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;
 
     if (STATE.translated) {
       restorePage();
@@ -387,6 +405,15 @@
     const abortSignal = STATE.abortController.signal;
 
     let units = SK.collectParagraphs();
+
+    // v1.6: 選區翻譯——若有選取文字，只翻譯選區內的段落
+    let selectionMode = false;
+    const selFiltered = filterUnitsBySelection(units);
+    if (selFiltered) {
+      units = selFiltered;
+      selectionMode = true;
+    }
+
     if (units.length === 0) {
       SK.showToast('error', SK.t('cs_no_content'), { autoHideMs: 3000 });
       STATE.translating = false;
@@ -765,7 +792,7 @@
   SK.translatePageGoogle = async function translatePageGoogle(gtOptions = {}) {
     // v1.4.12: gtOptions.slot 由 preset 快速鍵注入，供 STICKY_SET
     // v1.4.13: gtOptions.label 顯示於 loading toast
-    const labelPrefix = gtOptions.label ? `[${gtOptions.label}] ` : '';
+    let labelPrefix = gtOptions.label ? `[${gtOptions.label}] ` : '';
     // 若同一引擎已翻譯 → 還原（toggle）
     if (STATE.translated && STATE.translatedBy === 'google') {
       restorePage();
@@ -824,6 +851,15 @@
     const abortSignal = STATE.abortController.signal;
 
     let units = SK.collectParagraphs();
+
+    // v1.6: 選區翻譯——若有選取文字，只翻譯選區內的段落
+    let selectionMode = false;
+    const selFiltered = filterUnitsBySelection(units);
+    if (selFiltered) {
+      units = selFiltered;
+      selectionMode = true;
+    }
+
     if (units.length === 0) {
       SK.showToast('error', SK.t('cs_no_content'), { autoHideMs: 3000 });
       STATE.translating = false;
@@ -841,6 +877,7 @@
       units = units.slice(0, maxTotalUnits);
     }
     const total = units.length;
+    if (selectionMode) labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;
 
     SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, 0, total), { progress: 0, startTimer: true });
 
