@@ -4,9 +4,8 @@
 > regression spec 還沒寫」(對應 CLAUDE.md 硬規則 9 的路徑 B fallback)。
 >
 > **誰會讀**：
->   - **Cowork 端** 每次新對話會檢查本檔,若非空必須在第一句話提醒 Jimmy
->     (CLAUDE.md「開始新對話時的標準動作」第 4 步)
->   - **Claude Code 端** 跑完 `npm test` 全綠後若本檔非空,必須主動提醒
+>   - **Claude Code** 每次新對話會檢查本檔,若非空必須在第一句話提醒 Jimmy
+>     (CLAUDE.md「開始新對話時的標準動作」第 4 步);跑完 `npm test` 全綠後若本檔非空,也必須主動提醒
 >   - **Jimmy** 看到提醒後可以決定要立刻清,還是先繼續手上的事
 >
 > **怎麼清**：見 `測試流程說明.md` 的「指令 G:清 pending regression queue」。
