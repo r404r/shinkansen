@@ -2,9 +2,13 @@
 
 import { browser } from '../lib/compat.js';
 import { formatBytes, formatTokens, formatUSD } from '../lib/format.js';
+import { t, initLocale, applyLocale } from '../lib/i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
+
+// v1.5: 多語言初始化
+initLocale().then(() => applyLocale(document));
 
 async function refreshUsageInfo() {
   try {
@@ -12,12 +16,12 @@ async function refreshUsageInfo() {
     if (resp?.ok) {
       const totalTok = (resp.totalInputTokens || 0) + (resp.totalOutputTokens || 0);
       $('usage-info').textContent =
-        `累計：${formatUSD(resp.totalCostUSD || 0)} / ${formatTokens(totalTok)} tokens`;
+        t('popup_cost_total', formatUSD(resp.totalCostUSD || 0), formatTokens(totalTok));
     } else {
-      $('usage-info').textContent = '累計：讀取失敗';
+      $('usage-info').textContent = t('popup_cost_fail');
     }
   } catch {
-    $('usage-info').textContent = '累計：無法讀取';
+    $('usage-info').textContent = t('popup_cost_error');
   }
 }
 
@@ -26,12 +30,12 @@ async function refreshCacheInfo() {
     const resp = await browser.runtime.sendMessage({ type: 'CACHE_STATS' });
     if (resp?.ok) {
       $('cache-info').textContent =
-        `快取：${resp.count} 段 / ${formatBytes(resp.bytes)}`;
+        t('popup_cache_info', resp.count, formatBytes(resp.bytes));
     } else {
-      $('cache-info').textContent = '快取：讀取失敗';
+      $('cache-info').textContent = t('popup_cache_fail');
     }
   } catch {
-    $('cache-info').textContent = '快取：無法讀取';
+    $('cache-info').textContent = t('popup_cache_error');
   }
 }
 
@@ -44,20 +48,17 @@ async function refreshTranslateButton() {
     if (!tab?.id) return;
     const resp = await browser.tabs.sendMessage(tab.id, { type: 'GET_STATE' });
     if (resp?.translated) {
-      btn.textContent = '顯示原文';
+      btn.textContent = t('popup_show_original');
       btn.dataset.mode = 'restore';
-      // v1.0.3: 已翻譯時顯示編輯按鈕
       editBtn.hidden = false;
-      editBtn.textContent = resp?.editing ? '結束編輯' : '編輯譯文';
+      editBtn.textContent = resp?.editing ? t('popup_end_edit') : t('popup_edit');
     } else {
-      btn.textContent = '翻譯本頁';
+      btn.textContent = t('popup_translate');
       btn.dataset.mode = 'translate';
       editBtn.hidden = true;
     }
   } catch {
-    // 頁面尚未注入 content script (例如 chrome:// 頁、剛 reload extension)
-    // 維持預設「翻譯本頁」即可
-    btn.textContent = '翻譯本頁';
+    btn.textContent = t('popup_translate');
     btn.dataset.mode = 'translate';
     editBtn.hidden = true;
   }
@@ -74,10 +75,9 @@ async function refreshShortcutHint() {
     const cmd = cmds.find((c) => c.name === 'translate-preset-2');
     const shortcut = cmd?.shortcut?.trim();
     if (shortcut) {
-      el.textContent = `${shortcut} 快速切換`;
+      el.textContent = t('popup_shortcut_hint', shortcut);
     } else {
-      // 使用者可能在 chrome://extensions/shortcuts 清掉了快捷鍵
-      el.textContent = '未設定快捷鍵';
+      el.textContent = t('popup_shortcut_unset');
     }
   } catch {
     // browser.commands 不可用時靜默留白，不要顯示錯誤
@@ -119,7 +119,7 @@ async function init() {
   } catch { /* 非 YouTube 頁面，保持 hidden */ }
 
   if (!apiKey) {
-    statusEl.textContent = '狀態：⚠ 尚未設定 API Key';
+    statusEl.textContent = t('popup_status_no_api_key');
     statusEl.style.color = '#ff3b30';
   }
 
@@ -132,13 +132,13 @@ $('translate-btn').addEventListener('click', async () => {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
   const mode = $('translate-btn').dataset.mode;
-  statusEl.textContent = mode === 'restore' ? '狀態：正在還原原文…' : '狀態：正在翻譯…';
+  statusEl.textContent = mode === 'restore' ? t('popup_status_restoring') : t('popup_status_translating');
   try {
     // TOGGLE_TRANSLATE 在 content.js 是 toggle 行為：已翻譯 → 還原，反之翻譯
     await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_TRANSLATE' });
     window.close();
   } catch (err) {
-    statusEl.textContent = '狀態：無法在此頁面執行，請重新整理後再試';
+    statusEl.textContent = t('popup_status_no_content_script');
     statusEl.style.color = '#ff3b30';
   }
 });
@@ -179,7 +179,7 @@ $('yt-subtitle-toggle').addEventListener('change', async (e) => {
       }).catch(() => {});
     }
   } catch (err) {
-    statusEl.textContent = '狀態：無法切換字幕翻譯，請重新整理頁面';
+    statusEl.textContent = t('popup_status_yt_toggle_fail');
     statusEl.style.color = '#ff3b30';
   }
 });
@@ -195,27 +195,27 @@ $('edit-btn').addEventListener('click', async () => {
   try {
     const resp = await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_EDIT_MODE' });
     if (resp?.ok) {
-      $('edit-btn').textContent = resp.editing ? '結束編輯' : '編輯譯文';
+      $('edit-btn').textContent = resp.editing ? t('popup_end_edit') : t('popup_edit');
       statusEl.textContent = resp.editing
-        ? `狀態：編輯模式（${resp.elements} 個區塊可編輯）`
-        : '狀態：已結束編輯';
+        ? t('popup_status_edit_mode', resp.elements)
+        : t('popup_status_edit_end');
       statusEl.style.color = resp.editing ? '#0071e3' : '#86868b';
     }
   } catch {
-    statusEl.textContent = '狀態：無法切換編輯模式';
+    statusEl.textContent = t('popup_status_edit_fail');
     statusEl.style.color = '#ff3b30';
   }
 });
 
 $('clear-cache-btn').addEventListener('click', async () => {
-  if (!confirm('確定要清除所有翻譯快取嗎？清除後下次翻譯會重新呼叫 Gemini。')) return;
+  if (!confirm(t('popup_confirm_clear_cache'))) return;
   const resp = await browser.runtime.sendMessage({ type: 'CLEAR_CACHE' });
   if (resp?.ok) {
-    statusEl.textContent = `狀態：已清除 ${resp.removed} 筆快取`;
+    statusEl.textContent = t('popup_status_cache_cleared', resp.removed);
     statusEl.style.color = '#34c759';
     refreshCacheInfo();
   } else {
-    statusEl.textContent = '狀態：清除失敗 — ' + (resp?.error || '未知錯誤');
+    statusEl.textContent = t('popup_status_cache_clear_fail', resp?.error || t('popup_unknown_error'));
     statusEl.style.color = '#ff3b30';
   }
 });

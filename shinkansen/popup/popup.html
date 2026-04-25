@@ -12,39 +12,39 @@
   </header>
 
   <main>
-    <button id="translate-btn" class="primary">翻譯本頁</button>
-    <button id="edit-btn" class="secondary" hidden>編輯譯文</button>
+    <button id="translate-btn" class="primary" data-i18n="popup_translate">翻譯本頁</button>
+    <button id="edit-btn" class="secondary" hidden data-i18n="popup_edit">編輯譯文</button>
 
     <div class="row">
-      <label for="auto">自動翻譯指定網站</label>
+      <label for="auto" data-i18n="popup_auto_translate">自動翻譯指定網站</label>
       <input type="checkbox" id="auto">
     </div>
 
     <!-- v1.2.12: 只在 YouTube 頁面時顯示 -->
     <div class="row" id="yt-subtitle-row" hidden>
-      <label for="yt-subtitle-toggle">YouTube 字幕翻譯</label>
+      <label for="yt-subtitle-toggle" data-i18n="popup_yt_subtitle">YouTube 字幕���譯</label>
       <input type="checkbox" id="yt-subtitle-toggle">
     </div>
 
     <div class="row">
-      <label for="glossary-toggle">術語表一致化</label>
+      <label for="glossary-toggle" data-i18n="popup_glossary">術語表一致化</label>
       <input type="checkbox" id="glossary-toggle">
     </div>
 
     <div class="cache-row">
-      <span id="cache-info" class="cache-info">快取：讀取中…</span>
-      <button id="clear-cache-btn" class="link small">清除快取</button>
+      <span id="cache-info" class="cache-info" data-i18n="popup_cache_loading">快取��讀取中…</span>
+      <button id="clear-cache-btn" class="link small" data-i18n="popup_clear_cache">清除快取</button>
     </div>
 
     <div class="cache-row">
-      <span id="usage-info" class="cache-info">累計費用：讀取中…</span>
+      <span id="usage-info" class="cache-info" data-i18n="popup_cost_loading">累計費用：讀取中…</span>
     </div>
 
-    <div id="status" class="status">狀態：就緒</div>
+    <div id="status" class="status" data-i18n="popup_status_ready">���態：就緒</div>
   </main>
 
   <footer>
-    <button id="options-btn" class="link">設定</button>
+    <button id="options-btn" class="link" data-i18n="popup_settings">設定</button>
     <span id="shortcut-hint" class="hint"></span>
   </footer>
 
