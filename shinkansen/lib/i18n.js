@@ -173,7 +173,7 @@ const zhTW = {
   yt_waiting_data: '等待字幕資料…',
   yt_activated: '字幕翻譯已開啟。請開啟 YouTube 字幕（CC），翻譯將自動開始。',
   yt_behind: '{0}s ⚠️ 落後',
-  yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+  yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
 
   // ── options 頁面 (opt_) ──
   opt_tab_general: '一般設定',
@@ -292,7 +292,7 @@ const zhTW = {
   opt_debug_refresh: '重新整理',
 
   // ── options 頁面追加 key ──
-  opt_page_title: 'Shinkansen 設定',
+  opt_page_title: 'Shinkansen-Nozomi 設定',
   opt_desc_readme: '功能介紹與使用說明請參考',
   opt_desc_hotkey: '三組可自訂的翻譯預設，對應三個快速鍵。依網頁內容選擇不同引擎或模型（例如文學性強用最強模型、一般網頁用最省錢）。已翻譯狀態下按任一快速鍵都會還原原文；翻譯中按任一快速鍵則取消翻譯。',
   opt_preset_1: '預設 1',
@@ -326,8 +326,8 @@ const zhTW = {
   opt_btn_reset: '回復預設設定',
   opt_btn_save: '儲存設定',
   opt_section_license: '授權資訊',
-  opt_license_type: 'Shinkansen 採用 <strong>Elastic License 2.0 (ELv2)</strong> 授權。',
-  opt_license_summary: '你可以自由查看原始碼、學習、修改、自己使用，但<strong>不能把 Shinkansen（或改寫版本）包成服務拿去賣</strong>。',
+  opt_license_type: 'Shinkansen-Nozomi 採用 <strong>Elastic License 2.0 (ELv2)</strong> 授權。',
+  opt_license_summary: '你可以自由查看原始碼、學習、修改、自己使用，但<strong>不能把 Shinkansen-Nozomi（或改寫版本）包成服務拿去賣</strong>。',
   opt_license_full_before: '完整條款請見擴充功能目錄內的 LICENSE 檔案，或參閱 ',
   opt_license_full_link: 'Elastic License 2.0 官方全文',
   opt_license_full_after: '。',
@@ -372,7 +372,7 @@ const zhTW = {
   opt_label_glossary_temperature: '術語表 Temperature',
   opt_label_glossary_timeout: '逾時時間（毫秒）',
   opt_label_glossary_prompt: '術語擷取 Prompt',
-  opt_usage_desc_before: '以下為 Shinkansen 根據模型計價設定估算的用量，僅供參考。實際帳單金額請至 ',
+  opt_usage_desc_before: '以下為 Shinkansen-Nozomi 根據模型計價設定估算的用量，僅供參考。實際帳單金額請至 ',
   opt_usage_desc_after: ' 查詢',
   opt_label_usage_from: '從',
   opt_label_usage_to: '到',
@@ -518,7 +518,7 @@ const zhCN = {
   yt_waiting_data: '等待字幕数据…',
   yt_activated: '字幕翻译已开启。请开启 YouTube 字幕（CC），翻译将自动开始。',
   yt_behind: '{0}s ⚠️ 落后',
-  yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+  yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
 
   // ── options ──
   opt_tab_general: '常规设置',
@@ -632,7 +632,7 @@ const zhCN = {
   opt_debug_refresh: '刷新',
 
   // ── options 页面追加 key ──
-  opt_page_title: 'Shinkansen 设置',
+  opt_page_title: 'Shinkansen-Nozomi 设置',
   opt_desc_readme: '功能介绍与使用说明请参考',
   opt_desc_hotkey: '三组可自定义的翻译预设，对应三个快捷键。根据网页内容选择不同引擎或模型（例如文学性强用最强模型、一般网页用最省钱）。已翻译状态下按任一快捷键都会还原原文；翻译中按任一快捷键则取消翻译。',
   opt_preset_1: '预设 1',
@@ -666,8 +666,8 @@ const zhCN = {
   opt_btn_reset: '恢复默认设置',
   opt_btn_save: '保存设置',
   opt_section_license: '授权信息',
-  opt_license_type: 'Shinkansen 采用 <strong>Elastic License 2.0 (ELv2)</strong> 授权。',
-  opt_license_summary: '你可以自由查看源代码、学习、修改、自己使用，但<strong>不能把 Shinkansen（或改写版本）包装成服务拿去卖</strong>。',
+  opt_license_type: 'Shinkansen-Nozomi 采用 <strong>Elastic License 2.0 (ELv2)</strong> 授权。',
+  opt_license_summary: '你可以自由查看源代码、学习、修改、自己使用，但<strong>不能把 Shinkansen-Nozomi（或改写版本）包装成服务拿去卖</strong>。',
   opt_license_full_before: '完整条款请见扩展目录内的 LICENSE 文件，或参阅 ',
   opt_license_full_link: 'Elastic License 2.0 官方全文',
   opt_license_full_after: '。',
@@ -712,7 +712,7 @@ const zhCN = {
   opt_label_glossary_temperature: '术语表 Temperature',
   opt_label_glossary_timeout: '超时时间（毫秒）',
   opt_label_glossary_prompt: '术语提取 Prompt',
-  opt_usage_desc_before: '以下为 Shinkansen 根据模型计价设置估算的用量，仅供参考。实际账单金额请至 ',
+  opt_usage_desc_before: '以下为 Shinkansen-Nozomi 根据模型计价设置估算的用量，仅供参考。实际账单金额请至 ',
   opt_usage_desc_after: ' 查询',
   opt_label_usage_from: '从',
   opt_label_usage_to: '到',
@@ -858,7 +858,7 @@ const ja = {
   yt_waiting_data: '字幕データを待っています…',
   yt_activated: '字幕翻訳をオンにしました。YouTube の字幕（CC）をオンにすると自動的に翻訳が始まります。',
   yt_behind: '{0}s ⚠️ 遅延',
-  yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+  yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
 
   // ── options ──
   opt_tab_general: '一般設定',
@@ -972,7 +972,7 @@ const ja = {
   opt_debug_refresh: '更新',
 
   // ── options ページ追加 key ──
-  opt_page_title: 'Shinkansen 設定',
+  opt_page_title: 'Shinkansen-Nozomi 設定',
   opt_desc_readme: '機能紹介と使い方については',
   opt_desc_hotkey: '3組のカスタマイズ可能な翻訳プリセット。3つのショートカットキーに対応します。ページ内容に応じて異なるエンジンやモデルを選べます（例：文学的な内容には最高品質モデル、一般的なページにはコスパ重視）。翻訳済みの状態でショートカットを押すと原文に戻ります。翻訳中に押すとキャンセルします。',
   opt_preset_1: 'プリセット 1',
@@ -1006,8 +1006,8 @@ const ja = {
   opt_btn_reset: 'デフォルト設定に戻す',
   opt_btn_save: '設定を保存',
   opt_section_license: 'ライセンス情報',
-  opt_license_type: 'Shinkansen は <strong>Elastic License 2.0 (ELv2)</strong> の下でライセンスされています。',
-  opt_license_summary: 'ソースコードの閲覧、学習、修正、個人利用は自由ですが、<strong>Shinkansen（または改変版）をサービスとして販売することはできません</strong>。',
+  opt_license_type: 'Shinkansen-Nozomi は <strong>Elastic License 2.0 (ELv2)</strong> の下でライセンスされています。',
+  opt_license_summary: 'ソースコードの閲覧、学習、修正、個人利用は自由ですが、<strong>Shinkansen-Nozomi（または改変版）をサービスとして販売することはできません</strong>。',
   opt_license_full_before: '完全な条項は拡張機能ディレクトリ内の LICENSE ファイルをご覧ください。または ',
   opt_license_full_link: 'Elastic License 2.0 公式全文',
   opt_license_full_after: ' を参照してください。',
@@ -1052,7 +1052,7 @@ const ja = {
   opt_label_glossary_temperature: '用語集 Temperature',
   opt_label_glossary_timeout: 'タイムアウト（ミリ秒）',
   opt_label_glossary_prompt: '用語抽出プロンプト',
-  opt_usage_desc_before: '以下は Shinkansen がモデル料金設定に基づいて推定した使用量です（参考値）。実際の請求額は ',
+  opt_usage_desc_before: '以下は Shinkansen-Nozomi がモデル料金設定に基づいて推定した使用量です（参考値）。実際の請求額は ',
   opt_usage_desc_after: ' でご確認ください',
   opt_label_usage_from: '開始',
   opt_label_usage_to: '終了',

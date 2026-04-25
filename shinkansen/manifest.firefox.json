@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Shinkansen",
+  "name": "Shinkansen-Nozomi",
   "version": "1.6.2.5",
   "description": "快速、流暢的網頁翻譯擴充功能，使用 Google Gemini 將外語網頁翻譯成繁體中文／簡體中文／日本語。",
   "default_locale": "zh_TW",

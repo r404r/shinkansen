@@ -84,7 +84,7 @@ if (window.__shinkansen_loaded) {
       yt_waiting_cc: '字幕翻譯已啟動，等待 CC 字幕資料…',
       yt_starting: '已有 {0} 條字幕，開始翻譯', yt_waiting_data: '等待字幕資料…',
       yt_activated: '字幕翻譯已開啟。請開啟 YouTube 字幕（CC），翻譯將自動開始。',
-      yt_behind: '{0}s ⚠️ 落後', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+      yt_behind: '{0}s ⚠️ 落後', yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
     },
     'zh-CN': {
       cs_translating: '翻译中…', cs_close: '关闭', cs_seconds: ' 秒', cs_minutes: ' 分 ',
@@ -118,7 +118,7 @@ if (window.__shinkansen_loaded) {
       yt_waiting_cc: '字幕翻译已启动，等待 CC 字幕数据…',
       yt_starting: '已有 {0} 条字幕，开始翻译', yt_waiting_data: '等待字幕数据…',
       yt_activated: '字幕翻译已开启。请开启 YouTube 字幕（CC），翻译将自动开始。',
-      yt_behind: '{0}s ⚠️ 落后', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+      yt_behind: '{0}s ⚠️ 落后', yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
     },
     'ja': {
       cs_translating: '翻訳中…', cs_close: '閉じる', cs_seconds: ' 秒', cs_minutes: ' 分 ',
@@ -152,7 +152,7 @@ if (window.__shinkansen_loaded) {
       yt_waiting_cc: '字幕翻訳を開始しました。CC 字幕データを待っています…',
       yt_starting: '{0} 件の字幕を取得済み、翻訳を開始します', yt_waiting_data: '字幕データを待っています…',
       yt_activated: '字幕翻訳をオンにしました。YouTube の字幕（CC）をオンにすると自動的に翻訳が始まります。',
-      yt_behind: '{0}s ⚠️ 遅延', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+      yt_behind: '{0}s ⚠️ 遅延', yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
     },
   };
 

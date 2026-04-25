@@ -1,14 +1,16 @@
-# Shinkansen 🚄
+# Shinkansen-Nozomi 🚄
 
 快速、流暢的網頁翻譯擴充功能，支援 Chrome 與 Firefox。使用 Google Gemini 將外語網頁翻譯成繁體中文／簡體中文／日本語，原地替換文字，保留頁面原始排版。
 
-名稱「新幹線」象徵快速、平穩、流暢的閱讀體驗。
+名稱取自新幹線最快車型「のぞみ（希望號）」，象徵快速、平穩、流暢的閱讀體驗。
 
-> **[從 Chrome Web Store 安裝](https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg)**（推薦）· [下載最新版本 zip](https://github.com/jimmysu0309/shinkansen/releases/latest) · 安裝教學與產品介紹見 [官方網頁](https://jimmysu0309.github.io/shinkansen/)
+> **此專案 Fork 自 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)**（原作者：Jimmy Su），在原版基礎上新增 Firefox 支援、多語言介面（繁中／簡中／日文）、選區翻譯等功能，獨立發展。原版僅支援 Chrome + 繁體中文。
+
+> [下載最新版本 zip](https://github.com/r404r/shinkansen/releases/latest)
 
 ## 為什麼做這個專案
 
-既有的沉浸式翻譯工具需要將個人瀏覽內容傳送到第三方伺服器處理，隱私權難以掌控。Shinkansen 的設計從一開始就以隱私為核心：所有設定與資料都只存在你自己的電腦上；除了你自備的 Gemini API Key 直接連線 Google 之外，不會將任何資料外傳給其他第三方；原始碼完全公開，任何人都可以檢視它的安全性。
+既有的沉浸式翻譯工具需要將個人瀏覽內容傳送到第三方伺服器處理，隱私權難以掌控。Shinkansen-Nozomi 的設計從一開始就以隱私為核心：所有設定與資料都只存在你自己的電腦上；除了你自備的 Gemini API Key 直接連線 Google 之外，不會將任何資料外傳給其他第三方；原始碼完全公開，任何人都可以檢視它的安全性。
 
 ## 效能實測
 
@@ -212,7 +214,7 @@ v1.6.2 — 完整功能清單與規格詳見 [SPEC.md](SPEC.md)。
 
 本專案採用 [Elastic License 2.0 (ELv2)](LICENSE) 授權。
 
-白話來說：你可以自由查看原始碼、學習、修改、自己使用，但**不能把 Shinkansen（或改寫版本）包成服務拿去賣**。完整條款請見 [LICENSE](LICENSE) 檔案。
+白話來說：你可以自由查看原始碼、學習、修改、自己使用，但**不能把 Shinkansen-Nozomi（或改寫版本）包成服務拿去賣**。完整條款請見 [LICENSE](LICENSE) 檔案。
 
 原作者：Jimmy Su ・ [GitHub](https://github.com/jimmysu0309/shinkansen) ・ [Twitter (X)](https://x.com/jimmy_su)
-改版作者：r404r ・ [GitHub](https://github.com/r404r/shinkansen)（Firefox 支援、多語言介面）
+改版作者：r404r ・ [GitHub](https://github.com/r404r/shinkansen)（Firefox 支援、多語言介面、選區翻譯）

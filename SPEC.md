@@ -1,4 +1,4 @@
-# Shinkansen — 規格文件（SPEC）
+# Shinkansen-Nozomi — 規格文件（SPEC）
 
 > 一款專注於網頁翻譯的瀏覽器擴充功能，支援 Chrome 與 Firefox，作為 Immersive Translation 的輕量相容品。
 

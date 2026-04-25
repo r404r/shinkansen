@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shinkansen (新幹線) is a browser extension (Chrome + Firefox, Manifest V3) that translates web pages to Traditional Chinese (台灣繁體中文). Dual translation engines: Gemini AI and Google Translate. Single codebase, dual-platform build via esbuild.
+Shinkansen-Nozomi (新幹線のぞみ) is a browser extension (Chrome + Firefox, Manifest V3) that translates web pages to Traditional Chinese / Simplified Chinese / Japanese. Forked from [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen). Dual translation engines: Gemini AI and Google Translate. Single codebase, dual-platform build via esbuild.
 
 ## Commands
 
