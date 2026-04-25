@@ -580,13 +580,16 @@
 
       STATE.translated = true;
       STATE.translatedBy = 'gemini';  // v1.4.0
-      STATE.stickyTranslate = true;
-      STATE.stickySlot = options.slot ?? null;  // v1.4.12: 記錄 preset slot 供 SPA 續翻 + 跨 tab 繼承
-      browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
-      // v1.4.11 跨 tab sticky（v1.4.12 改存 preset slot）：opener 鏈中新開的 tab 繼承同 slot
-      if (options.slot != null) {
-        browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { slot: options.slot } }).catch(() => {});
+      STATE.translationScope = selectionMode ? 'selection' : 'page';  // v1.6: 翻譯範圍標記
+      if (!selectionMode) {
+        STATE.stickyTranslate = true;
+        STATE.stickySlot = options.slot ?? null;
+        // v1.4.11 跨 tab sticky（v1.4.12 改存 preset slot）
+        if (options.slot != null) {
+          browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { slot: options.slot } }).catch(() => {});
+        }
       }
+      browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
 
       if (!failures.length) {
         const totalTokens = pageUsage.inputTokens + pageUsage.outputTokens;
@@ -660,7 +663,11 @@
         }, 1500);
       }
 
-      scheduleRescanForLateContent();
+      // v1.6: 選區翻譯不啟動 rescan（避免翻譯全頁未選段落），
+      // 但保留 SPA observer（Content Guard 保護已翻譯節點不被框架覆蓋）。
+      if (!selectionMode) {
+        scheduleRescanForLateContent();
+      }
       SK.startSpaObserver();
     } catch (err) {
       SK.sendLog('error', 'translate', 'translatePage error', { error: err.message || String(err) });
@@ -706,6 +713,7 @@
     STATE.translationCache?.clear?.();  // v1.5.0
     STATE.translated = false;
     STATE.translatedBy = null;  // v1.4.0
+    STATE.translationScope = null;  // v1.6
     STATE.translatedMode = null;  // v1.5.0
     STATE.stickyTranslate = false;
     STATE.stickySlot = null;    // v1.4.12
@@ -912,13 +920,15 @@
 
       STATE.translated = true;
       STATE.translatedBy = 'google';  // v1.4.0
-      STATE.stickyTranslate = true;
-      STATE.stickySlot = gtOptions.slot ?? null;  // v1.4.12
-      browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
-      // v1.4.11 跨 tab sticky（v1.4.12 改存 preset slot）：opener 鏈中新開的 tab 繼承同 slot
-      if (gtOptions.slot != null) {
-        browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { slot: gtOptions.slot } }).catch(() => {});
+      STATE.translationScope = selectionMode ? 'selection' : 'page';  // v1.6
+      if (!selectionMode) {
+        STATE.stickyTranslate = true;
+        STATE.stickySlot = gtOptions.slot ?? null;
+        if (gtOptions.slot != null) {
+          browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { slot: gtOptions.slot } }).catch(() => {});
+        }
       }
+      browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
 
       if (!failures.length) {
         const successMsg = truncatedCount > 0
@@ -936,7 +946,9 @@
         segments: total, chars, elapsed: Date.now() - translateStartTime, url: location.href,
       });
 
-      scheduleRescanForLateContent();
+      if (!selectionMode) {
+        scheduleRescanForLateContent();
+      }
       SK.startSpaObserver();
     } catch (err) {
       SK.sendLog('error', 'translate', 'translatePageGoogle error', { error: err.message || String(err) });

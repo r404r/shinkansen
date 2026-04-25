@@ -292,6 +292,8 @@
   async function spaObserverRescan() {
     spaObserverDebounceTimer = null;
     if (!STATE.translated) return;
+    // v1.6: 選區翻譯模式下不 rescan 新內容（避免擴展為全頁翻譯）
+    if (STATE.translationScope === 'selection') return;
     if (spaObserverRescanCount >= SK.SPA_OBSERVER_MAX_RESCANS) {
       SK.sendLog('info', 'spa', 'SPA observer: reached max rescans, stopping NEW translations only', { maxRescans: SK.SPA_OBSERVER_MAX_RESCANS });
       return;
