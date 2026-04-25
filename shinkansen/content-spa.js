@@ -176,13 +176,13 @@
     let restored = 0;
     for (const [el, translatedSnapshot] of STATE.translatedHTML) {
       if (!el.isConnected) continue;
-      if (el.innerHTML === translatedSnapshot) continue;
-      // v1.5.5: 編輯模式下使用者正在改譯文，innerHTML 偏離 translatedSnapshot 是預期的，
+      if (SK.childSnapshotEquals(el, translatedSnapshot)) continue;
+      // v1.5.5: 編輯模式下使用者正在改譯文，快照偏離是預期的，
       // guard 不能覆蓋——否則每秒一次 sweep 會把使用者剛打的字蓋回去。
       if (el.getAttribute('contenteditable') === 'true') continue;
       const rect = el.getBoundingClientRect();
       if (rect.bottom < -500 || rect.top > window.innerHeight + 500) continue;
-      el.innerHTML = translatedSnapshot;
+      SK.restoreChildSnapshot(el, translatedSnapshot);
       restored++;
     }
     if (restored > 0) {
@@ -243,10 +243,10 @@
     let restored = 0;
     for (const [el, translatedSnapshot] of STATE.translatedHTML) {
       if (!el.isConnected) continue;
-      if (el.innerHTML === translatedSnapshot) continue;
+      if (SK.childSnapshotEquals(el, translatedSnapshot)) continue;
       // v1.5.5: 與 runContentGuard 對齊——編輯模式 contenteditable 元素不修復
       if (el.getAttribute('contenteditable') === 'true') continue;
-      el.innerHTML = translatedSnapshot;
+      SK.restoreChildSnapshot(el, translatedSnapshot);
       restored++;
     }
     return restored;

@@ -664,13 +664,13 @@
       SK.removeDualWrappers?.();
       // dual 也可能有少數 fallback 元素走了 single 路徑（fragment unit 不支援 dual），
       // 一併還原。
-      STATE.originalHTML.forEach((originalHTML, el) => {
-        el.innerHTML = originalHTML;
+      STATE.originalHTML.forEach((snapshot, el) => {
+        SK.restoreChildSnapshot(el, snapshot);
         el.removeAttribute('data-shinkansen-translated');
       });
     } else {
-      STATE.originalHTML.forEach((originalHTML, el) => {
-        el.innerHTML = originalHTML;
+      STATE.originalHTML.forEach((snapshot, el) => {
+        SK.restoreChildSnapshot(el, snapshot);
         el.removeAttribute('data-shinkansen-translated');
       });
     }
@@ -934,7 +934,7 @@
         // v1.5.5: 結束編輯時把使用者編輯後的 innerHTML 寫回 guard 快取，
         // 否則下一次 Content Guard sweep 會把編輯蓋回原譯文。
         if (STATE.translatedHTML.has(el)) {
-          STATE.translatedHTML.set(el, el.innerHTML);
+          STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
         }
       }
     }
