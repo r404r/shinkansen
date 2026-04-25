@@ -665,6 +665,10 @@ async function handleTranslateGoogle(payload, sender, cacheSuffix) {
     return { result: [], usage: { engine: 'google', chars: 0 } };
   }
 
+  // v1.6: 根據 uiLocale 決定 Google Translate 目標語言
+  const settings = await getSettings();
+  const targetLang = settings.uiLocale || 'zh-TW';
+
   // 1. 先查快取（與 Gemini 快取共用 cache module，但 key suffix 不同）
   const cached = await cache.getBatch(texts, cacheSuffix);
   const missingIdxs = [];
@@ -687,7 +691,7 @@ async function handleTranslateGoogle(payload, sender, cacheSuffix) {
   if (missingTexts.length > 0) {
     const t0 = Date.now();
     debugLog('info', 'api', 'google translateBatch start', { count: missingTexts.length });
-    const res = await translateGoogleBatch(missingTexts);
+    const res = await translateGoogleBatch(missingTexts, targetLang);
     fresh = res.translations;
     totalChars = res.chars;
     debugLog('info', 'api', 'google translateBatch done', {

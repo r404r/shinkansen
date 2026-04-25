@@ -10,12 +10,13 @@ const SEP = '\n\u2063\u2063\u2063\n';
 const MAX_URL_ENCODED_CHARS = 5500;
 
 /**
- * 批次翻譯字串陣列（自動偵測語言 → 繁體中文）。
+ * 批次翻譯字串陣列（自動偵測語言 → 目標語言）。
  * 內部用 SEP 串接多段文字為單一請求，若 URL 過長則自動拆多次請求後合併。
  * @param {string[]} texts
+ * @param {string} [targetLang='zh-TW'] 目標語言代碼（zh-TW / zh-CN / ja）
  * @returns {Promise<{ translations: string[], chars: number }>}
  */
-export async function translateGoogleBatch(texts) {
+export async function translateGoogleBatch(texts, targetLang = 'zh-TW') {
   if (!texts || texts.length === 0) return { translations: [], chars: 0 };
 
   const totalChars = texts.reduce((s, t) => s + (t?.length || 0), 0);
@@ -43,7 +44,7 @@ export async function translateGoogleBatch(texts) {
   // ─── 逐組翻譯，合併回原索引 ──────────────────────────────────
   for (const group of groups) {
     const joined = group.map(g => g.text).join(SEP);
-    const parts = await _fetchTranslate(joined);
+    const parts = await _fetchTranslate(joined, targetLang);
     group.forEach((g, j) => {
       result[g.idx] = parts[j] ?? g.text; // 解析失敗時 fallback 原文
     });
@@ -55,10 +56,10 @@ export async function translateGoogleBatch(texts) {
 /**
  * 對 Google Translate 非官方端點發出單一 GET 請求，回傳用 SEP 分割的字串陣列。
  */
-async function _fetchTranslate(text) {
+async function _fetchTranslate(text, targetLang = 'zh-TW') {
   const url =
     'https://translate.googleapis.com/translate_a/single' +
-    '?client=gtx&sl=auto&tl=zh-TW&dt=t&q=' +
+    `?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t&q=` +
     encodeURIComponent(text);
 
   const resp = await fetch(url);
