@@ -118,6 +118,9 @@ const zhTW = {
   popup_status_cache_cleared: '狀態：已清除 {0} 筆快取',
   popup_status_cache_clear_fail: '狀態：清除失敗 — {0}',
   popup_unknown_error: '未知錯誤',
+  popup_display_mode: '顯示模式',
+  popup_mode_single: '單語覆蓋',
+  popup_mode_dual: '雙語對照',
 
   // ── content script (cs_) ──
   cs_translating: '翻譯中…',
@@ -155,6 +158,10 @@ const zhTW = {
   cs_spa_partial_fail: '新內容翻譯部分失敗:{0} / {1} 段',
   cs_spa_complete: '已翻譯 {0} 段新內容',
   cs_spa_fail: '新內容翻譯失敗:{0}',
+  // 雙語模式
+  cs_mode_single: '單語覆蓋',
+  cs_mode_dual: '雙語對照',
+  cs_mode_changed: '顯示模式已切換為「{0}」，請按快速鍵重新翻譯以套用',
 
   // ── YouTube (yt_) ──
   yt_translating: '翻譯中…',
@@ -297,6 +304,12 @@ const zhTW = {
   opt_label_whitelist: '自動翻譯網站（每行一個網域，進入時自動翻譯）',
   opt_label_skip_target_lang: '跳過繁體中文網頁',
   opt_desc_skip_target_lang: '開啟時，若整頁文字以繁體中文為主，按翻譯會直接跳過。關閉後仍會逐段跳過中文段落，只翻譯外語內容。Gmail 等介面為中文但信件多為英文的網站，建議關閉此選項',
+  opt_section_dual_mark: '雙語對照視覺標記',
+  opt_desc_dual_mark: '當顯示模式設為「雙語對照」時，譯文會以新段落形式 append 在原文之後。以下選項決定譯文段落的視覺標記樣式（顯示模式本身可在 popup 切換）。',
+  opt_val_mark_tint: '淡底色',
+  opt_val_mark_bar: '左邊細條',
+  opt_val_mark_dashed: '波浪底線',
+  opt_val_mark_none: '無標記',
   opt_label_toast_position: '顯示位置',
   opt_val_bottom_right: '右下角',
   opt_val_bottom_left: '左下角',
@@ -451,6 +464,9 @@ const zhCN = {
   popup_status_cache_cleared: '状态：已清除 {0} 条缓存',
   popup_status_cache_clear_fail: '状态：清除失败 — {0}',
   popup_unknown_error: '未知错误',
+  popup_display_mode: '显示模式',
+  popup_mode_single: '单语覆盖',
+  popup_mode_dual: '双语对照',
 
   // ── content script (cs_) ──
   cs_translating: '翻译中…',
@@ -487,6 +503,9 @@ const zhCN = {
   cs_spa_partial_fail: '新内容翻译部分失败：{0} / {1} 段',
   cs_spa_complete: '已翻译 {0} 段新内容',
   cs_spa_fail: '新内容翻译失败：{0}',
+  cs_mode_single: '单语覆盖',
+  cs_mode_dual: '双语对照',
+  cs_mode_changed: '显示模式已切换为「{0}」，请按快捷键重新翻译以套用',
 
   // ── YouTube ──
   yt_translating: '翻译中…',
@@ -624,6 +643,12 @@ const zhCN = {
   opt_label_whitelist: '自动翻译网站（每行一个域名，进入时自动翻译）',
   opt_label_skip_target_lang: '跳过简体中文网页',
   opt_desc_skip_target_lang: '开启时，若整页文字以简体中文为主，按翻译会直接跳过。关闭后仍会逐段跳过中文段落，只翻译外语内容。Gmail 等界面为中文但邮件多为英文的网站，建议关闭此选项',
+  opt_section_dual_mark: '双语对照视觉标记',
+  opt_desc_dual_mark: '当显示模式设为「双语对照」时，译文会以新段落形式 append 在原文之后。以下选项决定译文段落的视觉标记样式（显示模式本身可在 popup 切换）。',
+  opt_val_mark_tint: '淡底色',
+  opt_val_mark_bar: '左边细条',
+  opt_val_mark_dashed: '波浪底线',
+  opt_val_mark_none: '无标记',
   opt_label_toast_position: '显示位置',
   opt_val_bottom_right: '右下角',
   opt_val_bottom_left: '左下角',
@@ -778,6 +803,9 @@ const ja = {
   popup_status_cache_cleared: 'ステータス：{0} 件のキャッシュを削除しました',
   popup_status_cache_clear_fail: 'ステータス：削除失敗 — {0}',
   popup_unknown_error: '不明なエラー',
+  popup_display_mode: '表示モード',
+  popup_mode_single: '単一言語',
+  popup_mode_dual: 'バイリンガル',
 
   // ── content script (cs_) ──
   cs_translating: '翻訳中…',
@@ -814,6 +842,9 @@ const ja = {
   cs_spa_partial_fail: '新コンテンツの翻訳が部分的に失敗：{0} / {1} 段',
   cs_spa_complete: '{0} 段の新コンテンツを翻訳しました',
   cs_spa_fail: '新コンテンツの翻訳に失敗：{0}',
+  cs_mode_single: '単一言語',
+  cs_mode_dual: 'バイリンガル',
+  cs_mode_changed: '表示モードを「{0}」に切り替えました。ショートカットキーで再翻訳してください',
 
   // ── YouTube ──
   yt_translating: '翻訳中…',
@@ -951,6 +982,12 @@ const ja = {
   opt_label_whitelist: '自動翻訳サイト（1行に1ドメイン、アクセス時に自動翻訳）',
   opt_label_skip_target_lang: '日本語ページをスキップ',
   opt_desc_skip_target_lang: 'オンの場合、ページ全体が日本語であれば翻訳をスキップします。オフでも段落単位で日本語はスキップし、外国語のみ翻訳します。Gmail のように UI は日本語でもメールは英語が多いサイトではオフを推奨します',
+  opt_section_dual_mark: 'バイリンガル表示の視覚マーク',
+  opt_desc_dual_mark: '表示モードが「バイリンガル」の場合、訳文は新しい段落として原文の後に追加されます。以下のオプションで訳文段落の視覚マークスタイルを選択できます（表示モード自体は popup で切り替え可能）。',
+  opt_val_mark_tint: '薄い背景色',
+  opt_val_mark_bar: '左側バー',
+  opt_val_mark_dashed: '波線下線',
+  opt_val_mark_none: 'マークなし',
   opt_label_toast_position: '表示位置',
   opt_val_bottom_right: '右下',
   opt_val_bottom_left: '左下',

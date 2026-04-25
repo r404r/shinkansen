@@ -1016,8 +1016,8 @@
     if (msg?.type === 'MODE_CHANGED') {
       const mode = msg.mode === 'dual' ? 'dual' : 'single';
       if (STATE.translated) {
-        const desc = mode === 'dual' ? '雙語對照' : '單語覆蓋';
-        SK.showToast('success', `顯示模式已切換為「${desc}」，請按快速鍵重新翻譯以套用`, {
+        const desc = mode === 'dual' ? SK.t('cs_mode_dual') : SK.t('cs_mode_single');
+        SK.showToast('success', SK.t('cs_mode_changed', desc), {
           autoHideMs: 5000,
         });
       }
