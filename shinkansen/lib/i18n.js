@@ -59,6 +59,10 @@ export function applyLocale(root = document) {
     const key = el.getAttribute('data-i18n-title');
     if (key) el.title = t(key);
   }
+  for (const el of root.querySelectorAll('[data-i18n-html]')) {
+    const key = el.getAttribute('data-i18n-html');
+    if (key) el.innerHTML = t(key);
+  }
 }
 
 // ─── 精簡版字串表（供 content script 內嵌使用） ──────────
@@ -312,6 +316,10 @@ const zhTW = {
   opt_btn_reset: '回復預設設定',
   opt_btn_save: '儲存設定',
   opt_section_license: '授權資訊',
+  opt_license_type: 'Shinkansen 採用 <strong>Elastic License 2.0 (ELv2)</strong> 授權。',
+  opt_license_summary: '你可以自由查看原始碼、學習、修改、自己使用，但<strong>不能把 Shinkansen（或改寫版本）包成服務拿去賣</strong>。',
+  opt_license_full: '完整條款請見擴充功能目錄內的 LICENSE 檔案，或參閱 <a href="https://www.elastic.co/licensing/elastic-license" target="_blank" rel="noopener">Elastic License 2.0 官方全文</a>。',
+  opt_license_author: '作者：Jimmy Su ・ Twitter (X)：<a href="https://x.com/jimmy_su" target="_blank" rel="noopener">@jimmy_su</a>',
   opt_section_gemini_model: 'Gemini 模型與參數',
   opt_val_model_custom: '自行輸入模型 ID…',
   opt_placeholder_custom_model: '輸入 Gemini API 模型 ID',
@@ -630,6 +638,10 @@ const zhCN = {
   opt_btn_reset: '恢复默认设置',
   opt_btn_save: '保存设置',
   opt_section_license: '授权信息',
+  opt_license_type: 'Shinkansen 采用 <strong>Elastic License 2.0 (ELv2)</strong> 授权。',
+  opt_license_summary: '你可以自由查看源代码、学习、修改、自己使用，但<strong>不能把 Shinkansen（或改写版本）包装成服务拿去卖</strong>。',
+  opt_license_full: '完整条款请见扩展目录内的 LICENSE 文件，或参阅 <a href="https://www.elastic.co/licensing/elastic-license" target="_blank" rel="noopener">Elastic License 2.0 官方全文</a>。',
+  opt_license_author: '作者：Jimmy Su ・ Twitter (X)：<a href="https://x.com/jimmy_su" target="_blank" rel="noopener">@jimmy_su</a>',
   opt_section_gemini_model: 'Gemini 模型与参数',
   opt_val_model_custom: '自行输入模型 ID…',
   opt_placeholder_custom_model: '输入 Gemini API 模型 ID',
@@ -948,6 +960,10 @@ const ja = {
   opt_btn_reset: 'デフォルト設定に戻す',
   opt_btn_save: '設定を保存',
   opt_section_license: 'ライセンス情報',
+  opt_license_type: 'Shinkansen は <strong>Elastic License 2.0 (ELv2)</strong> の下でライセンスされています。',
+  opt_license_summary: 'ソースコードの閲覧、学習、修正、個人利用は自由ですが、<strong>Shinkansen（または改変版）をサービスとして販売することはできません</strong>。',
+  opt_license_full: '完全な条項は拡張機能ディレクトリ内の LICENSE ファイルをご覧ください。または <a href="https://www.elastic.co/licensing/elastic-license" target="_blank" rel="noopener">Elastic License 2.0 公式全文</a> を参照してください。',
+  opt_license_author: '作者：Jimmy Su ・ Twitter (X)：<a href="https://x.com/jimmy_su" target="_blank" rel="noopener">@jimmy_su</a>',
   opt_section_gemini_model: 'Gemini モデルとパラメータ',
   opt_val_model_custom: 'モデル ID を手動入力…',
   opt_placeholder_custom_model: 'Gemini API モデル ID を入力',
