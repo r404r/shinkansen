@@ -148,6 +148,14 @@ async function load() {
   // v1.0.21: 頁面層級繁中偵測開關
   $('skipTraditionalChinesePage').checked = s.skipTraditionalChinesePage !== false;
 
+  // v1.5.0: 雙語對照視覺標記
+  const validMarks = ['tint', 'bar', 'dashed', 'none'];
+  const savedMark = validMarks.includes(s.translationMarkStyle) ? s.translationMarkStyle : 'tint';
+  for (const r of document.querySelectorAll('input[name="markStyle"]')) {
+    r.checked = (r.value === savedMark);
+  }
+  updateDualDemoMark(savedMark);
+
   // v1.0.29: 固定術語表
   fixedGlossary = {
     global: Array.isArray(s.fixedGlossary?.global) ? s.fixedGlossary.global : [],
@@ -200,6 +208,18 @@ async function load() {
     updatePresetModelVisibility(slot);
   }
   refreshPresetKeyBindings();
+}
+
+// v1.5.0: 雙語視覺標記預覽更新
+function updateDualDemoMark(mark) {
+  const wrapper = document.getElementById('dual-demo-wrapper');
+  if (wrapper) wrapper.setAttribute('data-sk-mark', mark);
+}
+
+function getSelectedMarkStyle() {
+  const checked = document.querySelector('input[name="markStyle"]:checked');
+  const v = checked?.value;
+  return ['tint', 'bar', 'dashed', 'none'].includes(v) ? v : 'tint';
 }
 
 // v1.4.13: engine='google' 時隱藏 model 欄
@@ -276,6 +296,8 @@ async function save() {
     toastPosition: $('toastPosition').value,
     // v1.1.3: Toast 自動關閉
     toastAutoHide: $('toastAutoHide').checked,
+    // v1.5.0: 雙語對照視覺標記
+    translationMarkStyle: getSelectedMarkStyle(),
     // v1.0.21: 頁面層級繁中偵測開關
     skipTraditionalChinesePage: $('skipTraditionalChinesePage').checked,
     // v1.2.11: YouTube 字幕設定
@@ -440,6 +462,11 @@ $('toastOpacity').addEventListener('input', () => {
   $('toastOpacityLabel').textContent = $('toastOpacity').value;
 });
 $('toastPosition').addEventListener('change', markDirty);
+
+// v1.5.0: 雙語視覺標記 radio 切換 → 即時更新 demo wrapper
+for (const r of document.querySelectorAll('input[name="markStyle"]')) {
+  r.addEventListener('change', () => updateDualDemoMark(getSelectedMarkStyle()));
+}
 
 $('reset-defaults').addEventListener('click', async () => {
   if (!confirm(t('opt_confirm_reset'))) return;
@@ -614,25 +641,27 @@ $('import-input').addEventListener('change', async (e) => {
   }
 });
 
-// v1.5: 快捷鍵設定連結——Chrome / Firefox / Safari 三分支
-const _isFirefox = typeof globalThis.browser !== 'undefined'
-  && typeof globalThis.browser.runtime?.getBrowserInfo === 'function';
-const _isChrome = typeof globalThis.chrome !== 'undefined' && !_isFirefox;
-
-if (_isChrome) {
-  $('open-shortcuts').addEventListener('click', (e) => {
-    e.preventDefault();
-    browser.tabs.create({ url: 'chrome://extensions/shortcuts' });
-  });
-} else if (_isFirefox) {
-  $('open-shortcuts').addEventListener('click', (e) => {
+// v1.3.16 / v1.5.4: 平台偵測決定快捷鍵設定連結。
+// 用 runtime.getURL('') 的 prefix 精確區分 Chrome / Firefox / Safari，
+// 比 globalThis.chrome 偵測更可靠（Firefox 全域 chrome 不存在但 browser 在）。
+//   chrome-extension://    → Chrome / Edge → chrome://extensions/shortcuts
+//   moz-extension://       → Firefox       → about:addons（Firefox 沒有深連到 shortcut UI）
+//   safari-web-extension:// → Safari       → 隱藏連結（Safari 不支援 about:* / chrome://*）
+const _extUrl = browser.runtime.getURL('');
+const _shortcutsLink = $('open-shortcuts');
+if (_extUrl.startsWith('moz-extension://')) {
+  _shortcutsLink?.addEventListener('click', (e) => {
     e.preventDefault();
     browser.tabs.create({ url: 'about:addons' });
   });
+} else if (_extUrl.startsWith('chrome-extension://')) {
+  _shortcutsLink?.addEventListener('click', (e) => {
+    e.preventDefault();
+    browser.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
 } else {
-  // Safari：隱藏快捷鍵設定連結
-  const shortcutsLink = $('open-shortcuts');
-  if (shortcutsLink) shortcutsLink.style.display = 'none';
+  // Safari 或其他：隱藏連結（無法 tabs.create 到內建設定 URL）
+  if (_shortcutsLink) _shortcutsLink.style.display = 'none';
 }
 
 // ═══════════════════════════════════════════════════════════

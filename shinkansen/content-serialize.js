@@ -3,6 +3,7 @@
 // 以及把含佔位符的譯文還原成 DocumentFragment（反序列化）。
 
 (function(SK) {
+  if (!SK || SK.disabled) return;  // v1.5.2: iframe gate（見 content-ns.js）
 
   const PH_OPEN = SK.PH_OPEN;
   const PH_CLOSE = SK.PH_CLOSE;

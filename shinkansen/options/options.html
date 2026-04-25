@@ -154,6 +154,27 @@
       <small class="muted" data-i18n="opt_desc_skip_target_lang">開啟時，若整頁文字以繁體中文為主，按翻譯會直接跳過。關閉後仍會逐段跳過中文段落，只翻譯外語內容。Gmail 等介面為中文但信件多為英文的網站，建議關閉此選項</small>
     </section>
 
+    <!-- v1.5.0: 雙語對照視覺標記 -->
+    <section>
+      <h2>雙語對照視覺標記</h2>
+      <p class="muted">
+        當顯示模式設為「雙語對照」時，譯文會以新段落形式 append 在原文之後。
+        以下選項決定譯文段落的視覺標記樣式（顯示模式本身可在 popup 切換）。
+      </p>
+      <div class="dual-demo">
+        <p class="dual-demo-original">The quick brown fox jumps over the lazy dog.</p>
+        <shinkansen-translation id="dual-demo-wrapper" data-sk-mark="tint">
+          <p class="dual-demo-translation">敏捷的棕狐跨越懶狗。</p>
+        </shinkansen-translation>
+      </div>
+      <div class="dual-mark-options">
+        <label><input type="radio" name="markStyle" value="tint" checked>淡底色</label>
+        <label><input type="radio" name="markStyle" value="bar">左邊細條</label>
+        <label><input type="radio" name="markStyle" value="dashed">波浪底線</label>
+        <label><input type="radio" name="markStyle" value="none">無標記</label>
+      </div>
+    </section>
+
     <section>
       <h2 data-i18n="opt_toast_title">翻譯進度通知</h2>
       <label>
@@ -691,6 +712,8 @@
     </div><!-- /tab-youtube -->
 
   </div>
+
+  <p class="footer-easter-egg">No coding skills were harmed in the making of this shit.</p>
 
   <script src="../lib/vendor/chart.min.js"></script>
   <script type="module" src="options.js"></script>

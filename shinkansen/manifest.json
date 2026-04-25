@@ -1,9 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Shinkansen",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "快速、流暢的網頁翻譯擴充功能，使用 Google Gemini 將外語網頁翻譯成繁體中文／簡體中文／日本語。",
   "default_locale": "zh_TW",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "shinkansen@jimmy.zm.su"
+    }
+  },
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -51,7 +56,8 @@
       "css": [
         "content.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "action": {

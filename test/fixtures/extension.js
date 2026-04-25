@@ -2,8 +2,9 @@
 //
 // 重要地雷（MV3 + Playwright）：
 //   1. 必須用 chromium.launchPersistentContext(...)，普通 launch() 載不了 extension。
-//   2. 必須 headed（headless: false），headless 下 service worker 會被 disabled，
-//      content script 雖然會跑，但 background 路由會掛掉。
+//   2. 不能用 Playwright 的 headless: true（舊 headless），會 disable service worker。
+//      改用 Chrome 原生 --headless=new（v1.5.2 起，2026-04-25），background 路由
+//      正常運作。預設啟用，可用 SHINKANSEN_HEADED=1 切回 headed 模式做視覺除錯。
 //   3. --disable-extensions-except 與 --load-extension 兩個都要給，
 //      只給後者 Chrome 仍會嘗試載入其他 extension（雖然 user data dir 是空的，
 //      還是依規矩走）。
@@ -37,9 +38,11 @@ export const test = base.extend({
     }
 
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shinkansen-pw-'));
+    const headed = process.env.SHINKANSEN_HEADED === '1';
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
       args: [
+        ...(headed ? [] : ['--headless=new']),
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
         '--no-first-run',

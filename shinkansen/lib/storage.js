@@ -149,6 +149,11 @@ export const DEFAULT_SETTINGS = {
   // 關閉時不做頁面層級檢查（元素層級仍會個別跳過繁中段落）。
   // Gmail 等介面語言為繁中但內容多為英文的網站，可關閉此選項。
   skipTraditionalChinesePage: true,
+  // v1.5.0: 顯示模式（'single' 覆蓋 / 'dual' 雙語對照），由 popup toggle 切換。
+  // 'single' 沿用 v1.4 之前所有路徑，'dual' 走 content-inject.js 的 injectDual。
+  displayMode: 'single',
+  // v1.5.0: 雙語模式下的視覺標記樣式（'tint' 淡底色 / 'bar' 左邊細條 / 'dashed' 波浪底線 / 'none'）
+  translationMarkStyle: 'tint',
   // v1.4.12: 三組翻譯預設對應 Alt+A / Alt+S / Alt+D 三個快速鍵。
   // engine='gemini' 時 model 覆蓋 geminiConfig.model，其他欄位（prompt、temperature、glossary）沿用全域；
   // engine='google' 時走 Google Translate 路徑，不需 model。

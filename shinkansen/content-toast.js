@@ -2,6 +2,7 @@
 // Shadow DOM 隔離的 Toast UI，提供翻譯進度、成功/失敗/還原提示。
 
 (function(SK) {
+  if (!SK || SK.disabled) return;  // v1.5.2: iframe gate（見 content-ns.js）
   // ─── Toast 提示 （Shadow DOM 隔離） ─────────────────────
   const toastHost = document.createElement('div');
   toastHost.id = 'shinkansen-toast-host';

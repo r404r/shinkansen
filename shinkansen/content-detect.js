@@ -2,6 +2,7 @@
 // 負責語言偵測、容器排除、段落收集（collectParagraphs）、fragment 抽取。
 
 (function(SK) {
+  if (!SK || SK.disabled) return;  // v1.5.2: iframe gate（見 content-ns.js）
 
   // ─── v0.76: 自動語言偵測 ─────────────────────────────────
   const SIMPLIFIED_ONLY_CHARS = new Set(
@@ -75,6 +76,11 @@
         continue;
       }
       if (tag && SK.SEMANTIC_CONTAINER_EXCLUDE_TAGS.has(tag)) return true;
+      // v1.5.2: 祖先若是 dual 模式注入的譯文 wrapper，整段 skip。
+      // acceptNode 流程已用 HARD_EXCLUDE_TAGS 擋住 wrapper 子樹，
+      // 但 leaf content div/span / anchor / grid td 三條補抓路徑用
+      // querySelectorAll 繞過 TreeWalker，必須在這裡再擋一次。
+      if (tag === 'SHINKANSEN-TRANSLATION') return true;
       const role = cur.getAttribute && cur.getAttribute('role');
       if (role && SK.EXCLUDE_ROLES.has(role)) return true;
       if (tag === 'HEADER' && role === 'banner') return true;

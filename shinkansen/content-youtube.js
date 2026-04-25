@@ -15,6 +15,7 @@
 //   5. 字幕翻譯設定（prompt/temperature/windowSizeS/lookaheadS）從 ytSubtitle settings 讀取
 
 (function(SK) {
+  if (!SK || SK.disabled) return;  // v1.5.2: iframe gate（見 content-ns.js）
 
   // ─── 預設設定（storage 讀不到時用這組） ────────────────────
   const DEFAULT_YT_CONFIG = {

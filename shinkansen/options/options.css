@@ -661,3 +661,59 @@ a:hover { text-decoration: underline; }
   appearance: auto;
 }
 .preset-model-label[hidden] { display: none !important; }
+
+/* v1.5.0: 雙語對照視覺標記設定 */
+.dual-demo {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  background: #fff;
+}
+.dual-demo .dual-demo-original {
+  margin: 0 0 4px 0;
+  color: #1d1d1f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.dual-demo .dual-demo-translation {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* wrapper 樣式：與 content-inject.js ensureDualWrapperStyle 注入到頁面的 CSS 對齊。
+   這份是給 options 頁的 demo 預覽用，不影響真實網頁的 wrapper。 */
+shinkansen-translation {
+  display: block;
+  margin-top: 0.25em;
+}
+shinkansen-translation[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 2px 4px; }
+shinkansen-translation[data-sk-mark="bar"]    { border-left: 2px solid #9CA3AF; padding-left: 8px; }
+shinkansen-translation[data-sk-mark="dashed"] { text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+shinkansen-translation[data-sk-mark="none"]   {}
+
+.dual-mark-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+}
+.dual-mark-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #1d1d1f;
+  cursor: pointer;
+}
+.dual-mark-options input[type="radio"] {
+  margin: 0;
+}
+
+.footer-easter-egg {
+  text-align: center;
+  font-size: 11px;
+  color: #9CA3AF;
+  margin: 32px 0 24px;
+  font-style: italic;
+}

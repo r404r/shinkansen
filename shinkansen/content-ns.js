@@ -7,14 +7,45 @@
 // content script 不能 import ES module，改用全域方式讓後續所有 content script 繼承。
 globalThis.browser = globalThis.browser ?? globalThis.chrome;
 
+// ─── v1.5.2: iframe gate（pure function 設計，給 spec unit-test 用） ───
+// manifest 開 `all_frames: true` 讓 content script 也注入 iframe（為了翻 BBC 等
+// 站點嵌入的 Flourish / Datawrapper 等第三方圖表 iframe），但 0×0 廣告 iframe、
+// reCAPTCHA、cookie consent、Cxense / DoubleClick 等技術性 iframe 不該被翻——
+// 否則一個 BBC 文章頁就會跑 11 份 content script、CPU 與第三方 widget 都受傷。
+// gate 條件：iframe 內的可見尺寸 >= 200×100 才啟動 content script，否則 SK.disabled = true。
+function _sk_shouldDisableInFrame(isFrame, width, height, visible) {
+  if (!isFrame) return false;            // 主 frame 永遠啟動
+  if (!visible) return true;             // 不可見 → 跳過
+  if (width < 200 || height < 100) return true;  // 太小 → 視為廣告/分析 iframe
+  return false;
+}
+
+function _sk_isCurrentFrameDisabled() {
+  const isFrame = window !== window.top;
+  if (!isFrame) return false;
+  const html = document.documentElement;
+  let visible = !!html;
+  if (html) {
+    const cs = window.getComputedStyle?.(html);
+    if (cs && (cs.visibility === 'hidden' || cs.display === 'none')) visible = false;
+  }
+  return _sk_shouldDisableInFrame(isFrame, window.innerWidth, window.innerHeight, visible);
+}
+
 if (window.__shinkansen_loaded) {
   // 防止重複載入（SPA 框架可能重新注入 content script）
+} else if (_sk_isCurrentFrameDisabled()) {
+  // 在不合格 iframe 內（廣告/分析/cookie consent 等），不建立完整命名空間
+  window.__shinkansen_loaded = true;
+  window.__SK = { disabled: true, shouldDisableInFrame: _sk_shouldDisableInFrame };
 } else {
   window.__shinkansen_loaded = true;
 
   // ─── 命名空間初始化 ─────────────────────────────────────
   window.__SK = {};
   const SK = window.__SK;
+  SK.disabled = false;
+  SK.shouldDisableInFrame = _sk_shouldDisableInFrame;
 
   // ─── v1.5: Content Script 多語言支援 ──────────────────
   // content script 不能 import ES module，內嵌精簡版字串表。
@@ -159,6 +190,14 @@ if (window.__shinkansen_loaded) {
     // v1.4.12: 記錄本次翻譯使用的 preset slot（1/2/3），供 SPA 導航續翻 + 跨 tab sticky 用。
     // null = 非 preset 觸發（例如 autoTranslate 白名單、popup 按鈕舊路徑）。
     stickySlot: null,
+    // v1.5.0: 雙語對照模式
+    // displayMode：本次翻譯要用的模式（'single' 覆蓋 / 'dual' 雙語對照），讀自 storage 的設定值
+    // translatedMode：本次實際翻譯時用的模式（restorePage 依此分派 single / dual 還原邏輯）
+    // translationCache：dual 模式下，原段落 → wrapper 的對照表，供 Content Guard 在 SPA 刪掉
+    //   wrapper 時 re-append 用。Map<originalEl, wrapperEl>
+    displayMode: 'single',
+    translatedMode: null,
+    translationCache: new Map(),
   };
 
   // v1.4.12: content script 在 storage.sync.translatePresets 尚未寫入時的 fallback
@@ -216,9 +255,17 @@ if (window.__shinkansen_loaded) {
   // 避免誤抓 inline 元素內的短文字。
   SK.CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'ARTICLE', 'MAIN', 'ASIDE']);
 
-  // 直接排除（純技術性元素）
+  // 直接排除（純技術性元素 + 我們自己注入的譯文 wrapper）
+  // v1.5.2: SHINKANSEN-TRANSLATION 加入 HARD_EXCLUDE。
+  // 真實場景：BBC byline 翻譯後譯文是「《Inside Health》主持人，BBC Radio 4」，
+  // CJK 字元佔比 < 50%（人名 / 節目名保留英文），不會被 isTraditionalChinese 認定，
+  // 所以 isCandidateText 把譯文當「新英文段落」回傳。SPA observer 看到這個
+  // 「新段落」就 translateUnits + injectDual 又疊一個 wrapper——每次 BBC 頁面
+  // 自然 mutation 觸發 observer，wrapper 再疊一層，視覺上呈現「慢慢長出第二、第三個」。
+  // 把 wrapper 整個 tag 標記為 HARD_EXCLUDE，detector 完全跳過 wrapper 子樹即可根治。
   SK.HARD_EXCLUDE_TAGS = new Set([
     'SCRIPT', 'STYLE', 'CODE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'BUTTON', 'SELECT',
+    'SHINKANSEN-TRANSLATION',
   ]);
 
   // 語意容器排除
@@ -295,6 +342,18 @@ if (window.__shinkansen_loaded) {
 
   // CJK 字元匹配 pattern（serialize 用）
   SK.CJK_CHAR = '[\\u3400-\\u9fff\\uf900-\\ufaff\\u3000-\\u303f\\uff00-\\uffef]';
+
+  // ─── v1.5.0 雙語對照模式常數 ─────────────────────────
+  SK.TRANSLATION_WRAPPER_TAG = 'shinkansen-translation';
+  SK.DEFAULT_MARK_STYLE = 'tint';
+  // 視覺標記合法值（options 頁 radio + content.js sanitize）
+  SK.VALID_MARK_STYLES = new Set(['tint', 'bar', 'dashed', 'none']);
+  // 顯示模式合法值
+  SK.VALID_DISPLAY_MODES = new Set(['single', 'dual']);
+  // 計算「最近的 block 祖先」用的 display 值（雙語模式 inline 段落 wrapper 用）
+  SK.BLOCK_DISPLAY_VALUES = new Set([
+    'block', 'flex', 'grid', 'table', 'list-item', 'flow-root',
+  ]);
 
   // ─── 共用工具函式 ──────────────────────────────────────
 

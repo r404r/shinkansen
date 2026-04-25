@@ -4,9 +4,8 @@
 > regression spec 還沒寫」(對應 CLAUDE.md 硬規則 9 的路徑 B fallback)。
 >
 > **誰會讀**：
->   - **Cowork 端** 每次新對話會檢查本檔,若非空必須在第一句話提醒 Jimmy
->     (CLAUDE.md「開始新對話時的標準動作」第 4 步)
->   - **Claude Code 端** 跑完 `npm test` 全綠後若本檔非空,必須主動提醒
+>   - **Claude Code** 每次新對話會檢查本檔,若非空必須在第一句話提醒 Jimmy
+>     (CLAUDE.md「開始新對話時的標準動作」第 4 步);跑完 `npm test` 全綠後若本檔非空,也必須主動提醒
 >   - **Jimmy** 看到提醒後可以決定要立刻清,還是先繼續手上的事
 >
 > **怎麼清**：見 `測試流程說明.md` 的「指令 G:清 pending regression queue」。
@@ -172,19 +171,19 @@ eval content.js + mock storage + Debug Bridge TRANSLATE 觸發 translatePage）
 ### ~~v1.4.0~~ — 已補測試 → `test/unit/google-translate-batch.spec.js`
 （mock `globalThis.fetch` 直接 import ES module；驗證 SEP 串接、URL 長度分塊、空陣列、多批次 result 依 idx 寫回。Sanity 通過：把切批條件改成 `false` 後「長文字 → ≥2 次 fetch」斷言 fail。原 PENDING 提到的 Jest ESM 限制未實際阻礙——Playwright spec 直接走 `await import()` 即可，不需要動 jest 設定）
 
-### v1.2.47 — 2026-04-16 — 字幕 BATCH_SIZE 20→8（無需 regression 測試）
+### ~~v1.2.47~~ — 2026-04-16 — 字幕 BATCH_SIZE 20→8（無需 regression 測試）
 - **說明**：常數變更，正確性已由現有字幕翻譯流程涵蓋，效果差異需人工觀察 debug 面板確認
 
-### v1.2.46 — 2026-04-16 — 向後拖進度條修正（無需 regression 測試）
+### ~~v1.2.46~~ — 2026-04-16 — 向後拖進度條修正（無需 regression 測試）
 - **說明**：`onVideoSeeked` 行為變更 + `captionMapCoverageUpToMs` 防重複翻譯；seek 行為需要真實 video element，難以在靜態 fixture 中驗證
 
-### v1.2.45 — 2026-04-16 — 過期視窗追趕機制（無需 regression 測試）
+### ~~v1.2.45~~ — 2026-04-16 — 過期視窗追趕機制（無需 regression 測試）
 - **說明**：防禦性安全網，正常運作時不觸發；觸發條件（API > windowSize + adaptLook ≈ 56s）在真實使用中極難重現，難以寫自動化測試
 
-### v1.2.44 — 2026-04-16 — 自適應 lookahead（無需 regression 測試）
+### ~~v1.2.44~~ — 2026-04-16 — 自適應 lookahead（無需 regression 測試）
 - **說明**：觸發時機邏輯變更，依賴 real-time API 耗時，難以在靜態 fixture 中驗證；行為正確性可透過 debug 面板 `adapt look` 欄位人工確認
 
-### v1.2.43 — 2026-04-16 — debug 面板各批次耗時（UI 變更，無需 regression 測試）
+### ~~v1.2.43~~ — 2026-04-16 — debug 面板各批次耗時（UI 變更，無需 regression 測試）
 - **說明**：純 debug 顯示邏輯，不影響翻譯正確性，不需要 regression spec
 
 ### ~~v1.2.42~~ — 已補測試 → `test/regression/youtube-streaming-inject.spec.js`

@@ -5,6 +5,7 @@
 // v1.1.9: 拆分為 7 個檔案，本檔為主協調層，依賴 content-ns/toast/detect/serialize/inject/spa。
 
 (function(SK) {
+  if (!SK || SK.disabled) return;  // v1.5.2: iframe gate（見 content-ns.js）
 
   const STATE = SK.STATE;
 
@@ -15,19 +16,22 @@
       window.dispatchEvent(new CustomEvent('shinkansen-debug-response', { detail }));
     };
 
+    // v1.5.4: 全部走 Promise 風格——Chrome 88+ 跟 Firefox 全版本都支援，
+    // 而 callback 風格 Firefox 不認；此前混用會在 Firefox 直接壞。
+    // Chrome 端兩種寫法走同一條 native code path，效能 0 影響。
+    const forwardToBackground = (type, extraPayload) => {
+      const msg = extraPayload === undefined ? { type } : { type, payload: extraPayload };
+      browser.runtime.sendMessage(msg)
+        .then((res) => respond(res || { ok: true }))
+        .catch((err) => respond({ ok: false, error: err?.message || String(err) }));
+    };
+
     if (action === 'GET_LOGS') {
-      browser.runtime.sendMessage(
-        { type: 'GET_LOGS', payload: { afterSeq: afterSeq || 0 } },
-        (res) => respond(res || { ok: false, error: 'no response' }),
-      );
+      forwardToBackground('GET_LOGS', { afterSeq: afterSeq || 0 });
     } else if (action === 'CLEAR_LOGS') {
-      browser.runtime.sendMessage({ type: 'CLEAR_LOGS' }, (res) => {
-        respond(res || { ok: true });
-      });
+      forwardToBackground('CLEAR_LOGS');
     } else if (action === 'CLEAR_CACHE') {
-      browser.runtime.sendMessage({ type: 'CLEAR_CACHE' }, (res) => {
-        respond(res || { ok: true });
-      });
+      forwardToBackground('CLEAR_CACHE');
     } else if (action === 'TRANSLATE') {
       respond({ ok: true, triggered: true });
       SK.translatePage();
@@ -39,19 +43,13 @@
         respond({ ok: false, error: 'not translated' });
       }
     } else if (action === 'CLEAR_RPD') {
-      browser.runtime.sendMessage({ type: 'CLEAR_RPD' }, (res) => {
-        respond(res || { ok: true });
-      });
+      forwardToBackground('CLEAR_RPD');
     } else if (action === 'GET_PERSISTED_LOGS') {
       // v1.2.52: 讀取跨 service worker 重啟仍保留的持久化 log
-      browser.runtime.sendMessage({ type: 'GET_PERSISTED_LOGS' }, (res) => {
-        respond(res || { ok: false, error: 'no response' });
-      });
+      forwardToBackground('GET_PERSISTED_LOGS');
     } else if (action === 'CLEAR_PERSISTED_LOGS') {
       // v1.2.52: 清除持久化 log（測試前呼叫，避免舊資料干擾）
-      browser.runtime.sendMessage({ type: 'CLEAR_PERSISTED_LOGS' }, (res) => {
-        respond(res || { ok: true });
-      });
+      forwardToBackground('CLEAR_PERSISTED_LOGS');
     } else if (action === 'GET_STATE') {
       respond({
         ok: true,
@@ -370,6 +368,19 @@
       }
     }
 
+    // v1.5.0: 讀顯示模式設定，寫進 STATE.translatedMode 鎖定本次翻譯用的模式。
+    // 同一頁中途切模式不會即時生效（避免半翻半改），需重新觸發翻譯。
+    {
+      const mode = settings.displayMode;
+      STATE.translatedMode = (mode === 'dual') ? 'dual' : 'single';
+      STATE.displayMode = STATE.translatedMode;
+      // 雙語視覺標記樣式
+      const ms = settings.translationMarkStyle;
+      SK.currentMarkStyle = (ms && SK.VALID_MARK_STYLES.has(ms)) ? ms : SK.DEFAULT_MARK_STYLE;
+      // 雙語模式才注入 wrapper CSS（單語模式不需要）
+      if (STATE.translatedMode === 'dual') SK.ensureDualWrapperStyle?.();
+    }
+
     STATE.translating = true;
     STATE.abortController = new AbortController();
     const translateStartTime = Date.now();
@@ -641,14 +652,34 @@
     if (editModeActive) toggleEditMode(false);
     SK.cancelRescan();
     SK.stopSpaObserver();
-    STATE.originalHTML.forEach((originalSnapshot, el) => {
-      SK.restoreChildSnapshot(el, originalSnapshot);
-      el.removeAttribute('data-shinkansen-translated');
-    });
+
+    // v1.5.0: dual 模式還原——只移除 wrapper，原文未動所以不需 innerHTML 還原。
+    // v1.5.3: 改呼叫 SK.removeDualWrappers()——它同時清除 wrapper 與原段落上的
+    // data-shinkansen-dual-source attribute。先前手寫 querySelectorAll 只刪 wrapper、
+    // 沒清 attribute，導致下一輪 translatePage 時 injectDual 入口的
+    // `if (hasAttribute('data-shinkansen-dual-source')) return;` 命中所有段落，
+    // 全部早期 return，使用者「按 Opt+A 翻譯 → 再按還原 → 再按只看到原文」。
+    // single 模式維持原本反向覆寫 originalHTML 邏輯。
+    if (STATE.translatedMode === 'dual') {
+      SK.removeDualWrappers?.();
+      // dual 也可能有少數 fallback 元素走了 single 路徑（fragment unit 不支援 dual），
+      // 一併還原。
+      STATE.originalHTML.forEach((originalHTML, el) => {
+        el.innerHTML = originalHTML;
+        el.removeAttribute('data-shinkansen-translated');
+      });
+    } else {
+      STATE.originalHTML.forEach((originalHTML, el) => {
+        el.innerHTML = originalHTML;
+        el.removeAttribute('data-shinkansen-translated');
+      });
+    }
     STATE.originalHTML.clear();
     STATE.translatedHTML.clear();
+    STATE.translationCache?.clear?.();  // v1.5.0
     STATE.translated = false;
     STATE.translatedBy = null;  // v1.4.0
+    STATE.translatedMode = null;  // v1.5.0
     STATE.stickyTranslate = false;
     STATE.stickySlot = null;    // v1.4.12
     browser.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(() => {});
@@ -777,6 +808,16 @@
       }
     }
 
+    // v1.5.0: 顯示模式（與 Gemini 路徑相同邏輯）
+    {
+      const mode = settings.displayMode;
+      STATE.translatedMode = (mode === 'dual') ? 'dual' : 'single';
+      STATE.displayMode = STATE.translatedMode;
+      const ms = settings.translationMarkStyle;
+      SK.currentMarkStyle = (ms && SK.VALID_MARK_STYLES.has(ms)) ? ms : SK.DEFAULT_MARK_STYLE;
+      if (STATE.translatedMode === 'dual') SK.ensureDualWrapperStyle?.();
+    }
+
     STATE.translating = true;
     STATE.abortController = new AbortController();
     const translateStartTime = Date.now();
@@ -890,6 +931,11 @@
       } else {
         el.removeAttribute('contenteditable');
         el.classList.remove('shinkansen-editable');
+        // v1.5.5: 結束編輯時把使用者編輯後的 innerHTML 寫回 guard 快取，
+        // 否則下一次 Content Guard sweep 會把編輯蓋回原譯文。
+        if (STATE.translatedHTML.has(el)) {
+          STATE.translatedHTML.set(el, el.innerHTML);
+        }
       }
     }
     editModeActive = enable;
@@ -963,6 +1009,18 @@
     // v1.4.0: Google Translate 快捷鍵（Opt+G）
     if (msg?.type === 'TOGGLE_TRANSLATE_GOOGLE') {
       SK.translatePageGoogle();
+      return;
+    }
+    // v1.5.0: 顯示模式切換通知。若已翻譯，提示使用者重新翻譯以套用。
+    // 沒翻譯時不需提示——下次 translatePage 會自動讀新的 displayMode。
+    if (msg?.type === 'MODE_CHANGED') {
+      const mode = msg.mode === 'dual' ? 'dual' : 'single';
+      if (STATE.translated) {
+        const desc = mode === 'dual' ? '雙語對照' : '單語覆蓋';
+        SK.showToast('success', `顯示模式已切換為「${desc}」，請按快速鍵重新翻譯以套用`, {
+          autoHideMs: 5000,
+        });
+      }
       return;
     }
     // v1.4.21: popup 勾選狀態直接決定「應該啟或停」，不再走 toggle 翻面
@@ -1066,6 +1124,42 @@
       SK.injectTranslation(unit, translation, slots);
       return { sourceText: text, slotCount: slots.length };
     },
+    // v1.5.0: 雙語注入測試入口。可選 markStyle 覆蓋預設。
+    testInjectDual(el, translation, opts) {
+      if (!el || el.nodeType !== Node.ELEMENT_NODE) {
+        throw new Error('testInjectDual: el must be an Element');
+      }
+      SK.ensureDualWrapperStyle?.();
+      if (opts && opts.markStyle && SK.VALID_MARK_STYLES.has(opts.markStyle)) {
+        SK.currentMarkStyle = opts.markStyle;
+      } else if (!SK.currentMarkStyle) {
+        SK.currentMarkStyle = SK.DEFAULT_MARK_STYLE;
+      }
+      const { text, slots } = SK.serializeWithPlaceholders(el);
+      const unit = { kind: 'element', el };
+      SK.injectDual(unit, translation, slots);
+      // 將 STATE.translatedMode 設為 dual 讓 restorePage 等路徑能正確分派
+      STATE.translatedMode = 'dual';
+      STATE.translated = true;
+      return {
+        sourceText: text,
+        slotCount: slots.length,
+        wrapperPresent: !!STATE.translationCache.get(el),
+      };
+    },
+    testRestoreDual() {
+      // 提供 spec 模擬 restorePage 的 dual 分支
+      SK.removeDualWrappers?.();
+      STATE.translationCache?.clear?.();
+      STATE.translated = false;
+      STATE.translatedMode = null;
+    },
+    // v1.5.3: 暴露真正的 restorePage 給 spec 直接測（不走 testRestoreDual 簡化版）。
+    // 用途：驗 restorePage 的 dual 分支會清乾淨原段落上的 data-shinkansen-dual-source
+    // attribute，避免下一輪 translatePage 時 injectDual 入口因 attribute 殘留早期 return。
+    testRestorePage() {
+      restorePage();
+    },
     selectBestSlotOccurrences(text) {
       return SK.selectBestSlotOccurrences(text);
     },
@@ -1082,9 +1176,18 @@
     setTestState(overrides) {
       if ('translated' in overrides) STATE.translated = !!overrides.translated;
       if ('stickyTranslate' in overrides) STATE.stickyTranslate = !!overrides.stickyTranslate;
+      // v1.5.0: 暴露 translatedMode 給 spec 切換 dispatcher 行為
+      if ('translatedMode' in overrides) {
+        const m = overrides.translatedMode;
+        STATE.translatedMode = (m === 'dual' || m === 'single') ? m : null;
+      }
     },
     testRunContentGuard() {
       return SK.testRunContentGuard();
+    },
+    // v1.5.5: 暴露 toggleEditMode 給 spec 測編輯模式進出對 guard 快取的同步
+    testToggleEditMode(forceState) {
+      return toggleEditMode(forceState);
     },
     testGoogleDocsUrl(urlString) {
       try {
