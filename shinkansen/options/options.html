@@ -45,7 +45,7 @@
           <input type="password" id="apiKey" placeholder="貼上您的 Gemini API Key" data-i18n-placeholder="opt_api_key_placeholder">
           <button type="button" id="toggle-api-key" class="ghost-btn" aria-label="顯示 API Key" data-i18n="opt_api_key_show">顯示</button>
         </div>
-        <small class="muted" data-i18n="opt_desc_api_key_help">還沒有 API Key？請參考 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" target="_blank" rel="noopener">Gemini API Key 申請教學</a>（含帳單設定等容易遺漏的步驟）</small>
+        <small class="muted">還沒有 API Key？請參考 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" target="_blank" rel="noopener">Gemini API Key 申請教學</a>（含帳單設定等容易遺漏的步驟）</small>
       </label>
     </section>
 
@@ -59,7 +59,7 @@
       <div class="preset-cards">
         <div class="preset-card" data-slot="1">
           <div class="preset-card-header">
-            <strong data-i18n="opt_preset_1">預設 1</strong>
+            <strong>預設 1</strong>
             <span class="preset-key" id="preset-key-1">—</span>
           </div>
           <label>
@@ -85,7 +85,7 @@
 
         <div class="preset-card" data-slot="2">
           <div class="preset-card-header">
-            <strong data-i18n="opt_preset_2">預設 2</strong>
+            <strong>預設 2</strong>
             <span class="preset-key" id="preset-key-2">—</span>
           </div>
           <label>
@@ -111,7 +111,7 @@
 
         <div class="preset-card" data-slot="3">
           <div class="preset-card-header">
-            <strong data-i18n="opt_preset_3">預設 3</strong>
+            <strong>預設 3</strong>
             <span class="preset-key" id="preset-key-3">—</span>
           </div>
           <label>
@@ -238,9 +238,9 @@
       <label>
         <span data-i18n="opt_gemini_model">模型</span>
         <select id="model">
-          <option value="gemini-3.1-flash-lite-preview" data-i18n="opt_val_model_flash_lite">gemini-3.1-flash-lite-preview（$0.10 / $0.30）— 翻譯品質普普，不要求最高品質可用</option>
-          <option value="gemini-3-flash-preview" data-i18n="opt_val_model_flash">gemini-3-flash-preview（$0.50 / $3.00）— 推薦選擇，翻譯品質高價格便宜</option>
-          <option value="gemini-3.1-pro-preview" data-i18n="opt_val_model_pro">gemini-3.1-pro-preview（$2.00 / $12.00）— Flash 就夠厲害了，中樂透的話我也無法阻止你用這個最頂的</option>
+          <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview（$0.10 / $0.30）— 翻譯品質普普，不要求最高品質可用</option>
+          <option value="gemini-3-flash-preview">gemini-3-flash-preview（$0.50 / $3.00）— 推薦選擇，翻譯品質高價格便宜</option>
+          <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview（$2.00 / $12.00）— Flash 就夠厲害了，中樂透的話我也無法阻止你用這個最頂的</option>
           <option value="__custom__" data-i18n="opt_val_model_custom">自行輸入模型 ID…</option>
         </select>
         <div id="custom-model-row" class="custom-model-row" hidden>
@@ -256,13 +256,13 @@
           <option value="STANDARD" data-i18n="opt_val_tier_standard">Standard（原價）</option>
           <option value="PRIORITY" data-i18n="opt_val_tier_priority">Priority（優先，更貴）</option>
         </select>
-        <small class="muted" data-i18n="opt_desc_service_tier">注意：Service Tier 僅較新模型支援（如 gemini-3-flash-preview），舊模型請用「預設」避免錯誤</small>
+        <small class="muted">注意：Service Tier 僅較新模型支援（如 gemini-3-flash-preview），舊模型請用「預設」避免錯誤</small>
       </label>
     </section>
 
     <section>
       <h2 data-i18n="opt_section_pricing">模型計價（USD）</h2>
-      <p class="muted" data-i18n="opt_desc_pricing">用於計算翻譯成本，單位為「每 1M tokens 的美金價格」。切換模型時會自動帶入參考價，你也可以手動修改。請至 <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener">Gemini 官方定價頁</a> 查詢最新費率</p>
+      <p class="muted">用於計算翻譯成本，單位為「每 1M tokens 的美金價格」。切換模型時會自動帶入參考價，你也可以手動修改。請至 <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener">Gemini 官方定價頁</a> 查詢最新費率</p>
       <label>
         <span data-i18n="opt_label_input_price">Input tokens 單價（USD / 1M tokens）</span>
         <input type="number" id="inputPerMTok" step="0.01" min="0" placeholder="0.30">
@@ -275,16 +275,16 @@
 
     <section>
       <h2 data-i18n="opt_section_quota">配額（API 用量限制）</h2>
-      <p class="muted" data-i18n="opt_desc_quota">根據你的 Gemini API 付費層級，自動控制請求頻率，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
+      <p class="muted">根據你的 Gemini API 付費層級，自動控制請求頻率，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
       <label>
         <span data-i18n="opt_label_api_tier">Gemini API 層級</span>
         <select id="tier">
           <option value="free" data-i18n="opt_val_tier_free">Free（免費）</option>
-          <option value="tier1" data-i18n="opt_val_tier_1">Tier 1（付費，已啟用 billing）</option>
-          <option value="tier2" data-i18n="opt_val_tier_2">Tier 2（累積消費 $250+，首次付款 30 天後）</option>
+          <option value="tier1">Tier 1（付費，已啟用 billing）</option>
+          <option value="tier2">Tier 2（累積消費 $250+，首次付款 30 天後）</option>
           <option value="custom" data-i18n="opt_val_tier_custom">自訂（手動填入下方三個數字）</option>
         </select>
-        <small class="muted" data-i18n="opt_desc_api_tier">層級與對應上限見 <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">Gemini API Rate Limits</a>，切換層級時下方數值會自動更新</small>
+        <small class="muted">層級與對應上限見 <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">Gemini API Rate Limits</a>，切換層級時下方數值會自動更新</small>
       </label>
       <div class="triple">
         <label>
@@ -303,12 +303,12 @@
       <label>
         <span data-i18n="opt_label_safety_margin">安全邊際</span> <span id="safetyMarginLabel">10</span>%
         <input type="range" id="safetyMargin" min="0" max="30" step="5" value="10">
-        <small class="muted" data-i18n="opt_desc_safety_margin">實際使用的上限會乘以（100% − 邊際），避免踩邊觸發 429，預設 10%</small>
+        <small class="muted">實際使用的上限會乘以（100% − 邊際），避免踩邊觸發 429，預設 10%</small>
       </label>
       <label>
         <span data-i18n="opt_label_max_retries">失敗重試次數</span>
         <input type="number" id="maxRetries" step="1" min="0" max="10">
-        <small class="muted" data-i18n="opt_desc_max_retries">單批翻譯遇到 API 錯誤（如 429 配額限制）時的最大重試次數，設為 0 表示不重試、失敗即跳過，預設 3 次</small>
+        <small class="muted">單批翻譯遇到 API 錯誤（如 429 配額限制）時的最大重試次數，設為 0 表示不重試、失敗即跳過，預設 3 次</small>
       </label>
     </section>
 
@@ -317,22 +317,22 @@
       <label>
         Temperature
         <input type="number" id="temperature" step="0.1" min="0" max="2">
-        <small class="muted" data-i18n="opt_desc_temperature">控制回覆的隨機程度。數字越低翻譯越穩定一致，越高則越有創意但可能偏離原意，範圍 0–2，預設 1.0（Gemini 3 Flash 原廠預設值）</small>
+        <small class="muted">控制回覆的隨機程度。數字越低翻譯越穩定一致，越高則越有創意但可能偏離原意，範圍 0–2，預設 1.0（Gemini 3 Flash 原廠預設值）</small>
       </label>
       <label>
         Top P
         <input type="number" id="topP" step="0.05" min="0" max="1">
-        <small class="muted" data-i18n="opt_desc_top_p">限制模型從機率最高的幾個候選詞中挑選。數字越低結果越集中，越高則用詞越多樣，範圍 0–1，預設 0.95</small>
+        <small class="muted">限制模型從機率最高的幾個候選詞中挑選。數字越低結果越集中，越高則用詞越多樣，範圍 0–1，預設 0.95</small>
       </label>
       <label>
         Top K
         <input type="number" id="topK" step="1" min="1" max="100">
-        <small class="muted" data-i18n="opt_desc_top_k">限制每次選詞時最多考慮幾個候選詞。數字越小越精準，越大越多樣，範圍 1–100，預設 40（Gemini 3 Flash 原廠預設值，Pro 系列為 64）</small>
+        <small class="muted">限制每次選詞時最多考慮幾個候選詞。數字越小越精準，越大越多樣，範圍 1–100，預設 40（Gemini 3 Flash 原廠預設值，Pro 系列為 64）</small>
       </label>
       <label>
         Max Output Tokens
         <input type="number" id="maxOutputTokens" step="256" min="256">
-        <small class="muted" data-i18n="opt_desc_max_output_tokens">Gemini 每次回覆的最大 token 數量。數字越大，單批能翻譯的內容越多，但也會消耗更多費用，上限 65,535，預設 8,192，一般不需要調整</small>
+        <small class="muted">Gemini 每次回覆的最大 token 數量。數字越大，單批能翻譯的內容越多，但也會消耗更多費用，上限 65,535，預設 8,192，一般不需要調整</small>
       </label>
       <label>
         <span data-i18n="opt_label_translate_prompt">翻譯 Prompt</span>
@@ -342,26 +342,26 @@
 
     <section>
       <h2 data-i18n="opt_section_performance">效能（翻譯效率調校）</h2>
-      <p class="muted" data-i18n="opt_desc_performance">調整每批翻譯的大小與並行數量，影響翻譯速度與品質的平衡</p>
+      <p class="muted">調整每批翻譯的大小與並行數量，影響翻譯速度與品質的平衡</p>
       <label>
         <span data-i18n="opt_label_max_concurrent">同時並發批次上限</span>
         <input type="number" id="maxConcurrentBatches" step="1" min="1" max="50">
-        <small class="muted" data-i18n="opt_desc_max_concurrent">同時送出幾批翻譯請求。數字越大翻越快，但也越容易撞到配額上限，長文建議 5–10，短文可設 1（逐批翻譯）</small>
+        <small class="muted">同時送出幾批翻譯請求。數字越大翻越快，但也越容易撞到配額上限，長文建議 5–10，短文可設 1（逐批翻譯）</small>
       </label>
       <label>
         <span data-i18n="opt_label_max_units_per_batch">每批段數上限</span>
         <input type="number" id="maxUnitsPerBatch" step="1" min="1" max="100">
-        <small class="muted" data-i18n="opt_desc_max_units_per_batch">每一批最多包含幾段。這裡的「段」是指網頁上一個獨立的文字區塊（例如一個段落、一個標題、一個列表項目），由網頁結構自動偵測。數字越大每批翻越多，但太大容易導致翻譯對齊失準，預設 12</small>
+        <small class="muted">每一批最多包含幾段。這裡的「段」是指網頁上一個獨立的文字區塊（例如一個段落、一個標題、一個列表項目），由網頁結構自動偵測。數字越大每批翻越多，但太大容易導致翻譯對齊失準，預設 12</small>
       </label>
       <label>
         <span data-i18n="opt_label_max_chars_per_batch">每批字元預算</span>
         <input type="number" id="maxCharsPerBatch" step="500" min="500" max="20000">
-        <small class="muted" data-i18n="opt_desc_max_chars_per_batch">每一批累積的原文字元數上限（與段數上限先到先封口）。數字越大每批能裝越多內容，但太大可能超出模型輸出長度限制，預設 3500</small>
+        <small class="muted">每一批累積的原文字元數上限（與段數上限先到先封口）。數字越大每批能裝越多內容，但太大可能超出模型輸出長度限制，預設 3500</small>
       </label>
       <label>
         <span data-i18n="opt_label_max_translate_units">單頁翻譯段落上限</span>
         <input type="number" id="maxTranslateUnits" step="100" min="0" max="10000">
-        <small class="muted" data-i18n="opt_desc_max_translate_units">單次翻譯最多處理幾段。超大頁面（如維基百科長條目）超過此上限時，多餘段落會被略過。設為 0 表示不限制，預設 1000</small>
+        <small class="muted">單次翻譯最多處理幾段。超大頁面（如維基百科長條目）超過此上限時，多餘段落會被略過。設為 0 表示不限制，預設 1000</small>
       </label>
     </section>
 
@@ -427,7 +427,7 @@
     <!-- 術語表一致化（自動擷取，從 Gemini Tab 搬來） -->
     <section>
       <h2 data-i18n="opt_glossary_auto_title">自動術語擷取</h2>
-      <p class="muted" data-i18n="opt_desc_glossary_auto">長文翻譯時，先呼叫 Gemini 擷取全文專有名詞建立對照表，確保分批翻譯的名詞譯名一致。短文（1 批以內）自動跳過。預設不開啟——開啟後術語翻譯會跳過 system prompt 的部分指示（例如「英文人名保留不翻」會失效）。詳細說明見 <a href="https://github.com/jimmysu0309/shinkansen#術語表一致化" target="_blank" rel="noopener">README</a></p>
+      <p class="muted">長文翻譯時，先呼叫 Gemini 擷取全文專有名詞建立對照表，確保分批翻譯的名詞譯名一致。短文（1 批以內）自動跳過。預設不開啟——開啟後術語翻譯會跳過 system prompt 的部分指示（例如「英文人名保留不翻」會失效）。詳細說明見 <a href="https://github.com/jimmysu0309/shinkansen#術語表一致化" target="_blank" rel="noopener">README</a></p>
       <label class="switch">
         <input type="checkbox" id="glossaryEnabled">
         <span data-i18n="opt_glossary_auto_enable">啟用自動術語擷取</span>
@@ -435,17 +435,17 @@
       <label>
         <span data-i18n="opt_label_glossary_temperature">術語表 Temperature</span>
         <input type="number" id="glossaryTemperature" step="0.1" min="0" max="2">
-        <small class="muted" data-i18n="opt_desc_glossary_temperature">控制術語擷取的穩定度，越低越穩定。預設 0.1，一般不需調整</small>
+        <small class="muted">控制術語擷取的穩定度，越低越穩定。預設 0.1，一般不需調整</small>
       </label>
       <label>
         <span data-i18n="opt_label_glossary_timeout">逾時時間（毫秒）</span>
         <input type="number" id="glossaryTimeout" step="1000" min="3000" max="60000">
-        <small class="muted" data-i18n="opt_desc_glossary_timeout">長文等待術語表的最長時間。超過則放棄術語表直接翻譯，預設 60000（60 秒）</small>
+        <small class="muted">長文等待術語表的最長時間。超過則放棄術語表直接翻譯，預設 60000（60 秒）</small>
       </label>
       <label>
         <span data-i18n="opt_label_glossary_prompt">術語擷取 Prompt</span>
         <textarea id="glossaryPrompt" rows="10"></textarea>
-        <small class="muted" data-i18n="opt_desc_glossary_prompt">控制 Gemini 擷取哪些類型的專有名詞。進階使用者可自行調整</small>
+        <small class="muted">控制 Gemini 擷取哪些類型的專有名詞。進階使用者可自行調整</small>
       </label>
     </section>
 
@@ -545,14 +545,14 @@
           <input type="checkbox" id="ytDebugToast">
           <div class="checkbox-body">
             <span data-i18n="opt_label_yt_debug_toast">顯示字幕翻譯即時狀態面板</span>
-            <small class="muted" data-i18n="opt_desc_yt_debug_toast">開啟後，字幕翻譯啟動時頁面左上角會出現一個即時狀態面板，顯示 buffer、batch API 耗時、captionMap 大小等診斷資訊。各欄位含意詳見 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/DEBUG-BOARD.md" target="_blank" rel="noopener">DEBUG-BOARD.md</a>。</small>
+            <small class="muted">開啟後，字幕翻譯啟動時頁面左上角會出現一個即時狀態面板，顯示 buffer、batch API 耗時、captionMap 大小等診斷資訊。各欄位含意詳見 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/DEBUG-BOARD.md" target="_blank" rel="noopener">DEBUG-BOARD.md</a>。</small>
           </div>
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="ytOnTheFly">
           <div class="checkbox-body">
             <span data-i18n="opt_label_yt_on_the_fly">啟用 On-the-fly 備援翻譯</span>
-            <small class="muted" data-i18n="opt_desc_yt_on_the_fly">開啟後，當字幕出現時若尚未預翻（captionMap 未命中），會即時送 API 翻譯。使用較慢的模型（如 Flash Lite）時建議關閉，避免即時翻譯請求阻塞預翻進度。預設關閉。</small>
+            <small class="muted">開啟後，當字幕出現時若尚未預翻（captionMap 未命中），會即時送 API 翻譯。使用較慢的模型（如 Flash Lite）時建議關閉，避免即時翻譯請求阻塞預翻進度。預設關閉。</small>
           </div>
         </label>
       </section>
@@ -605,8 +605,8 @@
 
       <!-- Log 計數 -->
       <div class="log-status">
-        <span id="log-count" data-i18n="opt_log_count">0 筆</span>
-        <span id="log-filtered-count" hidden data-i18n="opt_log_filtered_count">（篩選後 0 筆）</span>
+        <span id="log-count">0 筆</span>
+        <span id="log-filtered-count" hidden>（篩選後 0 筆）</span>
       </div>
 
       <!-- 除錯選項（從設定分頁搬過來） -->
@@ -634,7 +634,7 @@
           <option value="gemini" data-i18n="opt_val_yt_engine_gemini">Gemini（預設，品質較高，需要 API Key）</option>
           <option value="google" data-i18n="opt_val_yt_engine_google">Google Translate（免費，速度較快，不需 API Key）</option>
         </select>
-        <small class="muted" data-i18n="opt_desc_yt_engine">選擇 Google Translate 時，下方模型、計價、Prompt 設定均不作用（Google MT 不支援自訂 Prompt）。</small>
+        <small class="muted">選擇 Google Translate 時，下方模型、計價、Prompt 設定均不作用（Google MT 不支援自訂 Prompt）。</small>
       </label>
     </section>
 
@@ -643,43 +643,43 @@
       <label class="checkbox-label">
         <input type="checkbox" id="ytAutoTranslate">
         <span data-i18n="opt_label_yt_auto">偵測到 YouTube 影片時自動翻譯字幕</span>
-        <small class="muted" data-i18n="opt_desc_yt_auto">開啟後進入 YouTube 影片頁面時，會自動開始翻譯字幕，不需手動在 Popup 開啟開關。</small>
+        <small class="muted">開啟後進入 YouTube 影片頁面時，會自動開始翻譯字幕，不需手動在 Popup 開啟開關。</small>
       </label>
     </section>
 
     <section>
       <h2 data-i18n="opt_section_yt_window">翻譯視窗設定</h2>
-      <p class="muted" data-i18n="opt_desc_yt_window">字幕依時間分批翻譯。每批翻譯涵蓋一段時間內的字幕，在快用完前提前翻好下一批。</p>
+      <p class="muted">字幕依時間分批翻譯。每批翻譯涵蓋一段時間內的字幕，在快用完前提前翻好下一批。</p>
       <label>
         <span data-i18n="opt_label_yt_window_size">每批涵蓋秒數</span>
         <input type="number" id="ytWindowSizeS" step="5" min="10" max="120">
-        <small class="muted" data-i18n="opt_desc_yt_window_size">每次送去翻譯的字幕涵蓋幾秒（預設 30 秒）。數字越大每次翻越多，但第一次等待時間也越長。</small>
+        <small class="muted">每次送去翻譯的字幕涵蓋幾秒（預設 30 秒）。數字越大每次翻越多，但第一次等待時間也越長。</small>
       </label>
       <label>
         <span data-i18n="opt_label_yt_lookahead">提前觸發秒數</span>
         <input type="number" id="ytLookaheadS" step="1" min="3" max="30">
-        <small class="muted" data-i18n="opt_desc_yt_lookahead">在目前批次快用完前幾秒，提前翻好下一批（預設 10 秒）。建議不低於 5 秒。</small>
+        <small class="muted">在目前批次快用完前幾秒，提前翻好下一批（預設 10 秒）。建議不低於 5 秒。</small>
       </label>
     </section>
 
     <!-- v1.2.39: 字幕獨立模型設定 -->
     <section>
       <h2 data-i18n="opt_section_yt_model">翻譯模型</h2>
-      <p class="muted" data-i18n="opt_desc_yt_model_pricing">括號為 Standard tier 參考價（input / output，每 1M tokens USD）。</p>
+      <p class="muted">括號為 Standard tier 參考價（input / output，每 1M tokens USD）。</p>
       <label>
         <span data-i18n="opt_gemini_model">模型</span>
         <select id="ytModel">
           <option value="" data-i18n="opt_val_yt_model_same">（與文章翻譯相同）</option>
-          <option value="gemini-3.1-flash-lite-preview" data-i18n="opt_val_yt_model_flash_lite">gemini-3.1-flash-lite-preview（$0.10 / $0.30）— 便宜，字幕品質足夠</option>
-          <option value="gemini-3-flash-preview" data-i18n="opt_val_yt_model_flash">gemini-3-flash-preview（$0.50 / $3.00）— 推薦</option>
-          <option value="gemini-3.1-pro-preview" data-i18n="opt_val_yt_model_pro">gemini-3.1-pro-preview（$2.00 / $12.00）— 大炮打小鳥，不推薦</option>
+          <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview（$0.10 / $0.30）— 便宜，字幕品質足夠</option>
+          <option value="gemini-3-flash-preview">gemini-3-flash-preview（$0.50 / $3.00）— 推薦</option>
+          <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview（$2.00 / $12.00）— 大炮打小鳥，不推薦</option>
         </select>
-        <small class="muted" data-i18n="opt_desc_yt_model_select">選擇模型後，下方計價會自動帶入參考價；你也可以手動修改。</small>
+        <small class="muted">選擇模型後，下方計價會自動帶入參考價；你也可以手動修改。</small>
       </label>
       <label>
         <span data-i18n="opt_label_yt_input_price">字幕 Input 單價（USD / 1M tokens）</span>
         <input type="number" id="ytInputPerMTok" step="0.01" min="0" placeholder="（與文章翻譯相同）" data-i18n-placeholder="opt_placeholder_yt_same">
-        <small class="muted" data-i18n="opt_desc_yt_input_price">空白表示使用與文章翻譯相同的計價，不需重複設定。</small>
+        <small class="muted">空白表示使用與文章翻譯相同的計價，不需重複設定。</small>
       </label>
       <label>
         <span data-i18n="opt_label_yt_output_price">字幕 Output 單價（USD / 1M tokens）</span>
@@ -697,7 +697,7 @@
 
     <section>
       <h2 data-i18n="opt_section_yt_prompt">字幕翻譯 System Prompt</h2>
-      <p class="muted" data-i18n="opt_desc_yt_prompt">字幕翻譯使用獨立的 system prompt，與文章翻譯分開。字幕著重口語化、逐段保持、不合併。</p>
+      <p class="muted">字幕翻譯使用獨立的 system prompt，與文章翻譯分開。字幕著重口語化、逐段保持、不合併。</p>
       <label>
         <textarea id="ytSystemPrompt" rows="14" style="font-family: monospace; font-size: 12px;"></textarea>
       </label>
