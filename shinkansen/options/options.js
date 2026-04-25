@@ -1496,8 +1496,8 @@ $('usage-export-csv').addEventListener('click', async () => {
   const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const fromStr = $('usage-from').value.replace(/-/g, '');
-  const toStr = $('usage-to').value.replace(/-/g, '');
+  const fromStr = ($('usage-from-date')?.value || '').replace(/-/g, '');
+  const toStr = ($('usage-to-date')?.value || '').replace(/-/g, '');
   a.href = url;
   a.download = `shinkansen-usage-${fromStr}-${toStr}.csv`;
   a.click();

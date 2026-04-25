@@ -1,7 +1,16 @@
-# Shinkansen 變更記錄
+# Shinkansen-Nozomi 變更記錄
 
 > 完整版本歷史。SPEC.md §2.1 只保留功能摘要表，詳細說明均在此保存。
 > 版本號規則：v1.0.0 起三段式；v0.13–v0.99 為兩段式歷史版本。
+
+---
+
+## v1.7.0
+
+**v1.7.0** — 合併 upstream v1.5.6–v1.5.7 + Nozomi 獨立功能整合。
+
+  - **合併 upstream**：中國用語黑名單（`lib/forbidden-terms.js`）+ 自訂 OpenAI 相容模型（`lib/openai-compat.js`）+ `lib/system-instruction.js` 共用模組 + WordPress hero 圖修法
+  - **Nozomi 獨有功能**：Firefox 雙平台構建、多語言介面（zh-TW/zh-CN/ja）、選區翻譯、Google Translate 目標語言跟隨 uiLocale、項目改名 Shinkansen-Nozomi
 
 ---
 
