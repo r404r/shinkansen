@@ -221,7 +221,7 @@ async function refreshPresetKeyBindings() {
         keyEl.textContent = cmd.shortcut;
         keyEl.removeAttribute('data-unset');
       } else {
-        keyEl.textContent = '未設定';
+        keyEl.textContent = t('opt_preset_key_unset');
         keyEl.setAttribute('data-unset', '1');
       }
     }
@@ -327,10 +327,10 @@ async function save() {
     })(),
   };
   await browser.storage.sync.set(settings);
-  $('save-status').textContent = '✓ 已儲存';
+  $('save-status').textContent = t('opt_saved');
   setTimeout(() => { $('save-status').textContent = ''; }, 2000);
   // v0.94: 顯示綠色已儲存提示條
-  showSaveBar('saved', '設定已儲存');
+  showSaveBar('saved', t('opt_saved'));
 }
 
 $('save').addEventListener('click', save);
@@ -343,7 +343,7 @@ $('save-youtube').addEventListener('click', save);
 // Debug 分頁
 $('save-debug').addEventListener('click', save);
 $('yt-reset-prompt').addEventListener('click', () => {
-  $('ytSystemPrompt').value = DEFAULT_SUBTITLE_SYSTEM_PROMPT;
+  $('ytSystemPrompt').value = getDefaultPromptsForLocale(getLocale()).subtitlePrompt;
   markDirty(); // 值已變更，標記為未儲存
 });
 
@@ -409,12 +409,12 @@ $('toggle-api-key').addEventListener('click', () => {
   const btn = $('toggle-api-key');
   if (input.type === 'password') {
     input.type = 'text';
-    btn.textContent = '隱藏';
-    btn.setAttribute('aria-label', '隱藏 API Key');
+    btn.textContent = t('opt_api_key_hide');
+    btn.setAttribute('aria-label', t('opt_api_key_hide') + ' API Key');
   } else {
     input.type = 'password';
-    btn.textContent = '顯示';
-    btn.setAttribute('aria-label', '顯示 API Key');
+    btn.textContent = t('opt_api_key_show');
+    btn.setAttribute('aria-label', t('opt_api_key_show') + ' API Key');
   }
 });
 
@@ -442,12 +442,12 @@ $('toastOpacity').addEventListener('input', () => {
 $('toastPosition').addEventListener('change', markDirty);
 
 $('reset-defaults').addEventListener('click', async () => {
-  if (!confirm('確定要回復所有預設設定嗎？\n\nAPI Key 會被保留，翻譯快取與累計使用統計不受影響。\n此操作無法復原。')) return;
+  if (!confirm(t('opt_confirm_reset'))) return;
   // v0.62 起：apiKey 在 browser.storage.local，不在 sync 裡，
   // 所以直接 clear sync 即可；apiKey 自然不受影響。
   await browser.storage.sync.clear();
   await load();
-  $('save-status').textContent = '✓ 已回復預設設定';
+  $('save-status').textContent = t('opt_reset_done');
   $('save-status').style.color = '#34c759';
   setTimeout(() => {
     $('save-status').textContent = '';
@@ -600,17 +600,17 @@ $('import-input').addEventListener('change', async (e) => {
     }
     const { clean, warnings } = sanitizeImport(data);
     if (Object.keys(clean).length === 0) {
-      alert('匯入失敗：檔案中沒有任何有效的設定欄位');
+      alert(t('opt_import_fail_empty'));
       return;
     }
     await browser.storage.sync.set(clean);
     await load();
     const msg = warnings.length > 0
-      ? '匯入完成，但部分欄位被略過：\n\n' + warnings.join('\n')
-      : '匯入成功';
-    alert(msg + '\n\n（API Key 不在匯入範圍，請自行輸入）');
+      ? t('opt_import_partial') + '\n\n' + warnings.join('\n')
+      : t('opt_import_success');
+    alert(msg + '\n\n' + t('opt_import_apikey_note'));
   } catch (err) {
-    alert('匯入失敗：' + err.message);
+    alert(t('opt_import_fail', err.message));
   }
 });
 
@@ -1180,7 +1180,7 @@ document.querySelectorAll('.gran-btn').forEach(btn => {
 $('usage-export-csv').addEventListener('click', async () => {
   const { from, to } = getUsageDateRange();
   const res = await browser.runtime.sendMessage({ type: 'EXPORT_USAGE_CSV', payload: { from, to } });
-  if (!res?.ok) { alert('匯出失敗：' + (res?.error || '未知錯誤')); return; }
+  if (!res?.ok) { alert(t('opt_usage_export_fail', res?.error || t('popup_unknown_error'))); return; }
   const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1194,12 +1194,12 @@ $('usage-export-csv').addEventListener('click', async () => {
 
 // 清除紀錄
 $('usage-clear').addEventListener('click', async () => {
-  if (!confirm('確定要清除所有翻譯用量紀錄嗎？\n此操作無法復原。')) return;
+  if (!confirm(t('opt_usage_confirm_clear'))) return;
   const res = await browser.runtime.sendMessage({ type: 'CLEAR_USAGE' });
   if (res?.ok) {
     loadUsageData();
   } else {
-    alert('清除失敗：' + (res?.error || '未知錯誤'));
+    alert(t('opt_usage_clear_fail', res?.error || t('popup_unknown_error')));
   }
 });
 
@@ -1465,4 +1465,12 @@ $('uiLocale')?.addEventListener('change', async (e) => {
   setLocale(locale);
   await browser.storage.sync.set({ uiLocale: locale });
   applyLocale(document);
+  // Update prompt textareas to match new locale
+  const prompts = getDefaultPromptsForLocale(locale);
+  const siEl = $('systemInstruction');
+  if (siEl) siEl.value = prompts.systemPrompt;
+  const gpEl = $('glossaryPrompt');
+  if (gpEl) gpEl.value = prompts.glossaryPrompt;
+  const ytEl = $('ytSystemPrompt');
+  if (ytEl) ytEl.value = prompts.subtitlePrompt;
 });
