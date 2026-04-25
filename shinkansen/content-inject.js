@@ -12,7 +12,7 @@
    */
   SK.snapshotOnce = function snapshotOnce(el) {
     if (!STATE.originalHTML.has(el)) {
-      STATE.originalHTML.set(el, SK.cloneChildSnapshot(el));
+      STATE.originalHTML.set(el, el.innerHTML);
     }
   };
 

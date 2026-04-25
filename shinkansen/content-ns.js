@@ -179,12 +179,12 @@ if (window.__shinkansen_loaded) {
     abortController: null,   // v0.80: AbortController，翻譯中按 Alt+S 或離開頁面時 abort
     cache: new Map(),       // 段落文字 → 譯文
     // 記錄每個被替換過的元素與它原本的子節點快照，供還原使用。
-    // v0.36 起改為 Map，key 是 element，value 是 child node snapshot。這樣同一個
+    // v0.36 起改為 Map，key 是 element，value 是 innerHTML 字串。這樣同一個
     // element 被多個 fragment 單位改動時，只會快照一次「真正的原始 HTML」，
     // 不會被後續 fragment 的中途狀態污染。
-    originalHTML: new Map(), // el → Node[]
-    // v1.0.14: 儲存翻譯後的子節點快照，用於偵測框架覆寫並重新套用。
-    translatedHTML: new Map(), // el → Node[]
+    originalHTML: new Map(), // el → innerHTML string
+    // v1.0.14: 儲存翻譯後的 innerHTML，用於偵測框架覆寫並重新套用。
+    translatedHTML: new Map(), // el → innerHTML string
     // v1.0.23: 續翻模式
     stickyTranslate: false,
     // v1.4.12: 記錄本次翻譯使用的 preset slot（1/2/3），供 SPA 導航續翻 + 跨 tab sticky 用。
