@@ -331,7 +331,6 @@
     // modelOverride 覆蓋 geminiConfig.model，slot 用於 STICKY_SET。
     // v1.4.13: options.label 由 preset 傳入，在 loading toast 顯示讓使用者知道目前哪個 preset 在跑。
     let labelPrefix = options.label ? `[${options.label}] ` : '';
-    if (selectionMode) labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;
 
     if (STATE.translated) {
       restorePage();
@@ -412,6 +411,7 @@
     if (selFiltered) {
       units = selFiltered;
       selectionMode = true;
+      labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;
     }
 
     if (units.length === 0) {
