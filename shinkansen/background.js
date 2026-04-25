@@ -570,7 +570,10 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
   // v1.5.6: 中國用語黑名單。從 settings 讀清單後一路傳到 translateBatch（注入到 systemInstruction），
   // 同時計算 hash 加進 cache key 後綴，讓使用者修改清單後既有快取自動失效。
   // 空清單時 hash 為空字串，不附加後綴，向下相容既有 v1.5.5 之前的快取 key。
-  const forbiddenTermsList = Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : [];
+  // v1.7: zh-CN 模式下大陸用語是正確的，跳過黑名單
+  const forbiddenTermsList = (settings.uiLocale === 'zh-CN')
+    ? []
+    : (Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : []);
 
   // v0.70: 若有術語表，快取 key 加上 glossary hash 後綴，
   // 確保「有術語表」與「無術語表」的翻譯分開快取。
@@ -813,7 +816,10 @@ async function handleTranslateCustom(payload, sender) {
     }
   }
 
-  const forbiddenTermsList = Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : [];
+  // v1.7: zh-CN 模式下大陸用語是正確的，跳過黑名單
+  const forbiddenTermsList = (settings.uiLocale === 'zh-CN')
+    ? []
+    : (Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : []);
 
   // Cache key：'_oc' base tag + glossary/forbidden hash + baseUrl hash + safe model
   let suffix = '_oc';
