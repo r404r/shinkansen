@@ -256,7 +256,7 @@
       if (ok) {
         replaceNodeInPlace(el, frag);
         el.setAttribute('data-shinkansen-translated', '1');
-        STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+        STATE.translatedHTML.set(el, el.innerHTML);
         return;
       }
       const cleaned = SK.stripStrayPlaceholderMarkers(translation);
@@ -265,18 +265,18 @@
       if (recovered) {
         replaceNodeInPlace(el, recovered);
         el.setAttribute('data-shinkansen-translated', '1');
-        STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+        STATE.translatedHTML.set(el, el.innerHTML);
         return;
       }
       plainTextFallback(el, cleaned);
       el.setAttribute('data-shinkansen-translated', '1');
-      STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+      STATE.translatedHTML.set(el, el.innerHTML);
       return;
     }
 
     replaceTextInPlace(el, translation);
     el.setAttribute('data-shinkansen-translated', '1');
-    STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+    STATE.translatedHTML.set(el, el.innerHTML);
   };
 
   function injectFragmentTranslation(unit, translation, slots) {
