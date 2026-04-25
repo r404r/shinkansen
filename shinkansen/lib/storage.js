@@ -1,6 +1,7 @@
 // storage.js — 設定讀寫封裝
 import { browser } from './compat.js';
 import { DEFAULT_UNITS_PER_BATCH, DEFAULT_CHARS_PER_BATCH } from './constants.js';
+import { getDefaultPrompts } from './i18n-prompts.js';  // v1.5: 多語言提示詞
 
 // v0.83: 預設 system prompt 全面升級——從「翻譯助理」提升為「首席翻譯專家」，
 // 強調台灣語感、排版規範、專有名詞保留策略。同步切換預設模型至 gemini-3-flash-preview。
@@ -201,6 +202,14 @@ export async function getSettings() {
   };
   merged.apiKey = apiKey;
   return merged;
+}
+
+/**
+ * 根據語言取得對應的預設提示詞。
+ * 用於 options 頁面「回復預設提示詞」按鈕和語言切換時重置。
+ */
+export function getDefaultPromptsForLocale(locale) {
+  return getDefaultPrompts(locale || 'zh-TW');
 }
 
 export async function setSettings(patch) {
