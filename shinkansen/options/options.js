@@ -1456,8 +1456,85 @@ initLocale().then(() => {
   if (localeSelect) localeSelect.value = getLocale();
   // 套用 data-i18n 屬性
   applyLocale(document);
+  applyRichTextLocale();
   load();
 });
+
+// 含 HTML 的元素不能用 innerHTML（Mozilla AMO 安全警告），改用 DOM API 安全構建。
+// 這些元素的連結 URL 固定不變，只有文字部分隨語言切換。
+function applyRichTextLocale() {
+  // helper: 用 DOM API 安全地設定含 <strong> 的文字
+  function setWithStrong(id, text) {
+    const el = $(id);
+    if (!el) return;
+    // 簡單處理：找 <strong>...</strong> 標記，拆成三段
+    const m = text.match(/^(.*?)<strong>(.*?)<\/strong>(.*)$/);
+    if (m) {
+      el.textContent = '';
+      el.appendChild(document.createTextNode(m[1]));
+      const strong = document.createElement('strong');
+      strong.textContent = m[2];
+      el.appendChild(strong);
+      el.appendChild(document.createTextNode(m[3]));
+    } else {
+      el.textContent = text;
+    }
+  }
+  // helper: 設定「文字 + 連結」格式的段落
+  function setWithLink(id, text, href, linkText) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = '';
+    el.appendChild(document.createTextNode(text));
+    const a = document.createElement('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = linkText;
+    el.appendChild(a);
+  }
+
+  setWithStrong('license-type', t('opt_license_type'));
+  setWithStrong('license-summary', t('opt_license_summary'));
+
+  // license-full: "...，或參閱 [link]。"
+  const fullEl = $('license-full');
+  if (fullEl) {
+    fullEl.textContent = '';
+    fullEl.appendChild(document.createTextNode(t('opt_license_full_before')));
+    const a = document.createElement('a');
+    a.href = 'https://www.elastic.co/licensing/elastic-license';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = t('opt_license_full_link');
+    fullEl.appendChild(a);
+    fullEl.appendChild(document.createTextNode(t('opt_license_full_after')));
+  }
+
+  // license-author: "原作者：Jimmy Su ・ Twitter (X)：[@jimmy_su]"
+  setWithLink('license-author',
+    t('opt_license_author_text'),
+    'https://x.com/jimmy_su', '@jimmy_su');
+
+  // license-fork-author: "改版作者：r404r ・ [GitHub]（...）"
+  setWithLink('license-fork-author',
+    t('opt_license_fork_text'),
+    'https://github.com/r404r/shinkansen', 'GitHub');
+
+  // usage-desc: "...實際帳單請至 [link] 查詢"
+  const usageEl = $('usage-desc');
+  if (usageEl) {
+    usageEl.textContent = '';
+    usageEl.appendChild(document.createTextNode(t('opt_usage_desc_before')));
+    const a = document.createElement('a');
+    a.href = 'https://aistudio.google.com/spend';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'Gemini API Spend';
+    usageEl.appendChild(a);
+    usageEl.appendChild(document.createTextNode(t('opt_usage_desc_after')));
+  }
+}
 
 // 語言切換事件
 $('uiLocale')?.addEventListener('change', async (e) => {
@@ -1465,6 +1542,7 @@ $('uiLocale')?.addEventListener('change', async (e) => {
   setLocale(locale);
   await browser.storage.sync.set({ uiLocale: locale });
   applyLocale(document);
+  applyRichTextLocale();
   // Update prompt textareas to match new locale
   const prompts = getDefaultPromptsForLocale(locale);
   const siEl = $('systemInstruction');
