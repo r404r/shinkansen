@@ -45,7 +45,7 @@
           <input type="password" id="apiKey" placeholder="貼上您的 Gemini API Key" data-i18n-placeholder="opt_api_key_placeholder">
           <button type="button" id="toggle-api-key" class="ghost-btn" aria-label="顯示 API Key" data-i18n="opt_api_key_show">顯示</button>
         </div>
-        <small class="muted" data-i18n="opt_desc_api_key_help">還沒有 API Key？請參考 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" target="_blank" rel="noopener">Gemini API Key 申請教學</a>（含帳單設定等容易遺漏的步驟）</small>
+        <small class="muted">還沒有 API Key？請參考 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" target="_blank" rel="noopener">Gemini API Key 申請教學</a>（含帳單設定等容易遺漏的步驟）</small>
       </label>
     </section>
 
@@ -262,7 +262,7 @@
 
     <section>
       <h2 data-i18n="opt_section_pricing">模型計價（USD）</h2>
-      <p class="muted" data-i18n="opt_desc_pricing">用於計算翻譯成本，單位為「每 1M tokens 的美金價格」。切換模型時會自動帶入參考價，你也可以手動修改。請至 <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener">Gemini 官方定價頁</a> 查詢最新費率</p>
+      <p class="muted">用於計算翻譯成本，單位為「每 1M tokens 的美金價格」。切換模型時會自動帶入參考價，你也可以手動修改。請至 <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener">Gemini 官方定價頁</a> 查詢最新費率</p>
       <label>
         <span data-i18n="opt_label_input_price">Input tokens 單價（USD / 1M tokens）</span>
         <input type="number" id="inputPerMTok" step="0.01" min="0" placeholder="0.30">
@@ -275,7 +275,7 @@
 
     <section>
       <h2 data-i18n="opt_section_quota">配額（API 用量限制）</h2>
-      <p class="muted" data-i18n="opt_desc_quota">根據你的 Gemini API 付費層級，自動控制請求頻率，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
+      <p class="muted">根據你的 Gemini API 付費層級，自動控制請求頻率，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
       <label>
         <span data-i18n="opt_label_api_tier">Gemini API 層級</span>
         <select id="tier">
@@ -284,7 +284,7 @@
           <option value="tier2" data-i18n="opt_val_tier_2">Tier 2（累積消費 $250+，首次付款 30 天後）</option>
           <option value="custom" data-i18n="opt_val_tier_custom">自訂（手動填入下方三個數字）</option>
         </select>
-        <small class="muted" data-i18n="opt_desc_api_tier">層級與對應上限見 <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">Gemini API Rate Limits</a>，切換層級時下方數值會自動更新</small>
+        <small class="muted">層級與對應上限見 <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">Gemini API Rate Limits</a>，切換層級時下方數值會自動更新</small>
       </label>
       <div class="triple">
         <label>
@@ -427,7 +427,7 @@
     <!-- 術語表一致化（自動擷取，從 Gemini Tab 搬來） -->
     <section>
       <h2 data-i18n="opt_glossary_auto_title">自動術語擷取</h2>
-      <p class="muted" data-i18n="opt_desc_glossary_auto">長文翻譯時，先呼叫 Gemini 擷取全文專有名詞建立對照表，確保分批翻譯的名詞譯名一致。短文（1 批以內）自動跳過。預設不開啟——開啟後術語翻譯會跳過 system prompt 的部分指示（例如「英文人名保留不翻」會失效）。詳細說明見 <a href="https://github.com/jimmysu0309/shinkansen#術語表一致化" target="_blank" rel="noopener">README</a></p>
+      <p class="muted">長文翻譯時，先呼叫 Gemini 擷取全文專有名詞建立對照表，確保分批翻譯的名詞譯名一致。短文（1 批以內）自動跳過。預設不開啟——開啟後術語翻譯會跳過 system prompt 的部分指示（例如「英文人名保留不翻」會失效）。詳細說明見 <a href="https://github.com/jimmysu0309/shinkansen#術語表一致化" target="_blank" rel="noopener">README</a></p>
       <label class="switch">
         <input type="checkbox" id="glossaryEnabled">
         <span data-i18n="opt_glossary_auto_enable">啟用自動術語擷取</span>
@@ -545,14 +545,14 @@
           <input type="checkbox" id="ytDebugToast">
           <div class="checkbox-body">
             <span data-i18n="opt_label_yt_debug_toast">顯示字幕翻譯即時狀態面板</span>
-            <small class="muted" data-i18n="opt_desc_yt_debug_toast">開啟後，字幕翻譯啟動時頁面左上角會出現一個即時狀態面板，顯示 buffer、batch API 耗時、captionMap 大小等診斷資訊。各欄位含意詳見 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/DEBUG-BOARD.md" target="_blank" rel="noopener">DEBUG-BOARD.md</a>。</small>
+            <small class="muted">開啟後，字幕翻譯啟動時頁面左上角會出現一個即時狀態面板，顯示 buffer、batch API 耗時、captionMap 大小等診斷資訊。各欄位含意詳見 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/DEBUG-BOARD.md" target="_blank" rel="noopener">DEBUG-BOARD.md</a>。</small>
           </div>
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="ytOnTheFly">
           <div class="checkbox-body">
             <span data-i18n="opt_label_yt_on_the_fly">啟用 On-the-fly 備援翻譯</span>
-            <small class="muted" data-i18n="opt_desc_yt_on_the_fly">開啟後，當字幕出現時若尚未預翻（captionMap 未命中），會即時送 API 翻譯。使用較慢的模型（如 Flash Lite）時建議關閉，避免即時翻譯請求阻塞預翻進度。預設關閉。</small>
+            <small class="muted">開啟後，當字幕出現時若尚未預翻（captionMap 未命中），會即時送 API 翻譯。使用較慢的模型（如 Flash Lite）時建議關閉，避免即時翻譯請求阻塞預翻進度。預設關閉。</small>
           </div>
         </label>
       </section>
@@ -605,8 +605,8 @@
 
       <!-- Log 計數 -->
       <div class="log-status">
-        <span id="log-count" data-i18n="opt_log_count">0 筆</span>
-        <span id="log-filtered-count" data-i18n="opt_log_filtered_count" hidden>（篩選後 0 筆）</span>
+        <span id="log-count">0 筆</span>
+        <span id="log-filtered-count" hidden>（篩選後 0 筆）</span>
       </div>
 
       <!-- 除錯選項（從設定分頁搬過來） -->
