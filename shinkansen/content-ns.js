@@ -16,6 +16,130 @@ if (window.__shinkansen_loaded) {
   window.__SK = {};
   const SK = window.__SK;
 
+  // ─── v1.5: Content Script 多語言支援 ──────────────────
+  // content script 不能 import ES module，內嵌精簡版字串表。
+  // 從 storage 讀取 uiLocale，預設 zh-TW。
+  SK._locale = 'zh-TW';
+  SK._strings = {
+    'zh-TW': {
+      cs_translating: '翻譯中…', cs_close: '關閉', cs_seconds: ' 秒', cs_minutes: ' 分 ',
+      cs_zero_seconds: '0 秒', cs_batch_timeout: '批次逾時（{0}s）', cs_unknown_error: '未知錯誤',
+      cs_google_docs_redirect: '偵測到 Google Docs，正在開啟可翻譯的閱讀版⋯',
+      cs_cancelling: '正在取消翻譯⋯',
+      cs_offline: '目前處於離線狀態，無法翻譯。請確認網路連線後再試',
+      cs_already_target_lang: '此頁面已是{0}，不需翻譯',
+      cs_no_content: '找不到可翻譯的內容',
+      cs_building_glossary: '建立術語表⋯', cs_glossary_timeout: '術語表逾時',
+      cs_progress: '{0}翻譯中… {1} / {2}', cs_cancelled: '已取消翻譯',
+      cs_partial_fail: '翻譯部分失敗:{0} / {1} 段失敗',
+      cs_complete_truncated: '翻譯完成 （{0} 段，另有 {1} 段因頁面過長被略過）',
+      cs_complete: '翻譯完成 （{0} 段）',
+      cs_all_cache_hit: '全部快取命中 · 本次未計費',
+      cs_rpd_warning_title: '提醒：今日 API 請求次數已超過預算上限',
+      cs_rpd_warning_body: '翻譯仍可正常使用，但請留意用量。每日計數於太平洋時間午夜重置（約台灣時間下午 3 點）',
+      cs_translate_fail: '翻譯失敗:{0}', cs_restored: '已還原原文',
+      cs_google_progress: '{0}Google 翻譯中… {1} / {2}',
+      cs_google_complete_truncated: 'Google 翻譯完成（{0} 段，另有 {1} 段因頁面過長被略過）',
+      cs_google_complete: 'Google 翻譯完成（{0} 段）',
+      cs_google_chars: '{0} 字元 · 免費', cs_auto_translate: '自動翻譯',
+      cs_target_lang_name: '繁體中文',
+      cs_spa_progress: '翻譯新內容… {0} / {1}',
+      cs_spa_partial_fail: '新內容翻譯部分失敗:{0} / {1} 段',
+      cs_spa_complete: '已翻譯 {0} 段新內容', cs_spa_fail: '新內容翻譯失敗:{0}',
+      yt_translating: '翻譯中…', yt_translate_fail: '翻譯失敗',
+      yt_restored: '已還原原文字幕',
+      yt_waiting_cc: '字幕翻譯已啟動，等待 CC 字幕資料…',
+      yt_starting: '已有 {0} 條字幕，開始翻譯', yt_waiting_data: '等待字幕資料…',
+      yt_activated: '字幕翻譯已開啟。請開啟 YouTube 字幕（CC），翻譯將自動開始。',
+      yt_behind: '{0}s ⚠️ 落後', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+    },
+    'zh-CN': {
+      cs_translating: '翻译中…', cs_close: '关闭', cs_seconds: ' 秒', cs_minutes: ' 分 ',
+      cs_zero_seconds: '0 秒', cs_batch_timeout: '批次超时（{0}s）', cs_unknown_error: '未知错误',
+      cs_google_docs_redirect: '检测到 Google Docs，正在打开可翻译的阅读版…',
+      cs_cancelling: '正在取消翻译…',
+      cs_offline: '当前处于离线状态，无法翻译。请检查网络连接后重试',
+      cs_already_target_lang: '此页面已是{0}，无需翻译',
+      cs_no_content: '找不到可翻译的内容',
+      cs_building_glossary: '正在建立术语表…', cs_glossary_timeout: '术语表超时',
+      cs_progress: '{0}翻译中… {1} / {2}', cs_cancelled: '已取消翻译',
+      cs_partial_fail: '翻译部分失败：{0} / {1} 段失败',
+      cs_complete_truncated: '翻译完成（{0} 段，另有 {1} 段因页面过长被略过）',
+      cs_complete: '翻译完成（{0} 段）',
+      cs_all_cache_hit: '全部缓存命中 · 本次未计费',
+      cs_rpd_warning_title: '提醒：今日 API 请求次数已超过预算上限',
+      cs_rpd_warning_body: '翻译仍可正常使用，但请注意用量。每日计数于太平洋时间午夜重置（约北京时间下午 3 点）',
+      cs_translate_fail: '翻译失败：{0}', cs_restored: '已还原原文',
+      cs_google_progress: '{0}Google 翻译中… {1} / {2}',
+      cs_google_complete_truncated: 'Google 翻译完成（{0} 段，另有 {1} 段因页面过长被略过）',
+      cs_google_complete: 'Google 翻译完成（{0} 段）',
+      cs_google_chars: '{0} 字符 · 免费', cs_auto_translate: '自动翻译',
+      cs_target_lang_name: '简体中文',
+      cs_spa_progress: '翻译新内容… {0} / {1}',
+      cs_spa_partial_fail: '新内容翻译部分失败：{0} / {1} 段',
+      cs_spa_complete: '已翻译 {0} 段新内容', cs_spa_fail: '新内容翻译失败：{0}',
+      yt_translating: '翻译中…', yt_translate_fail: '翻译失败',
+      yt_restored: '已还原原文字幕',
+      yt_waiting_cc: '字幕翻译已启动，等待 CC 字幕数据…',
+      yt_starting: '已有 {0} 条字幕，开始翻译', yt_waiting_data: '等待字幕数据…',
+      yt_activated: '字幕翻译已开启。请开启 YouTube 字幕（CC），翻译将自动开始。',
+      yt_behind: '{0}s ⚠️ 落后', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+    },
+    'ja': {
+      cs_translating: '翻訳中…', cs_close: '閉じる', cs_seconds: ' 秒', cs_minutes: ' 分 ',
+      cs_zero_seconds: '0 秒', cs_batch_timeout: 'バッチタイムアウト（{0}s）', cs_unknown_error: '不明なエラー',
+      cs_google_docs_redirect: 'Google Docs を検出しました。翻訳可能な閲覧版を開いています…',
+      cs_cancelling: '翻訳をキャンセル中…',
+      cs_offline: '現在オフラインです。ネットワーク接続を確認してから再試行してください',
+      cs_already_target_lang: 'このページは既に{0}です。翻訳は不要です',
+      cs_no_content: '翻訳可能なコンテンツが見つかりません',
+      cs_building_glossary: '用語集を作成中…', cs_glossary_timeout: '用語集タイムアウト',
+      cs_progress: '{0}翻訳中… {1} / {2}', cs_cancelled: '翻訳をキャンセルしました',
+      cs_partial_fail: '翻訳が部分的に失敗：{0} / {1} 段が失敗',
+      cs_complete_truncated: '翻訳完了（{0} 段、他に {1} 段がページ長超過により省略）',
+      cs_complete: '翻訳完了（{0} 段）',
+      cs_all_cache_hit: 'すべてキャッシュヒット・今回は課金なし',
+      cs_rpd_warning_title: '注意：本日の API リクエスト数が予算上限を超えました',
+      cs_rpd_warning_body: '翻訳は引き続き使用できますが、使用量にご注意ください。日次カウントは太平洋時間の午前0時にリセットされます',
+      cs_translate_fail: '翻訳失敗：{0}', cs_restored: '原文を復元しました',
+      cs_google_progress: '{0}Google 翻訳中… {1} / {2}',
+      cs_google_complete_truncated: 'Google 翻訳完了（{0} 段、他に {1} 段がページ長超過により省略）',
+      cs_google_complete: 'Google 翻訳完了（{0} 段）',
+      cs_google_chars: '{0} 文字・無料', cs_auto_translate: '自動翻訳',
+      cs_target_lang_name: '日本語',
+      cs_spa_progress: '新しいコンテンツを翻訳中… {0} / {1}',
+      cs_spa_partial_fail: '新コンテンツの翻訳が部分的に失敗：{0} / {1} 段',
+      cs_spa_complete: '{0} 段の新コンテンツを翻訳しました', cs_spa_fail: '新コンテンツの翻訳に失敗：{0}',
+      yt_translating: '翻訳中…', yt_translate_fail: '翻訳失敗',
+      yt_restored: '字幕を原文に復元しました',
+      yt_waiting_cc: '字幕翻訳を開始しました。CC 字幕データを待っています…',
+      yt_starting: '{0} 件の字幕を取得済み、翻訳を開始します', yt_waiting_data: '字幕データを待っています…',
+      yt_activated: '字幕翻訳をオンにしました。YouTube の字幕（CC）をオンにすると自動的に翻訳が始まります。',
+      yt_behind: '{0}s ⚠️ 遅延', yt_debug_title: '🔍 Shinkansen 字幕 Debug',
+    },
+  };
+
+  /**
+   * Content script 翻譯函式。用法：SK.t('cs_translating') 或 SK.t('cs_progress', '', 5, 10)
+   */
+  SK.t = function(key) {
+    const table = SK._strings[SK._locale] || SK._strings['zh-TW'];
+    let s = table[key] ?? SK._strings['zh-TW'][key] ?? key;
+    for (let i = 1; i < arguments.length; i++) {
+      s = s.replace('{' + (i - 1) + '}', arguments[i]);
+    }
+    return s;
+  };
+
+  // 從 storage 異步讀取語言設定（不阻塞初始化）
+  try {
+    browser.storage.sync.get('uiLocale').then(function(result) {
+      if (result.uiLocale && SK._strings[result.uiLocale]) {
+        SK._locale = result.uiLocale;
+      }
+    }).catch(function() {});
+  } catch(e) {}
+
   // ─── 共用狀態 ──────────────────────────────────────────
   SK.STATE = {
     translated: false,
