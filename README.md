@@ -110,7 +110,12 @@ v1.4.12 起提供三組可自訂的翻譯預設，各綁一個快速鍵：
 | `Alt+S` / `Option+S` | Gemini           | Flash（$0.50 / $3.00）      | 日常閱讀，品質最佳性價比       |
 | `Alt+D` / `Option+D` | Google Translate | —                           | 不需 API Key、速度快、完全免費 |
 
-**可以在設定頁「翻譯快速鍵」區塊自訂**：每組 preset 的引擎（Gemini / Google Translate）、模型（Flash Lite / Flash / Pro / 自訂）、顯示標籤都可以改。鍵位本身則在 `chrome://extensions/shortcuts` 設定。
+**可以在設定頁「翻譯快速鍵」區塊自訂**：每組 preset 的引擎（Gemini / Google Translate / 自訂模型）、模型（Flash Lite / Flash / Pro / 自訂）、顯示標籤都可以改。
+
+**快捷鍵修改**：
+
+- **Firefox**（v1.7 新增）：直接在設定頁點擊快捷鍵徽章即可進入編輯模式，按下新的鍵組合即時生效。支援 `Alt+`、`Ctrl+`、`Shift+` 及 macOS 的 `Command+` 修飾鍵。按 `Esc` 取消編輯。
+- **Chrome**：瀏覽器不提供 API 讓擴充功能修改快捷鍵，需到 `chrome://extensions/shortcuts` 頁面手動設定。
 
 **統一的取消/還原行為**：
 
