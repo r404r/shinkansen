@@ -1,8 +1,12 @@
 # Shinkansen-Nozomi 🚄
 
+[繁體中文](README.md) | [日本語](README.ja.md)
+
 快速、流暢的網頁翻譯擴充功能，支援 Chrome 與 Firefox。使用 Google Gemini 將外語網頁翻譯成繁體中文／簡體中文／日本語，原地替換文字，保留頁面原始排版。
 
 名稱取自新幹線最快車型「のぞみ（希望號）」，象徵快速、平穩、流暢的閱讀體驗。
+
+> **本 Project 主要關注 Firefox 擴充功能。Chrome 擴充功能請關注原作者 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)。**
 
 > **此專案 Fork 自 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)**（原作者：Jimmy Su），在原版基礎上新增 Firefox 支援、多語言介面（繁中／簡中／日文）、選區翻譯等功能，獨立發展。
 
