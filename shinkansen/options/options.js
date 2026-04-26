@@ -1008,14 +1008,47 @@ let forbiddenTerms = []; // 記憶體中的清單；load 時從 storage 讀入�
 
 function renderForbiddenTermsTable() {
   const tbody = $('forbidden-terms-tbody');
-  tbody.innerHTML = forbiddenTerms.map((t, i) =>
-    `<tr data-idx="${i}">` +
-    `<td><input type="text" class="ft-forbidden" value="${escapeAttr(t.forbidden)}" placeholder="禁用詞（簡中）"></td>` +
-    `<td><input type="text" class="ft-replacement" value="${escapeAttr(t.replacement)}" placeholder="替換詞（台灣）"></td>` +
-    `<td><input type="text" class="ft-note" value="${escapeAttr(t.note || '')}" placeholder="（可選）"></td>` +
-    `<td class="glossary-col-action"><button class="glossary-delete-row" data-idx="${i}" title="刪除">×</button></td>` +
-    `</tr>`
-  ).join('');
+  const rows = forbiddenTerms.map((t, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = String(i);
+
+    const tdForbidden = document.createElement('td');
+    const inputForbidden = document.createElement('input');
+    inputForbidden.type = 'text';
+    inputForbidden.className = 'ft-forbidden';
+    inputForbidden.value = t.forbidden;
+    inputForbidden.placeholder = '禁用詞（簡中）';
+    tdForbidden.appendChild(inputForbidden);
+
+    const tdReplacement = document.createElement('td');
+    const inputReplacement = document.createElement('input');
+    inputReplacement.type = 'text';
+    inputReplacement.className = 'ft-replacement';
+    inputReplacement.value = t.replacement;
+    inputReplacement.placeholder = '替換詞（台灣）';
+    tdReplacement.appendChild(inputReplacement);
+
+    const tdNote = document.createElement('td');
+    const inputNote = document.createElement('input');
+    inputNote.type = 'text';
+    inputNote.className = 'ft-note';
+    inputNote.value = t.note || '';
+    inputNote.placeholder = '（可選）';
+    tdNote.appendChild(inputNote);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'glossary-col-action';
+    const delBtn = document.createElement('button');
+    delBtn.className = 'glossary-delete-row';
+    delBtn.dataset.idx = String(i);
+    delBtn.title = '刪除';
+    delBtn.textContent = '×';
+    tdAction.appendChild(delBtn);
+
+    tr.append(tdForbidden, tdReplacement, tdNote, tdAction);
+    return tr;
+  });
+  tbody.replaceChildren(...rows);
 }
 
 function readForbiddenTableEntries() {
@@ -1125,10 +1158,16 @@ let _timeSelectsBuilt = false;
 function buildTimeSelectOptions() {
   if (_timeSelectsBuilt) return;
   _timeSelectsBuilt = true;
-  const hourOptions = Array.from({ length: 24 }, (_, h) => `<option value="${_pad2(h)}">${_pad2(h)}</option>`).join('');
-  const minOptions  = Array.from({ length: 60 }, (_, m) => `<option value="${_pad2(m)}">${_pad2(m)}</option>`).join('');
-  for (const id of ['usage-from-hour', 'usage-to-hour']) $(id).innerHTML = hourOptions;
-  for (const id of ['usage-from-min',  'usage-to-min'])  $(id).innerHTML = minOptions;
+  function buildOptions(count) {
+    return Array.from({ length: count }, (_, n) => {
+      const opt = document.createElement('option');
+      opt.value = _pad2(n);
+      opt.textContent = _pad2(n);
+      return opt;
+    });
+  }
+  for (const id of ['usage-from-hour', 'usage-to-hour']) $(id).replaceChildren(...buildOptions(24));
+  for (const id of ['usage-from-min',  'usage-to-min'])  $(id).replaceChildren(...buildOptions(60));
 }
 
 function setDateTimeFields(prefix, d) {
