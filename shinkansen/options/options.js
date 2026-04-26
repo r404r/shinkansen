@@ -195,7 +195,7 @@ async function load() {
   $('ytWindowSizeS').value           = yt.windowSizeS ?? 30;
   $('ytLookaheadS').value            = yt.lookaheadS  ?? 10;
   $('ytTemperature').value           = yt.temperature  ?? 1;
-  $('ytSystemPrompt').value          = yt.systemPrompt || DEFAULT_SUBTITLE_SYSTEM_PROMPT;
+  $('ytSystemPrompt').value = yt.systemPrompt || DEFAULT_SUBTITLE_SYSTEM_PROMPT;
   // v1.2.39: 獨立模型 + 計價
   const ytModelSel = $('ytModel');
   const savedYtModel = yt.model || '';
