@@ -268,8 +268,129 @@ async function refreshPresetKeyBindings() {
         keyEl.textContent = t('opt_preset_key_unset');
         keyEl.setAttribute('data-unset', '1');
       }
+      // Firefox 快捷鍵編輯 tooltip（每次 refresh 時更新，確保語言切換後正確）
+      if (keyEl.hasAttribute('data-editable')) {
+        keyEl.title = t('opt_shortcut_click_to_edit');
+      }
     }
   } catch { /* Safari / 舊瀏覽器不支援 commands API，欄位維持 '—' */ }
+}
+
+// v1.7: Firefox 快捷鍵編輯（browser.commands.update API）
+// Chrome 沒有 commands.update，只能到 chrome://extensions/shortcuts 修改。
+const _isFirefoxExt = browser.runtime.getURL('').startsWith('moz-extension://');
+
+if (_isFirefoxExt && typeof browser.commands?.update === 'function') {
+  for (const slot of [1, 2, 3]) {
+    const keyEl = $(`preset-key-${slot}`);
+    if (!keyEl) continue;
+    keyEl.setAttribute('data-editable', '1');
+    keyEl.tabIndex = 0; // 讓 span 可聚焦
+
+    let _invalidTimer = null;
+    keyEl.addEventListener('click', () => {
+      // 進入編輯模式（清除可能殘留的 invalid reset timer）
+      if (_invalidTimer) { clearTimeout(_invalidTimer); _invalidTimer = null; }
+      keyEl.setAttribute('data-editing', '1');
+      keyEl.textContent = t('opt_shortcut_press_keys');
+      keyEl.focus();
+    });
+
+    keyEl.addEventListener('keydown', async (e) => {
+      if (!keyEl.hasAttribute('data-editing')) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 忽略單獨的修飾鍵
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+      // 組合快捷鍵字串（Firefox commands.update 格式）
+      // macOS: metaKey=⌘ → 'Command'，ctrlKey=Control → 'MacCtrl'
+      // Windows/Linux: ctrlKey → 'Ctrl'
+      const isMac = navigator.platform?.startsWith('Mac') || navigator.userAgent?.includes('Mac');
+      const parts = [];
+      if (isMac) {
+        if (e.metaKey) parts.push('Command');
+        if (e.ctrlKey) parts.push('MacCtrl');
+      } else {
+        if (e.ctrlKey) parts.push('Ctrl');
+      }
+      if (e.altKey) parts.push('Alt');
+      if (e.shiftKey) parts.push('Shift');
+
+      // Esc 取消編輯
+      if (e.key === 'Escape') {
+        keyEl.removeAttribute('data-editing');
+        refreshPresetKeyBindings();
+        return;
+      }
+
+      // 從 e.code 取得實體按鍵（避免 macOS Option+A 產生 'å' 問題）
+      let key;
+      const code = e.code || '';
+      if (code.startsWith('Key')) {
+        key = code.slice(3); // KeyA → A
+      } else if (code.startsWith('Digit')) {
+        key = code.slice(5); // Digit1 → 1
+      } else if (code === 'Space') {
+        key = 'Space';
+      } else if (/^F\d{1,2}$/.test(code)) {
+        key = code; // F1-F12
+      } else if (code === 'ArrowUp') { key = 'Up'; }
+      else if (code === 'ArrowDown') { key = 'Down'; }
+      else if (code === 'ArrowLeft') { key = 'Left'; }
+      else if (code === 'ArrowRight') { key = 'Right'; }
+      else if (code === 'Comma') { key = 'Comma'; }
+      else if (code === 'Period') { key = 'Period'; }
+      else if (code === 'Home') { key = 'Home'; }
+      else if (code === 'End') { key = 'End'; }
+      else if (code === 'PageUp') { key = 'PageUp'; }
+      else if (code === 'PageDown') { key = 'PageDown'; }
+      else if (code === 'Insert') { key = 'Insert'; }
+      else if (code === 'Delete') { key = 'Delete'; }
+      else if (code.startsWith('Minus')) { key = 'Minus'; }
+      else if (code.startsWith('Equal')) { key = 'Equal'; }
+      else if (code.startsWith('Bracket')) { key = code === 'BracketLeft' ? 'BracketLeft' : 'BracketRight'; }
+      else if (code === 'Backslash') { key = 'Backslash'; }
+      else if (code === 'Semicolon') { key = 'Semicolon'; }
+      else if (code === 'Quote') { key = 'Quote'; }
+      else if (code === 'Backquote') { key = 'Backquote'; }
+      else if (code === 'Slash') { key = 'Slash'; }
+      else { return; } // 不支援的按鍵，忽略
+
+      // 至少需要一個修飾鍵（Alt 或 Ctrl）
+      if (parts.length === 0) return;
+
+      parts.push(key);
+      const shortcut = parts.join('+');
+
+      try {
+        await browser.commands.update({
+          name: `translate-preset-${slot}`,
+          shortcut: shortcut,
+        });
+        keyEl.removeAttribute('data-editing');
+        keyEl.textContent = shortcut;
+        keyEl.removeAttribute('data-unset');
+        // commands.update() 已即時生效且持久化，不需 markDirty()
+      } catch (err) {
+        // 無效的快捷鍵組合
+        keyEl.textContent = t('opt_shortcut_invalid');
+        _invalidTimer = setTimeout(() => {
+          _invalidTimer = null;
+          keyEl.removeAttribute('data-editing');
+          refreshPresetKeyBindings();
+        }, 1500);
+      }
+    });
+
+    keyEl.addEventListener('blur', () => {
+      if (keyEl.hasAttribute('data-editing')) {
+        keyEl.removeAttribute('data-editing');
+        refreshPresetKeyBindings();
+      }
+    });
+  }
 }
 
 async function save() {
@@ -1922,6 +2043,7 @@ $('uiLocale')?.addEventListener('change', async (e) => {
   await browser.storage.sync.set({ uiLocale: locale });
   applyLocale(document);
   applyRichTextLocale();
+  refreshPresetKeyBindings(); // 更新快捷鍵 tooltip 語言
   // Update prompt textareas to match new locale
   const prompts = getDefaultPromptsForLocale(locale);
   const siEl = $('systemInstruction');

@@ -726,6 +726,17 @@ a:hover { text-decoration: underline; }
   background: #ffe8e6;
   color: #ff3b30;
 }
+.preset-key[data-editable="1"] {
+  cursor: pointer;
+}
+.preset-key[data-editable="1"]:hover {
+  background: #d1d1d6;
+}
+.preset-key[data-editing="1"] {
+  outline: 2px solid #0071e3;
+  background: #fff;
+  color: #0071e3;
+}
 .preset-card label {
   display: block;
   margin-bottom: 8px;
