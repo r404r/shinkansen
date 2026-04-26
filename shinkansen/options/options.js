@@ -147,6 +147,8 @@ async function load() {
 
   // v1.0.21: 頁面層級繁中偵測開關
   $('skipTraditionalChinesePage').checked = s.skipTraditionalChinesePage !== false;
+  // v1.7: 延續翻譯開關
+  $('stickyTranslateEnabled').checked = s.stickyTranslateEnabled !== false;
 
   // v1.5.0: 雙語對照視覺標記
   const validMarks = ['tint', 'bar', 'dashed', 'none'];
@@ -445,6 +447,8 @@ async function save() {
     translationMarkStyle: getSelectedMarkStyle(),
     // v1.0.21: 頁面層級繁中偵測開關
     skipTraditionalChinesePage: $('skipTraditionalChinesePage').checked,
+    // v1.7: 延續翻譯開關
+    stickyTranslateEnabled: $('stickyTranslateEnabled').checked,
     // v1.2.11: YouTube 字幕設定
     ytSubtitle: {
       engine: ($('ytEngine')?.value || 'gemini'),  // v1.4.0

@@ -136,6 +136,8 @@ export const DEFAULT_SETTINGS = {
   },
   domainRules: { whitelist: [] },
   autoTranslate: false,
+  // v1.7: 延續翻譯開關。開啟時，翻譯過的頁面點連結到新頁面（或 SPA 導航）會自動繼續翻譯。
+  stickyTranslateEnabled: true,
   debugLog: false,
   // v1.2.11: YouTube 字幕翻譯設定
   ytSubtitle: {

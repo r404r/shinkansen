@@ -587,10 +587,10 @@
       STATE.translated = true;
       STATE.translatedBy = 'gemini';  // v1.4.0
       STATE.translationScope = selectionMode ? 'selection' : 'page';  // v1.6: 翻譯範圍標記
-      if (!selectionMode) {
+      // v1.7: 延續翻譯開關——關閉時不設 sticky 狀態
+      if (!selectionMode && settings.stickyTranslateEnabled !== false) {
         STATE.stickyTranslate = true;
         STATE.stickySlot = options.slot ?? null;
-        // v1.4.11 跨 tab sticky（v1.4.12 改存 preset slot）
         if (options.slot != null) {
           browser.runtime.sendMessage({ type: 'STICKY_SET', payload: { slot: options.slot } }).catch(() => {});
         }
@@ -933,7 +933,8 @@
       STATE.translated = true;
       STATE.translatedBy = 'google';  // v1.4.0
       STATE.translationScope = selectionMode ? 'selection' : 'page';  // v1.6
-      if (!selectionMode) {
+      // v1.7: 延續翻譯開關
+      if (!selectionMode && settings.stickyTranslateEnabled !== false) {
         STATE.stickyTranslate = true;
         STATE.stickySlot = gtOptions.slot ?? null;
         if (gtOptions.slot != null) {
@@ -1311,11 +1312,15 @@
         SK.sendLog('info', 'system', 'page reload, sticky cleared', { navType, url: location.href });
       } else {
         // v1.4.11 跨 tab sticky（v1.4.12 改傳 preset slot）：opener tab 的 preset 延用到此 tab
-        const stickyResp = await browser.runtime.sendMessage({ type: 'STICKY_QUERY' }).catch(() => null);
-        if (stickyResp?.shouldTranslate && stickyResp.slot != null) {
-          SK.sendLog('info', 'system', 'sticky translate inherited from opener tab, triggering preset', { slot: stickyResp.slot, url: location.href });
-          handleTranslatePreset(Number(stickyResp.slot));
-          return;
+        // v1.7: 檢查延續翻譯開關
+        const { stickyTranslateEnabled = true } = await browser.storage.sync.get('stickyTranslateEnabled').catch(() => ({}));
+        if (stickyTranslateEnabled !== false) {
+          const stickyResp = await browser.runtime.sendMessage({ type: 'STICKY_QUERY' }).catch(() => null);
+          if (stickyResp?.shouldTranslate && stickyResp.slot != null) {
+            SK.sendLog('info', 'system', 'sticky translate inherited, triggering preset', { slot: stickyResp.slot, url: location.href });
+            handleTranslatePreset(Number(stickyResp.slot));
+            return;
+          }
         }
       }
 
