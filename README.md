@@ -6,6 +6,7 @@
 
 名稱取自新幹線最快車型「のぞみ（希望號）」，象徵快速、平穩、流暢的閱讀體驗。
 
+
 > **本 Project 主要關注 Firefox 擴充功能。Chrome 擴充功能請關注原作者 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)。**
 
 > **此專案 Fork 自 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)**（原作者：Jimmy Su），在原版基礎上新增 Firefox 支援、多語言介面（繁中／簡中／日文）、選區翻譯等功能，獨立發展。
