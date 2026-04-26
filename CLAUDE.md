@@ -137,3 +137,21 @@ MAIN world script (`content-youtube-main.js`) intercepts XHR for caption data (P
 - Regression tests named by feature: `test/regression/{feature}.spec.js`
 - Test fixtures in `test/fixtures/` (domain-specific HTML files)
 - License: Elastic License 2.0 (ELv2)
+
+## innerHTML 禁用規則（Mozilla AMO 合規）
+
+**絕對禁止在任何 JS 文件中使用 `el.innerHTML = ...` 賦值。** Mozilla AMO 審核會標記所有 `innerHTML` 賦值為安全警告，即使內容已轉義。
+
+替代方案（按場景）：
+
+| 場景 | 禁止 | 替代 |
+|------|------|------|
+| 構建表格行/選項 | `tbody.innerHTML = rows.join('')` | `document.createElement()` + `el.replaceChildren(...nodes)` |
+| 設定元素文字 | `el.innerHTML = text` | `el.textContent = text` |
+| 含 HTML 標籤的文字 | `el.innerHTML = '<strong>text</strong>'` | DOM API 構建：`createElement('strong')` + `textContent` |
+| 含 `<a>` 連結的段落 | `el.innerHTML = 'text <a>link</a>'` | `applyRichTextLocale()` 模式：`setWithLink()` helper |
+| 存儲/還原 DOM 快照 | `el.innerHTML = saved` | `SK.cloneChildSnapshot()` / `SK.restoreChildSnapshot()` |
+| i18n 動態替換 | `data-i18n-html` + `innerHTML` | `data-i18n` + `textContent`，含 HTML 的元素用 `applyRichTextLocale()` |
+
+**檢查命令**：`grep -rn '\.innerHTML\s*=' shinkansen/` 應返回 0 結果。
+構建後檢查：`grep -c '\.innerHTML\s*=' build/firefox/**/*.js` 也應為 0。
