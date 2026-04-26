@@ -1829,6 +1829,11 @@ function applyRichTextLocale() {
     el.appendChild(a);
   }
 
+  // desc-readme: "功能介紹與使用說明請參考 [README]"
+  setWithLink('desc-readme',
+    t('opt_desc_readme') + ' ',
+    'https://github.com/r404r/shinkansen#readme', 'README');
+
   setWithStrong('license-type', t('opt_license_type'));
   setWithStrong('license-summary', t('opt_license_summary'));
 

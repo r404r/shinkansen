@@ -959,11 +959,11 @@ const ja = {
   yt_debug_title: '🔍 Shinkansen-Nozomi 字幕 Debug',
 
   // ── options ──
-  opt_tab_general: '一般設定',
+  opt_tab_general: '一般',
   opt_tab_gemini: 'Gemini',
   opt_tab_glossary: '用語集',
   opt_tab_custom_provider: 'カスタムモデル',
-  opt_tab_forbidden: '禁止用語リスト',
+  opt_tab_forbidden: '禁止用語',
   opt_tab_youtube: 'YouTube 字幕',
   opt_tab_usage: '使用量履歴',
   opt_tab_debug: 'Debug',
