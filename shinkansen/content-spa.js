@@ -67,6 +67,14 @@
     await new Promise(r => setTimeout(r, SK.SPA_NAV_SETTLE_MS));
 
     if (wasSticky) {
+      // v1.7: 即時檢查延續翻譯開關——使用者可能在翻譯後從設定頁關閉此選項
+      try {
+        const { stickyTranslateEnabled = true } = await browser.storage.sync.get('stickyTranslateEnabled');
+        if (stickyTranslateEnabled === false) {
+          SK.sendLog('info', 'spa', 'SPA nav: sticky was active but stickyTranslateEnabled=false, skipping', { url: location.href });
+          return;
+        }
+      } catch { /* 讀取失敗時維持 sticky 行為 */ }
       // v1.4.12: 上次若由 preset 快速鍵觸發就按同 slot 續翻，保留 engine+model；
       // 舊路徑（例如 autoTranslate 白名單）stickySlot 為 null，fallback 舊行為
       if (prevSlot != null && typeof SK.handleTranslatePreset === 'function') {
