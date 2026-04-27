@@ -22,6 +22,26 @@ function sleep(ms) {
 }
 
 /**
+ * v1.6.12:依模型決定 thinkingConfig。Gemini 3+ 改用 thinkingLevel(舊
+ * thinkingBudget Google 標 not recommended)。實測(tools/probe-gemini-pro.js):
+ *   - gemini-3-pro-preview / gemini-2.5-pro 強制 thinking-only,thinkingBudget=0
+ *     會 400 "Budget 0 is invalid. This model only works in thinking mode"
+ *   - gemini-3 Pro 不支援 thinkingLevel='minimal',最低支援 'low'
+ *   - gemini-3 Flash / Flash Lite 用 thinkingLevel='minimal' = 舊 budget=0 的等效,
+ *     thoughts=0 不額外計費
+ *
+ * 偵測策略:
+ *   - 模型名含 "pro"(case-insensitive)→ 'low'(Pro 強制 thinking)
+ *   - 否則 → 'minimal'(Flash 系列繼續省 token)
+ *
+ * 此函式 export 是為了 unit spec 鎖死 model → level 對映。
+ */
+export function pickThinkingConfig(model) {
+  const isPro = /pro/i.test(String(model || ''));
+  return { thinkingLevel: isPro ? 'low' : 'minimal' };
+}
+
+/**
  * 從 Gemini 429 的 response body 找出爆掉的維度(RPM/TPM/RPD)。
  * 若找不到明確線索回傳 null。
  */
@@ -149,8 +169,9 @@ export async function extractGlossary(compressedText, settings) {
       topP,
       topK,
       maxOutputTokens: glossaryMaxOutput,
-      // v0.74: 關閉思考功能，避免思考 token 吃掉 maxOutputTokens 額度。
-      thinkingConfig: { thinkingBudget: 0 },
+      // v1.6.12:Pro 系列改用 thinkingLevel='low'(無法完全關閉 thinking),Flash
+      // 系列用 'minimal'(thoughts=0,等同舊 budget=0)。詳見 pickThinkingConfig 註解。
+      thinkingConfig: pickThinkingConfig(model),
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -360,8 +381,9 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
       topP,
       topK,
       maxOutputTokens,
-      // 關閉思考功能，避免思考 token 吃掉 maxOutputTokens 額度。
-      thinkingConfig: { thinkingBudget: 0 },
+      // v1.6.12:依模型動態選 thinkingLevel('low' for Pro, 'minimal' for Flash)。
+      // 詳見 pickThinkingConfig 註解;Pro 強制 thinking 不能用 budget=0。
+      thinkingConfig: pickThinkingConfig(model),
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -385,6 +407,11 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
     model, serviceTier, segments: texts.length, chars: joined.length,
     // v1.5.7: 送進 LLM 的原文前 300 字 — 將來任何「譯文沒按預期出現」都能對照原文 / 譯文確認 LLM 行為
     inputPreview: joined.slice(0, 300),
+    // v1.5.8: 本批 prompt 末端注入的「自動術語表 / 固定術語表 / 禁用詞清單」實際條數，
+    // 讓使用者從 Debug 分頁看出：YouTube 字幕的兩個 toggle 是否生效、文章翻譯有沒有讀到設定
+    glossaryCount: glossary?.length || 0,
+    fixedGlossaryCount: fixedGlossary?.length || 0,
+    forbiddenTermsCount: forbiddenTerms?.length || 0,
   });
 
   const t0 = Date.now();

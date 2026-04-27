@@ -179,15 +179,21 @@ test.describe('v0.77 segment mismatch fallback', () => {
   });
 });
 
-test.describe('v0.77 thinkingConfig for translateChunk', () => {
-  test('translateBatch request 包含 thinkingConfig: { thinkingBudget: 0 }', async () => {
+// v0.77 / v0.88 / v1.6.12 thinkingConfig 演進:
+//   v0.74 起 Flash 用 { thinkingBudget: 0 } 關閉思考避免吃 maxOutputTokens
+//   v1.6.12 起改用 { thinkingLevel: 'minimal' }(Flash) / 'low'(Pro)——
+//     真實 API 實測:Pro 系列強制 thinking-only,thinkingBudget=0 直接 400;
+//     Gemini 3+ Google 推薦改用 thinkingLevel 而非 thinkingBudget(後者標 deprecated)。
+// 此 settings.model='gemini-2.5-flash' → pickThinkingConfig 回 'minimal'。
+test.describe('v1.6.12 thinkingConfig for translateChunk', () => {
+  test('translateBatch request 包含 thinkingConfig: { thinkingLevel: "minimal" } (Flash 系列)', async () => {
     pushResponse('你好');
     await translateBatch(['Hello'], settings);
 
-    expect(fetchCalls[0].body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(fetchCalls[0].body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
   });
 
-  test('useThinking=true → 仍包含 thinkingConfig（v0.88 起一律關閉思考）', async () => {
+  test('useThinking=true 已 deprecated,thinkingConfig 仍由 model name 決定(本例 Flash → minimal)', async () => {
     pushResponse('你好');
     const thinkingSettings = {
       ...settings,
@@ -195,6 +201,6 @@ test.describe('v0.77 thinkingConfig for translateChunk', () => {
     };
     await translateBatch(['Hello'], thinkingSettings);
 
-    expect(fetchCalls[0].body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(fetchCalls[0].body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
   });
 });

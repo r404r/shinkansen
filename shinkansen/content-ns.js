@@ -328,7 +328,7 @@ if (window.__shinkansen_loaded) {
   // ─── 翻譯流程常數 ─────────────────────────────────────
   // 注意：content script 無法 import ES module，以下兩個值鏡像 lib/constants.js，
   // 修改時必須同步更新 lib/constants.js（lib/gemini.js 與 lib/storage.js 的單一來源）。
-  SK.DEFAULT_UNITS_PER_BATCH = 12;
+  SK.DEFAULT_UNITS_PER_BATCH = 20;
   SK.DEFAULT_CHARS_PER_BATCH = 3500;
   SK.DEFAULT_MAX_CONCURRENT = 10;
   SK.DEFAULT_MAX_TOTAL_UNITS = 1000;
@@ -488,5 +488,73 @@ if (window.__shinkansen_loaded) {
       if (t.nodeValue.length > main.nodeValue.length) main = t;
     }
     return main;
+  };
+
+  // v1.6.5: 「今日」鍵字串 'YYYY-MM-DD'——**本地時區**而非 UTC。鏡像 lib/update-check.js
+  // 的 localTodayKey()。content script 不能 import ES module，且必須與 lib 端用同樣
+  // 算法（不然 toast / popup / background 之間 today 不一致導致節流失效或重複提示）。
+  // 修改此函式時必須同步更新 shinkansen/lib/update-check.js 的 localTodayKey()。
+  SK.localTodayKey = function localTodayKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // v1.6.1: 翻譯成功 toast 顯示「有新版可下載」前的判斷 helper。
+  // 同時檢查：(1) storage.local.updateAvailable 有版本資訊；(2) 今日尚未顯示過；
+  // (3) 使用者沒勾「不再顯示更新提示」。三條件全成立才回傳 { version, releaseUrl }，
+  // 否則回 null（toast 隱藏 update notice 區塊）。
+  // v1.6.5: 翻譯成功 toast 顯示「🎉 已升級至 vX.Y」前的判斷 helper。
+  // 同時檢查：(1) storage.local.welcomeNotice 有版本資訊；(2) 沒被永久 dismissed
+  // （popup 端「知道了」按鈕標記）；(3) 今日尚未顯示過。三條件全成立才回傳 { version }。
+  SK.maybeBuildWelcomeNotice = async function maybeBuildWelcomeNotice() {
+    try {
+      const { welcomeNotice } = await browser.storage.local.get('welcomeNotice');
+      if (!welcomeNotice || !welcomeNotice.version) return null;
+      if (welcomeNotice.dismissed === true) return null;
+      if (welcomeNotice.lastNoticeShownDate === SK.localTodayKey()) return null;
+      return { version: welcomeNotice.version };
+    } catch {
+      return null;
+    }
+  };
+
+  // v1.6.5: 鏡像 lib/update-check.js 的 isWorthNotifying（content script 不能 import）。
+  // 修改此函式時必須同步更新 lib/update-check.js。
+  function isWorthNotifying(latest, current) {
+    const parse = v => {
+      const c = String(v || '').replace(/^v/, '').split('-')[0];
+      const p = c.split('.').map(s => parseInt(s, 10) || 0);
+      while (p.length < 3) p.push(0);
+      return p.slice(0, 3);
+    };
+    const a = parse(latest);
+    const b = parse(current);
+    if (a[0] > b[0]) return true;
+    if (a[0] < b[0]) return false;
+    return a[1] > b[1];
+  }
+
+  SK.maybeBuildUpdateNotice = async function maybeBuildUpdateNotice() {
+    try {
+      const { disableUpdateNotice } = await browser.storage.sync.get('disableUpdateNotice');
+      if (disableUpdateNotice === true) return null;
+      const { updateAvailable } = await browser.storage.local.get('updateAvailable');
+      if (!updateAvailable || !updateAvailable.version) return null;
+      if (updateAvailable.lastNoticeShownDate === SK.localTodayKey()) return null;
+      // v1.6.5: belt-and-suspenders — 必須 storage.version 真的 > 當前 manifest.version 才提示。
+      // 即使 storage 殘留 stale 資料（測試殘留 / update-check 還沒清），toast 也不會錯誤顯示。
+      const currentVersion = browser.runtime.getManifest().version;
+      if (!isWorthNotifying(updateAvailable.version, currentVersion)) return null;
+      // v1.6.3: 三層 fallback URL（同 popup / options click handler）—— storage 缺 releaseUrl
+      // 也能跳到合理頁面，不會因為一個欄位缺失整個提示就失效
+      const releaseUrl = updateAvailable.releaseUrl
+        || `https://github.com/jimmysu0309/shinkansen/releases/tag/v${updateAvailable.version}`;
+      return { version: updateAvailable.version, releaseUrl };
+    } catch {
+      return null;
+    }
   };
 }

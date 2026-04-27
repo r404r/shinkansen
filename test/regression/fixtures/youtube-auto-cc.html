@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube auto-CC fixture</title>
+</head>
+<body>
+  <!-- Fixture for v1.6.20 A 路徑:autoTranslate 開啟 + CC 沒開時自動點 CC button。
+       含 .ytp-subtitles-button(aria-pressed=false 模擬 CC 關著)+ <video>。
+       spec 端啟動 translateYouTubeSubtitles 後等 1.2s,驗 button.click 被呼叫。 -->
+  <div class="html5-video-player">
+    <button class="ytp-subtitles-button" aria-pressed="false">CC</button>
+    <div class="ytp-caption-window-container"></div>
+    <video></video>
+  </div>
+</body>
+</html>

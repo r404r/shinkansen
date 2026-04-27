@@ -133,10 +133,13 @@ test.describe('glossary JSON 解析容錯', () => {
   });
 
   // v0.74 regression: thinking token 截斷防治
-  test('request body 包含 thinkingConfig: { thinkingBudget: 0 }', async () => {
+  // v1.6.12 起改用 thinkingLevel(舊 thinkingBudget Google 標 not recommended);
+  // 此 settings.model='gemini-2.5-flash' 不含 "pro" → pickThinkingConfig 回 'minimal'
+  // (thoughts=0 等同舊 budget=0)。對應 v1.6.12 修法詳見 lib/gemini.js#pickThinkingConfig。
+  test('request body 包含 thinkingConfig: { thinkingLevel: "minimal" } (Flash 系列)', async () => {
     mockGeminiResponse('[{"source":"test","target":"測試"}]');
     await extractGlossary('some text', settings);
-    expect(lastCapturedBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(lastCapturedBody.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
   });
 
   test('request body 不包含 responseMimeType（v0.72 已移除 JSON mode）', async () => {

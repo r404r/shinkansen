@@ -1,6 +1,6 @@
 body {
   margin: 0;
-  font-family: -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   background: #f5f5f7;
   color: #1d1d1f;
 }
@@ -92,8 +92,7 @@ textarea { resize: vertical; font-family: -apple-system, 'PingFang TC', sans-ser
 .api-test-result[data-state="loading"] { background: #f2f2f7; color: #555;    border: 1px solid #e5e5ea; }
 
 /* 自行輸入模型 ID（v0.64） */
-.custom-model-row { margin-top: 6px; }
-.custom-model-row input { margin-top: 0; }
+/* v1.6.15: .custom-model-row 隨全域 model dropdown 一起移除(自行輸入欄位失效) */
 
 .muted { color: #86868b; font-size: 12px; }
 
@@ -119,12 +118,17 @@ button.primary {
 button.primary:hover { background: #0077ed; }
 
 button.secondary {
-  padding: 8px 16px;
+  /* v1.6.17: 高度與字級對齊 .primary(padding 9px 20px + font-size 14px),
+     保留 secondary 自身視覺性(白底藍邊細字)。primary 因 padding 10px 24px
+     + 粗字 600 + 無 border 仍視覺較突出,符合「主動作 vs 次動作」design pattern。
+     box-sizing: content-box 下 secondary 總高 ≈ 9*2 + 14*1.2 + 2(border) ≈ 38px;
+     primary 總高 ≈ 10*2 + 14*1.2 ≈ 37px,差距在 1px 內視覺一致。 */
+  padding: 9px 20px;
   background: #fff;
   color: #0071e3;
   border: 1px solid #0071e3;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 button.secondary:hover { background: #f0f7ff; }
@@ -692,6 +696,28 @@ a:hover { text-decoration: underline; }
    讓備註欄能拿到剩餘空間（中英文混雜的說明往往較長）。 */
 .forbidden-col-word { width: 22%; }
 
+/* v1.5.8: 備註欄 input focus 時浮起放寬，編輯時看得到完整內容。
+   未 focus 時維持單行欄寬，過長文字截斷（hover tooltip 看完整）。 */
+.ft-note-cell {
+  position: relative;
+}
+.ft-note:focus {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  /* 至少撐到能看到一段完整中英文混雜備註，但不超出 viewport */
+  min-width: 380px;
+  max-width: min(600px, 80vw);
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #0071e3;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
 /* v1.4.13: 翻譯快捷鍵三張 preset card */
 .preset-cards {
   display: grid;
@@ -705,6 +731,12 @@ a:hover { text-decoration: underline; }
   padding: 14px;
   background: #fbfbfd;
 }
+/* v1.6.14: 主要預設視覺強化——藍邊 + 淡藍底突顯 */
+.preset-card-primary {
+  border: 2px solid #0071e3;
+  background: #f0f6ff;
+  box-shadow: 0 2px 6px rgba(0, 113, 227, 0.08);
+}
 .preset-card-header {
   display: flex;
   align-items: center;
@@ -713,6 +745,34 @@ a:hover { text-decoration: underline; }
   font-size: 14px;
 }
 .preset-card-header strong { color: #1d1d1f; }
+.preset-card-primary .preset-card-header strong { color: #0071e3; font-size: 15px; }
+
+/* v1.6.14: per-model 計價覆蓋表(Gemini 分頁) */
+.model-pricing-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.model-pricing-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #d2d2d7;
+  border-radius: 6px;
+  background: #fbfbfd;
+}
+.model-pricing-label strong { display: block; font-size: 14px; color: #1d1d1f; }
+.model-pricing-label small { display: block; margin-top: 2px; font-size: 12px; }
+.model-pricing-row input[type="number"] {
+  height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #d2d2d7;
+  border-radius: 4px;
+  font-size: 13px;
+}
 .preset-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -814,3 +874,47 @@ shinkansen-translation[data-sk-mark="none"]   {}
   margin: 32px 0 24px;
   font-style: italic;
 }
+
+/* v1.6.1: 一般設定分頁頂部更新提示 banner — wrapper + 內部 a + dismiss button 並列 */
+.update-banner-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.update-banner-link {
+  /* v1.6.3: 從 <a> 改 <button>——加 button reset 維持 banner 視覺 */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff8e1;
+  border: 1px solid #f5b800;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #2c2a1f;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.update-banner-link:hover { background: #fff3c4; text-decoration: none; }
+.update-banner-link strong { color: #1d1d1f; }
+.update-banner-link > span { color: #6e6e73; }
+.update-banner-dismiss {
+  background: #f5f5f7;
+  border: 1px solid #d2d2d7;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #6e6e73;
+  cursor: pointer;
+}
+.update-banner-dismiss:hover {
+  background: #ececef;
+  color: #1d1d1f;
+}
+/* v1.6.5: 強制覆寫 hidden attribute——display:flex 會 override 掉 user-agent
+   [hidden] { display: none }，造成 hidden=true 仍顯示的 bug。 */
+.update-banner-row[hidden] { display: none !important; }

@@ -20,6 +20,9 @@
 
 import { debugLog } from './logger.js';
 import { DELIMITER, packChunks, buildEffectiveSystemInstruction } from './system-instruction.js';
+// v1.6.18: thinking 控制 mapping(各家 provider 的 thinking schema 不同,統一成
+// thinkingLevel 'auto/off/low/medium/high' + extraBodyJson 進階透傳)
+import { buildThinkingPayload } from './openai-compat-thinking.js';
 
 const MAX_BACKOFF_MS = 8000;
 
@@ -140,8 +143,8 @@ export async function translateBatch(texts, settings, glossary, fixedGlossary, f
 async function translateChunk(texts, settings, glossary, fixedGlossary, forbiddenTerms) {
   if (!texts?.length) return { parts: [], usage: { inputTokens: 0, outputTokens: 0, cachedTokens: 0 } };
   const cp = settings.customProvider || {};
-  const { baseUrl, model, systemPrompt, temperature, apiKey } = cp;
-  if (!apiKey) throw new Error('尚未設定自訂 Provider 的 API Key，請至設定頁填入。');
+  const { baseUrl, model, systemPrompt, temperature, apiKey, thinkingLevel, extraBodyJson } = cp;
+  // v1.6.7: API Key 允許為空（本機 llama.cpp / Ollama 等不需要 key）；商用後端漏填會自然 401
   if (!model) throw new Error('尚未設定自訂 Provider 的模型 ID。');
 
   // 多段時加序號標記（與 Gemini 同邏輯）
@@ -156,6 +159,15 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
     : '你是專業的英文 → 繁體中文（台灣慣用語）翻譯助理，僅輸出譯文不加任何說明。';
   const effectiveSystem = buildEffectiveSystemInstruction(baseSystem, texts, joined, glossary, fixedGlossary, forbiddenTerms);
 
+  // v1.6.18: 依 baseUrl + model 偵測 provider,組對應 thinking 控制 payload。
+  // 若 user 的 extraBodyJson 解析失敗,debugLog 一條 warn 但不阻斷翻譯。
+  const thinkingPayload = buildThinkingPayload({
+    baseUrl, model,
+    level: thinkingLevel || 'auto',
+    extraBodyRaw: extraBodyJson || '',
+    onWarn: (msg) => { debugLog('warn', 'api', `customProvider thinking config: ${msg}`); },
+  });
+
   const body = {
     model,
     messages: [
@@ -164,14 +176,20 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
     ],
     temperature: typeof temperature === 'number' ? temperature : 0.7,
     stream: false,
+    ...thinkingPayload,
   };
 
   const url = resolveChatCompletionsUrl(baseUrl);
-  const headers = { 'Authorization': `Bearer ${apiKey}` };
+  // v1.6.7: apiKey 為空時不送 Authorization（本機 llama.cpp / Ollama 等不需要 key）
+  const headers = apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {};
 
   await debugLog('info', 'api', 'openai-compat request', {
     baseUrl, model, segments: texts.length, chars: joined.length,
     inputPreview: joined.slice(0, 300), // v1.5.7: 對齊 gemini.js
+    // v1.5.8: 本批 prompt 末端注入的條數（同 gemini.js）
+    glossaryCount: glossary?.length || 0,
+    fixedGlossaryCount: fixedGlossary?.length || 0,
+    forbiddenTermsCount: forbiddenTerms?.length || 0,
   });
 
   const t0 = Date.now();

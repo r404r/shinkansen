@@ -11,11 +11,18 @@
 
 > **此專案 Fork 自 [jimmysu0309/shinkansen](https://github.com/jimmysu0309/shinkansen)**（原作者：Jimmy Su），在原版基礎上新增 Firefox 支援、多語言介面（繁中／簡中／日文）、選區翻譯等功能，獨立發展。
 
-> [下載最新版本 zip](https://github.com/r404r/shinkansen/releases/latest)
+> [下載最新版本 zip](https://github.com/r404r/shinkansen/releases/latest) · [功能變更紀錄](CHANGELOG.md)
+
+## 近期重大更新
+
+- 新增**AI 智慧分句**，YouTube 自動產生字幕經 AI 重新分句，讓中文字幕更自然好讀
+- 新增**雙語對照模式**，原文 + 譯文並列顯示
+- 新增**中國用語黑名單**，明確要求 LLM 不能用視頻 / 軟件 / 數據等中國用語
+- 新增**自訂 AI 模型**功能，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等百種模型
 
 ## 為什麼做這個專案
 
-既有的沉浸式翻譯工具需要將個人瀏覽內容傳送到第三方伺服器處理，隱私權難以掌控。Shinkansen-Nozomi 的設計從一開始就以隱私為核心：所有設定與資料都只存在你自己的電腦上；除了你自備的 Gemini API Key 直接連線 Google 之外，不會將任何資料外傳給其他第三方；原始碼完全公開，任何人都可以檢視它的安全性。
+既有的網頁翻譯工具大多需要將個人瀏覽內容傳送到第三方伺服器處理，隱私權難以掌控。Shinkansen-Nozomi 的設計從一開始就以隱私為核心：所有設定與資料都只存在你自己的電腦上；除了你自備的 Gemini API Key 直接連線 Google 之外，不會將任何資料外傳給其他第三方；原始碼完全公開，任何人都可以檢視它的安全性。
 
 ## 效能實測
 
@@ -37,7 +44,7 @@
 - **三維 Rate Limiter**：RPM / TPM / RPD 滑動視窗，自動配合 Gemini API 配額
 - **用量追蹤**：記錄每次翻譯的 token 數與費用，附圖表與 CSV 匯出
 - **編輯譯文**：翻譯完成後可直接在頁面上修改譯文，適合要列印 PDF 或讓 Readwise Reader 抓取時，手動修正翻得不理想的地方
-- **跨 tab 延續翻譯**（v1.4.11 起）：在 tab A 按快速鍵翻譯後，從 A 點連結開新 tab B（含 Cmd+Click / `target="_blank"` / `window.open`），B 自動翻譯並繼承同一組 preset；新 tab 再開新 tab 也繼續
+- **跨 tab 延續翻譯**（v1.4.11 起）：在 tab A 按快速鍵翻譯後，從 A 點連結開新 tab B（含按住 Cmd（Mac）/ Ctrl（Windows）點連結 / `target="_blank"` / `window.open`），B 自動翻譯並繼承同一組 preset；新 tab 再開新 tab 也繼續
 - **自動翻譯指定網站**：在設定頁加入常看的網域，開啟該網站時自動翻譯，不用每次手動按快速鍵（翻譯通知會標示 `[自動翻譯]` 讓你知道是 whitelist 觸發）
 - **還原原文**：按同一組快速鍵即切換回原文，隨時對照
 - **Google Docs 翻譯**：自動偵測 Google Docs，開啟可翻譯的閱讀版並翻譯（詳見下方說明）
@@ -122,7 +129,7 @@ v1.4.12 起提供三組可自訂的翻譯預設，各綁一個快速鍵：
 - 翻譯中按任一快速鍵 → 立即取消翻譯
 - 已翻譯狀態下按任一快速鍵 → 還原原文（不分用哪個 preset 翻的）
 
-**跨 tab 延續翻譯**（v1.4.11 起）：在 tab A 按快速鍵翻譯後，從 A 點連結開新 tab B（Cmd+Click、`target="_blank"` 或 `window.open`），B 會自動翻譯且繼承同一組 preset——讓使用者可以一路按連結讀下去不用每個 tab 都按快速鍵。新 tab 再開新 tab 也繼續；手動打網址 / 從 bookmark 開 / 從外部 app 開的 tab 不繼承（openerTabId 為空）。按任一組快速鍵還原只影響當前 tab，不影響樹中其他 tab。
+**跨 tab 延續翻譯**（v1.4.11 起）：在 tab A 按快速鍵翻譯後，從 A 點連結開新 tab B（按住 Cmd（Mac）/ Ctrl（Windows）點連結、`target="_blank"` 或 `window.open`），B 會自動翻譯且繼承同一組 preset——讓使用者可以一路按連結讀下去不用每個 tab 都按快速鍵。新 tab 再開新 tab 也繼續；手動打網址 / 從 bookmark 開 / 從外部 app 開的 tab 不繼承（openerTabId 為空）。按任一組快速鍵還原只影響當前 tab，不影響樹中其他 tab。
 
 ## Google Translate 翻譯引擎
 
@@ -152,15 +159,28 @@ Google Docs 的編輯畫面使用 Canvas 渲染文字，一般的網頁翻譯擴
 
 若你常看 YouTube 英文影片，可在設定頁的「YouTube 字幕」Tab 開啟自動翻譯，進入影片頁面後字幕翻譯會自動啟動，不需每次手動開關。
 
-**費用**
+### AI 智慧分句（v1.7 起，自動產生字幕專用）
 
-字幕翻譯與網頁翻譯共用同一套計費邏輯與用量追蹤。翻過的字幕自動快取，重播或拖回已翻段落完全不花錢。
+YouTube 自動產生字幕（沒有人工字幕的影片，CC 標記為 auto-generated）原本是「**按時間切割**」而非「按句子切割」——每條字幕只有 1-3 個英文字、沒有標點，逐條翻譯完全失去語意上下文，譯文會像被剁碎一樣難讀。
 
-**注意事項**
+Shinkansen v1.7 起對自動產生字幕導入專用流程：
 
-- 需要影片有英文字幕（手動上傳或自動生成皆可）
+- **分句改用 AI 重組**：把整批 ASR 片段送 Gemini，由 AI 依語意重新分句（合併短條成完整句子、補上標點），再翻譯。中文字幕從「破碎的詞」變成「完整的句子」。
+- **預設「混合模式」**：先用本地啟發式快速分句顯示（秒出，使用者不必等），背景同時跑 AI 分句，回來後用更精緻版本替換——兼顧速度與品質。
+- **字幕顯示 overlay 整句穩定**：自家 overlay 完全旁路 YouTube 原生 caption-segment（avoid「一個字一個字跳出來」），整句進整句出。控制列出現時自動上移避開進度條。
+- **可關閉**：如果只想要最低延遲、用 YouTube 原始分句邏輯翻，到設定頁「YouTube 字幕 → AI 分句模式」取消勾選即可。
+
+人工上傳字幕（professional / community-contributed）不受此設定影響，沿用原來的逐句翻譯路徑。
+
+### 費用
+
+字幕翻譯與網頁翻譯共用同一套計費邏輯與用量追蹤。翻過的字幕自動快取，重播或拖回已翻段落完全不花錢。AI 分句模式 token 用量略高於關閉時（多送一次語意分句的 prompt），但對中文閱讀體驗的提升明顯，建議開啟。
+
+### 注意事項
+
+- 需要影片有英文字幕（手動上傳或自動產生皆可）
 - 字幕翻譯使用獨立的 system prompt，可在設定頁「YouTube 字幕」Tab 自訂
-- 若 CC 未開啟，畫面會顯示提示請你先開啟字幕
+- 若 CC 未開啟，Shinkansen 會自動幫你開啟（每個影片 session 只主動開一次，尊重使用者後續手動關 CC）
 - 換影片後需重新開啟開關（或開啟自動翻譯）
 
 ## 翻譯快取與費用計算
@@ -193,8 +213,7 @@ Shinkansen-Nozomi 有兩層快取機制，各自在不同階段省錢：
 v1.5.7 起，除了 Gemini 與 Google Translate 兩條既有引擎，你還可以接一組 OpenAI 相容端點，使用 Gemini 之外的模型——例如：
 
 - **OpenRouter**（`https://openrouter.ai/api/v1`）：一個端點接百種模型，含 Anthropic / Gemini / DeepSeek / Llama / Qwen / Grok / xAI / Mistral 等
-- **DeepSeek 直連**（`https://api.deepseek.com/v1`）：成本極低、品質好
-- **Together / Groq / Fireworks** 等推論加速 provider
+- **Together / Groq / Fireworks** 等模型供應商
 - **Ollama 本機**（`http://localhost:11434/v1`）：跑你自己的開源模型，零成本零延遲
 - **OpenAI 自家**（`https://api.openai.com/v1`）
 
@@ -207,7 +226,7 @@ v1.5.7 起，除了 Gemini 與 Google Translate 兩條既有引擎，你還可�
    - **API Key**：對應 provider 的 Bearer token，按右側「測試」按鈕可立即驗證連線（耗 ~1 token）
 3. 選填：翻譯 Prompt（留空 = 用內建簡短預設，預設值與 Gemini 相同）/ Temperature / 模型計價 input / output 單價（USD / 1M tokens；填 0 = 不顯示費用）
 4. 儲存
-5. 到「一般設定」分頁的「翻譯快速鍵」把任一組預設引擎改為「自訂模型」
+5. 到「一般設定」分頁的「翻譯快速鍵」，把任一組預設引擎改為「自訂模型」
 6. 對該 preset 的快速鍵翻譯時就會走自訂模型端點
 
 ### 設計重點

@@ -314,7 +314,10 @@
       }
     }
 
-    const anchor = endNode ? endNode.nextSibling : null;
+    // v1.6.19: endNode 可能在 collectParagraphs 與 inject 之間被外部重排,
+    // 不再是 el 的直接 child。沿用 endNode.nextSibling 當 anchor 會把 newContent
+    // 加到 el 末尾(順序錯位)。anchor 必須是 el 的直接 child 才合法。
+    const anchor = (endNode && endNode.parentNode === el) ? endNode.nextSibling : null;
     const toRemove = [];
     let cur = startNode;
     while (cur) {

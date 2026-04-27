@@ -47,7 +47,12 @@
   };
 
   function isCandidateText(el) {
-    const text = el.innerText?.trim();
+    // v1.6.9: textContent 取代 innerText——innerText 觸發 layout 重算（每呼叫一次
+    // 都 force layout reflow，在 leaf div/span 全頁掃描路徑會被呼叫上千次）。
+    // textContent 純讀字串樹不 force layout。差異：textContent 包含 display:none
+    // 子樹文字；但 isVisible 在多處已過濾隱藏祖先，剩餘 edge case 僅是「父可見、
+    // 子隱藏」混排（極罕見），對長度/語言判斷不足以改變結果。
+    const text = el.textContent?.trim();
     if (!text || text.length < 2) return false;
     if (SK.isTraditionalChinese(text)) return false;
     if (!/[\p{L}]/u.test(text)) return false;
@@ -67,32 +72,56 @@
     return false;
   }
 
-  function isInsideExcludedContainer(el) {
+  // v1.6.9: 加入 memo 參數做 per-call cache。原版每次從 el 走到 body
+  // 是 O(depth)，在 walker acceptNode + 三條 querySelectorAll 補抓路徑被
+  // 重複呼叫,實測同一個祖先鏈會被走過數百次。Map<el, bool> 把每個祖先
+  // 第一次計算後的結果記下,後續任何後代命中即 O(1) 短路。memo 為純函式
+  // 結果緩存（DOM 在單次 collectParagraphs 內不變動），語意完全等價。
+  function isInsideExcludedContainer(el, memo) {
+    if (memo && memo.has(el)) return memo.get(el);
+
+    const visited = [];
     let cur = el;
+    let result = false;
     while (cur && cur !== document.body) {
+      if (memo && memo.has(cur)) {
+        result = memo.get(cur);
+        break;
+      }
+      visited.push(cur);
+
       const tag = cur.tagName;
       if (tag === 'FOOTER' && isContentFooter(cur)) {
         cur = cur.parentElement;
         continue;
       }
-      if (tag && SK.SEMANTIC_CONTAINER_EXCLUDE_TAGS.has(tag)) return true;
-      // v1.5.2: 祖先若是 dual 模式注入的譯文 wrapper，整段 skip。
-      // acceptNode 流程已用 HARD_EXCLUDE_TAGS 擋住 wrapper 子樹，
+      if (tag && SK.SEMANTIC_CONTAINER_EXCLUDE_TAGS.has(tag)) { result = true; break; }
+      // v1.5.2: 祖先若是 dual 模式注入的譯文 wrapper,整段 skip。
+      // acceptNode 流程已用 HARD_EXCLUDE_TAGS 擋住 wrapper 子樹,
       // 但 leaf content div/span / anchor / grid td 三條補抓路徑用
-      // querySelectorAll 繞過 TreeWalker，必須在這裡再擋一次。
-      if (tag === 'SHINKANSEN-TRANSLATION') return true;
+      // querySelectorAll 繞過 TreeWalker,必須在這裡再擋一次。
+      if (tag === 'SHINKANSEN-TRANSLATION') { result = true; break; }
       const role = cur.getAttribute && cur.getAttribute('role');
-      if (role && SK.EXCLUDE_ROLES.has(role)) return true;
-      if (tag === 'HEADER' && role === 'banner') return true;
-      if (cur.getAttribute && cur.getAttribute('contenteditable') === 'true') return true;
-      if (role === 'textbox') return true;
+      if (role && SK.EXCLUDE_ROLES.has(role)) { result = true; break; }
+      if (tag === 'HEADER' && role === 'banner') { result = true; break; }
+      if (cur.getAttribute && cur.getAttribute('contenteditable') === 'true') { result = true; break; }
+      if (role === 'textbox') { result = true; break; }
       cur = cur.parentElement;
     }
-    return false;
+
+    if (memo) {
+      for (const v of visited) memo.set(v, result);
+    }
+    return result;
   }
 
   function isInteractiveWidgetContainer(el) {
     if (!el.querySelector('button, [role="button"]')) return false;
+    // v1.6.9: 此處刻意保留 innerText（不改 textContent）。語意上「>=300 字
+    // 視為非 widget」要的是「使用者實際看得到的字數」,改成 textContent 會把
+    // 隱藏 modal/menu/dropdown 的字也算進來,可能讓本應被視為 widget 的元件
+    // 通過篩選被翻譯。Twitter / Gmail 這類站常見,風險過大。此函式只在 walker
+    // accept 路徑被呼叫一次/element,非熱點。
     const textLen = (el.innerText || '').trim().length;
     if (textLen >= 300) return false;
     return true;
@@ -173,6 +202,9 @@
     const results = [];
     const seen = new Set();
     const fragmentExtracted = new Set();
+    // v1.6.9: per-call memo for isInsideExcludedContainer。整個 collectParagraphs
+    // 期間 DOM 不變,同一祖先鏈只算一次。
+    const excludedMemo = new Map();
 
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
       acceptNode(el) {
@@ -196,7 +228,7 @@
           //   Case A: "intro"<br>"Pros:"<ul><li>...</li></ul>"Overall..."
           //   Case B: "段落一"<br><br>"段落二"
           // DIV 不在 BLOCK_TAGS_SET → 以前直接 FILTER_SKIP，text node 完全不可見。
-          if (!fragmentExtracted.has(el) && !isInsideExcludedContainer(el)) {
+          if (!fragmentExtracted.has(el) && !isInsideExcludedContainer(el, excludedMemo)) {
             let hasDirectText = false;
             for (const child of el.childNodes) {
               if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim().length >= 2) {
@@ -251,7 +283,7 @@
           }
           return NodeFilter.FILTER_SKIP;
         }
-        if (isInsideExcludedContainer(el)) {
+        if (isInsideExcludedContainer(el, excludedMemo)) {
           if (stats) stats.excludedContainer = (stats.excludedContainer || 0) + 1;
           return NodeFilter.FILTER_REJECT;
         }
@@ -349,7 +381,7 @@
     document.querySelectorAll(SK.INCLUDE_BY_SELECTOR).forEach(el => {
       if (seen.has(el)) return;
       if (el.hasAttribute('data-shinkansen-translated')) return;
-      if (isInsideExcludedContainer(el)) return;
+      if (isInsideExcludedContainer(el, excludedMemo)) return;
       if (isInteractiveWidgetContainer(el)) return;
       if (!SK.isVisible(el)) return;
       if (!isCandidateText(el)) return;
@@ -369,11 +401,12 @@
       }
       if (hasBlockAncestor) return;
       if (SK.containsBlockDescendant(a)) return;
-      if (isInsideExcludedContainer(a)) return;
+      if (isInsideExcludedContainer(a, excludedMemo)) return;
       if (isInteractiveWidgetContainer(a)) return;
       if (!SK.isVisible(a)) return;
       if (!isCandidateText(a)) return;
-      const txt = (a.innerText || '').trim();
+      // v1.6.9: textContent 取代 innerText（避免 layout reflow）
+      const txt = (a.textContent || '').trim();
       if (txt.length < 20) return;
       if (stats) stats.leafContentAnchor = (stats.leafContentAnchor || 0) + 1;
       results.push({ kind: 'element', el: a });
@@ -381,10 +414,15 @@
     });
 
     // v1.0.8: leaf content element 補抓（CSS-in-JS 框架）
-    document.querySelectorAll('div, span').forEach(d => {
+    // v1.6.9: 收緊 selector 為 :not(:has(*))——只抓「無 element 子節點」的 div/span,
+    // 把過濾從 JS forEach 路徑下放到原生 CSS engine。長頁（Wikipedia / 論壇）原本
+    // querySelectorAll('div, span') 可能回傳幾萬個 element,新版只回傳數百個葉節點,
+    // 後續 isVisible / textContent / isCandidateText 等檢查減少 95% 以上呼叫次數。
+    // :has() 支援:Chrome 105+ / Firefox 121+ / Safari 15.4+,皆已是 stable 多年。
+    document.querySelectorAll('div:not(:has(*)), span:not(:has(*))').forEach(d => {
       if (seen.has(d)) return;
       if (d.hasAttribute('data-shinkansen-translated')) return;
-      if (d.children.length > 0) return;
+      // d.children.length > 0 過濾已由 :not(:has(*)) selector 取代,移除
       let cur = d.parentElement;
       let hasBlockAncestor = false;
       while (cur && cur !== document.body) {
@@ -392,11 +430,12 @@
         cur = cur.parentElement;
       }
       if (hasBlockAncestor) return;
-      if (isInsideExcludedContainer(d)) return;
+      if (isInsideExcludedContainer(d, excludedMemo)) return;
       if (isInteractiveWidgetContainer(d)) return;
       if (!SK.isVisible(d)) return;
       if (!isCandidateText(d)) return;
-      const txt = (d.innerText || '').trim();
+      // v1.6.9: textContent 取代 innerText
+      const txt = (d.textContent || '').trim();
       if (txt.length < 20) return;
       if (stats) stats.leafContentDiv = (stats.leafContentDiv || 0) + 1;
       results.push({ kind: 'element', el: d });
@@ -405,7 +444,8 @@
 
     // v1.0.22: grid cell leaf text 補抓
     document.querySelectorAll('table[role="grid"] td').forEach(td => {
-      const tdText = (td.innerText || '').trim();
+      // v1.6.9: textContent 取代 innerText
+      const tdText = (td.textContent || '').trim();
       if (tdText.length < 20) return;
       if (td.hasAttribute('data-shinkansen-translated')) return;
 
@@ -414,10 +454,10 @@
         if (el.hasAttribute('data-shinkansen-translated')) return;
 
         for (const child of el.children) {
-          if ((child.innerText || '').trim().length >= 15) return;
+          if ((child.textContent || '').trim().length >= 15) return;
         }
 
-        const text = (el.innerText || '').trim();
+        const text = (el.textContent || '').trim();
         if (text.length < 15) return;
 
         if (!SK.isVisible(el)) return;

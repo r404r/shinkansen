@@ -146,11 +146,14 @@
 
   // Toast 自動關閉開關
   let toastAutoHide = true;
+  // v1.6.8: Toast master switch — false 時 SK.showToast 入口直接 return
+  let showProgressToast = true;
 
-  browser.storage.sync.get(['toastOpacity', 'toastPosition', 'toastAutoHide']).then((s) => {
+  browser.storage.sync.get(['toastOpacity', 'toastPosition', 'toastAutoHide', 'showProgressToast']).then((s) => {
     applyToastOpacity(s.toastOpacity);
     applyToastPosition(s.toastPosition);
     if (typeof s.toastAutoHide === 'boolean') toastAutoHide = s.toastAutoHide;
+    if (typeof s.showProgressToast === 'boolean') showProgressToast = s.showProgressToast;
   });
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && changes.toastOpacity) {
@@ -162,11 +165,17 @@
     if (area === 'sync' && changes.toastAutoHide) {
       toastAutoHide = changes.toastAutoHide.newValue ?? true;
     }
+    if (area === 'sync' && changes.showProgressToast) {
+      showProgressToast = changes.showProgressToast.newValue ?? true;
+      // 切到 false 即時隱藏目前 toast（不等下一次 showToast 觸發）
+      if (!showProgressToast && SK.hideToast) SK.hideToast();
+    }
   });
 
   const toastEl = shadow.getElementById('toast');
   const toastMsgEl = shadow.getElementById('msg');
   const toastDetailEl = shadow.getElementById('detail');
+  // v1.6.1/v1.6.5: update/welcome notice rendering removed (user doesn't want update notification)
   const toastTimerEl = shadow.getElementById('timer');
   const toastFillEl = shadow.getElementById('fill');
   shadow.getElementById('close').addEventListener('click', () => SK.hideToast());
@@ -204,7 +213,15 @@
    * kind: 'loading' | 'success' | 'error'
    * opts: { progress?, startTimer?, stopTimer?, autoHideMs?, detail?, mismatch? }
    */
+  // v1.6.8: master switch 查詢函式，與 SK.shouldDisableInFrame 同 pattern
+  // 暴露給呼叫端（例如未來 content.js fast-path 跳過 buildToastOptions）與 regression spec 用
+  SK.shouldShowToast = function shouldShowToast() {
+    return showProgressToast;
+  };
+
   SK.showToast = function showToast(kind, msg, opts = {}) {
+    // v1.6.8: master switch 關閉時完全不顯示（不渲染 DOM、不發訊息）
+    if (!SK.shouldShowToast()) return;
     if (toastHideHandle) {
       clearTimeout(toastHideHandle);
       toastHideHandle = null;
@@ -224,6 +241,8 @@
       toastDetailEl.textContent = '';
       toastDetailEl.hidden = true;
     }
+
+    // v1.6.1/v1.6.5: update/welcome notice rendering removed (user doesn't want update notification)
 
     if (opts.progress != null) {
       toastFillEl.style.width = Math.round(opts.progress * 100) + '%';

@@ -17,6 +17,27 @@
 
 ## 條目
 
+### v1.6.19 — `hydrateStickyTabs` 並行 race(promise lock 修法)
+- **症狀**:SW 喚醒後 `_stickyStorage.get` 完成前若連開多個新 tab,後續 onCreated listener 進來時 `_stickyHydrated=true` 已 set 直接 return,但 stickyTabs Map 還空 → `stickyTabs.get(openerId)` 回 undefined → 沒繼承 sticky slot
+- **修在**:`shinkansen/background.js:200-235`(`_stickyHydratingPromise` 取代 boolean flag,所有 caller `await` 同一 in-flight promise)
+- **為什麼還不能寫測試**:Playwright 的 `context.newPage` 與 `window.open` 的時序受 Chromium 內部排程影響,SW wake 與 storage.session.get 完成的時間差難以可控地壓在「第二次 onCreated 進來時 await 還沒回」這個窄窗;jest-unit 用 jsdom mock 也需大幅 rewrite background.js 的 module pattern。先把實際修法 commit,觸發機率本身極低(<50ms 視窗 + 連開多 tab),靠真實使用發現幾乎不可能。
+- **建議 spec 位置**:`test/jest-unit/sticky-hydrate-race.test.cjs`
+- **建議 fixture 結構**(已知觸發條件):mock `chrome.storage.session.get` 回 50ms delay 的 Promise,接著兩次 `tabs.onCreated.dispatch` 各自帶 openerTabId,驗證兩次 `stickyTabs.get(openerId)` 都拿到正確 slot。
+
+### v1.6.19 — options.js `parseUserNum` 修「`||` 把 0 當 falsy」
+- **症狀**:使用者在設定頁輸入 `0`(safetyMargin / maxRetries / maxConcurrentBatches / maxUnitsPerBatch / maxCharsPerBatch / maxTranslateUnits)→ save 端 `Number(v) || default` 把 0 視為 falsy 回退預設值,使用者下次打開設定頁看到自己輸入的 0 變回預設,UI 體感 bug
+- **修在**:`shinkansen/options/options.js:60-67`(新增 `parseUserNum` helper),`shinkansen/options/options.js:108-119, 463-474, 689`(load/save/reset 三處用 `??` 取代 `||`)
+- **為什麼還不能寫測試**:`parseUserNum` 是 options.js 內部 helper,沒 export;options.js 走 ES module + DOM 操作,直接從 jest 載入需大量 stub(document、chrome.storage 等)。小工具函式 6 行,最壞情況也是「使用者輸入 0 看到預設」,不是資料破壞,測試效益低於投入成本。
+- **建議 spec 位置**:`test/jest-unit/options-parse-user-num.test.cjs`(若要鎖,把 `parseUserNum` 抽到 `lib/format.js` 或新 `lib/parse-input.js` export 後再寫測)
+- **建議 fixture 結構**:`parseUserNum('0', 20) === 0`、`parseUserNum('', 20) === 20`、`parseUserNum('abc', 20) === 20`、`parseUserNum('5.5', 20) === 5.5`
+
+### v1.6.19 — content.js `sendMessageWithTimeout` timer leak 修法
+- **症狀**:`Promise.race([sendMessage, setTimeout reject])` 結構在 sendMessage 先 settle 時不 clearTimeout,90s 後 timer 仍 fire(reject 已 settled 的 promise 被忽略,但 Error 物件 + timer 占住 90s GC)。長頁面 50+ batch 累積。
+- **修在**:`shinkansen/content.js:130-158`(`sendMessageWithTimeout` helper 用 `.finally(() => clearTimeout(timer))`),兩處 `Promise.race` call site 改用 helper(content.js 的 Gemini batch 與 Google Translate batch 路徑)
+- **為什麼還不能寫測試**:GC / timer 殘留難以從 page-level Playwright 觀察;若改寫成 stub `setTimeout`/`clearTimeout` 計數,等於針對實作細節寫測試,不是行為驗證。實際影響極低(微 GC 壓力,沒有功能差異),修法也夠小(包成 helper),不值得專屬測試。
+- **建議 spec 位置**:不寫(走「dim 影響無自動化價值」豁免)
+- **建議 fixture 結構**:N/A
+
 ### ~~vBulletin td.alt1 翻譯後標題 div 消失 / HR 位置顛倒~~ — 已修復（v1.4.14）→ `test/regression/inject-vbulletin-title-div.spec.js`
 （Cowork 端 Chrome MCP 實地診斷：根因不在 detection，而在 `content-inject.js` `injectIntoTarget`——TD 含 img 觸發 `containsMedia(TD)=true` 走 media-preserving path，把 fragment 塞進最長文字節點所在的 postbitcontrol2，原 smallfont/HR 殘留於其上方。修法：target 有 CONTAINER_TAGS 直屬子元素時改走 clean-slate（`containsMedia && !hasContainerChild` 才走 media path）。SANITY 通過。這是 v1.4.14 起「UI bug 必須 Cowork 實地診斷」新流程的首發；對比前一版被 revert 的 v1.4.14（Claude Code 純推理自以為修好但真實頁面沒用），證明實地驗證規則的必要性。）
 

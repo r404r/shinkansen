@@ -5,7 +5,7 @@ import { browser } from './lib/compat.js';
 import { translateBatch, extractGlossary } from './lib/gemini.js';
 import { translateBatch as translateBatchCustom } from './lib/openai-compat.js'; // v1.5.7
 import { translateGoogleBatch } from './lib/google-translate.js';
-import { getSettings, DEFAULT_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
+import { getSettings, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
 import { debugLog, getLogs, clearLogs, getPersistedLogs, clearPersistedLogs } from './lib/logger.js';
 import * as cache from './lib/cache.js';
 import { RateLimiter } from './lib/rate-limiter.js';
@@ -14,6 +14,8 @@ import * as usageDB from './lib/usage-db.js'; // v0.86: 用量紀錄 IndexedDB
 import { getPricingForModel } from './lib/model-pricing.js';  // v1.4.12: preset 依 model 查定價
 import { sessionStore } from './lib/session-storage.js';  // v1.5: 跨平台 session storage
 import { detectForbiddenTermLeaks } from './lib/forbidden-terms.js'; // v1.5.6
+// import { checkForUpdate, markUpdateNoticeShown, localTodayKey } from './lib/update-check.js'; // v1.6.1: disabled — user doesn't want update notification
+// import { maybeWriteWelcomeNotice } from './lib/welcome-notice.js'; // v1.6.5: disabled — user doesn't want update notification
 
 debugLog('info', 'system', 'service worker started', { version: browser.runtime.getManifest().version });
 
@@ -78,6 +80,17 @@ function estimateInputTokens(texts) {
     debugLog('info', 'cache', 'cache up-to-date', { version: currentVersion });
   }
 })();
+
+// ─── v1.6.1: GitHub Releases 更新檢查（disabled — user doesn't want update notification）────
+// checkForUpdate().catch(err => debugLog('warn', 'update-check', 'initial check failed', { error: err.message }));
+// browser.runtime.onStartup?.addListener(() => {
+//   checkForUpdate().catch(err => debugLog('warn', 'update-check', 'onStartup check failed', { error: err.message }));
+// });
+// browser.alarms?.create('update-check', { periodInMinutes: 60 * 24 });
+// browser.alarms?.onAlarm.addListener((alarm) => {
+//   if (alarm.name !== 'update-check') return;
+//   checkForUpdate().catch(err => debugLog('warn', 'update-check', 'alarm check failed', { error: err.message }));
+// });
 
 // ─── 使用量累計（browser.storage.local) ────────────────────
 // 結構：
@@ -180,7 +193,7 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // 持久化於 chrome.storage.session，service worker 休眠重啟後仍保留。
 
 const stickyTabs = new Map(); // tabId → slot (number)
-let _stickyHydrated = false;
+let _stickyHydratingPromise = null;
 
 // v1.5.4: storage.session 是 Chrome 102+ / Firefox 129+ 才有的 in-memory storage。
 // 舊版 Firefox（< 129）沒有此 API → fallback 到 storage.local（會 disk-persist，
@@ -188,22 +201,28 @@ let _stickyHydrated = false;
 // Chrome 端 storage.session 一定存在 → 行為跟修改前完全一致，效能 0 影響。
 const _stickyStorage = (browser.storage && browser.storage.session) ?? browser.storage.local;
 
-async function hydrateStickyTabs() {
-  if (_stickyHydrated) return;
-  _stickyHydrated = true;
-  // Firefox fallback: 先清除上次 session 殘留，再讀取（Chrome 為 no-op）
-  await sessionStore.clearOnStartup();
-  try {
-    const saved = await sessionStore.get('stickyTabs');
-    if (saved && typeof saved === 'object') {
-      for (const [tabId, slot] of Object.entries(saved)) {
-        // v1.4.12 前的舊值是 'gemini'/'google' 字串，重啟後忽略舊格式避免誤觸發
-        if (typeof slot === 'number') stickyTabs.set(Number(tabId), slot);
+// v1.6.19: 用 promise lock 取代 boolean flag——舊版在 `_stickyHydrated = true`
+// 與 `await storage.get` 之間第二個 caller 直接 return,但 Map 還空,結果
+// 後續 onCreated 拿不到 sticky slot。改成共用同一個 in-flight promise,
+// 所有並行 caller 都等到 Map 真正填好。
+function hydrateStickyTabs() {
+  if (_stickyHydratingPromise) return _stickyHydratingPromise;
+  _stickyHydratingPromise = (async () => {
+    // Firefox fallback: 先清除上次 session 殘留，再讀取（Chrome 為 no-op）
+    await sessionStore.clearOnStartup();
+    try {
+      const saved = await sessionStore.get('stickyTabs');
+      if (saved && typeof saved === 'object') {
+        for (const [tabId, slot] of Object.entries(saved)) {
+          // v1.4.12 前的舊值是 'gemini'/'google' 字串，重啟後忽略舊格式避免誤觸發
+          if (typeof slot === 'number') stickyTabs.set(Number(tabId), slot);
+        }
       }
+    } catch (err) {
+      debugLog('warn', 'system', 'hydrateStickyTabs failed', { error: err.message });
     }
-  } catch (err) {
-    debugLog('warn', 'system', 'hydrateStickyTabs failed', { error: err.message });
-  }
+  })();
+  return _stickyHydratingPromise;
 }
 
 async function persistStickyTabs() {
@@ -270,7 +289,41 @@ const messageHandlers = {
       if (yt.model) geminiOverrides.model = yt.model;
       // ytSubtitle.pricing 非空時傳入，讓 handleTranslate 用正確計價計算費用
       const pricingOverride = (yt.pricing && yt.pricing.inputPerMTok != null) ? yt.pricing : null;
-      return handleTranslate(payload, sender, geminiOverrides, pricingOverride, '_yt');
+      // v1.5.8: 字幕路徑預設不套用固定術語表 / 黑名單，使用者可在 YouTube 字幕分頁開 toggle
+      return handleTranslate(payload, sender, geminiOverrides, pricingOverride, '_yt',
+        yt.applyFixedGlossary === true,
+        yt.applyForbiddenTerms === true);
+    },
+  },
+  // v1.6.20: ASR(YouTube 自動字幕)專用——LLM 自由合句 + 時間戳對齊路徑(D' 模式,
+  // timestamp mode)。
+  // 與 TRANSLATE_SUBTITLE_BATCH 的差異:
+  //   - 走獨立 system prompt(DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT),允許 LLM 自由合句
+  //   - texts 是單一元素(整視窗包成 [{s,e,t}] JSON 字串),不分批
+  //   - cache key tag '_yt_asr',跟 _yt 分區避免互打
+  //   - 字幕 settings 沿用 ytSubtitle(model / temperature / pricing),只覆寫 systemInstruction
+  TRANSLATE_ASR_SUBTITLE_BATCH: {
+    async: true,
+    handler: async (payload, sender) => {
+      const _tReceived = Date.now();
+      const s = await getSettings();
+      const _settingsMs = Date.now() - _tReceived;
+      debugLog('info', 'youtube', 'asr subtitle batch received', {
+        inputBytes: payload?.texts?.[0]?.length || 0,
+        settingsMs: _settingsMs,
+      });
+      const yt = s.ytSubtitle || {};
+      const geminiOverrides = {
+        // ASR 模式不沿用使用者自訂的 ytSubtitle.systemPrompt(那是逐條翻譯版本,規則不適用 ASR JSON 模式)
+        systemInstruction: DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT,
+        // ASR 合句需要一點推理,但翻譯仍應穩定;沿用 ytSubtitle.temperature
+        temperature: yt.temperature ?? 0.1,
+      };
+      if (yt.model) geminiOverrides.model = yt.model;
+      const pricingOverride = (yt.pricing && yt.pricing.inputPerMTok != null) ? yt.pricing : null;
+      // ASR 路徑不套用固定術語表 / 黑名單(ASR prompt 已內含禁用詞規則,且 JSON 包裝增加術語注入難度)
+      return handleTranslate(payload, sender, geminiOverrides, pricingOverride, '_yt_asr',
+        false, false);
     },
   },
   // v1.4.0: Google Translate 網頁翻譯（不需 API Key，不走 rate limiter，快取 key 用 _gt 後綴）
@@ -282,8 +335,31 @@ const messageHandlers = {
   // 不走 rate limiter，cache key 加 baseUrl hash + model 分區。
   TRANSLATE_BATCH_CUSTOM: {
     async: true,
-    handler: (payload, sender) => handleTranslateCustom(payload, sender),
+    handler: (payload, sender) => handleTranslateCustom(payload, sender, '_oc'),
   },
+  // v1.5.8: 字幕用自訂模型，與網頁翻譯共用 customProvider 設定但 cache key 用 '_oc_yt'
+  // 命名空間（同 '_yt' 對 Gemini、'_gt_yt' 對 Google MT 的字幕分區慣例）。
+  // 對 systemPrompt 走 cpOverrides 覆蓋成字幕專屬（ytSubtitle.systemPrompt）；
+  // 字幕未自訂時 fallback 到主自訂模型 prompt。
+  TRANSLATE_SUBTITLE_BATCH_CUSTOM: {
+    async: true,
+    handler: async (payload, sender) => {
+      const s = await getSettings();
+      const yt = s.ytSubtitle || {};
+      const ytPrompt = (yt.systemPrompt || '').trim();
+      const overrides = ytPrompt ? { systemPrompt: ytPrompt } : null;
+      // v1.5.8: 字幕路徑同 Gemini 字幕路徑，預設不套用固定術語表 / 黑名單
+      return handleTranslateCustom(payload, sender, '_oc_yt', overrides,
+        yt.applyFixedGlossary === true,
+        yt.applyForbiddenTerms === true);
+    },
+  },
+  // v1.6.1: update notice handlers (disabled — user doesn't want update notification)
+  // UPDATE_NOTICE_DISMISSED / WELCOME_NOTICE_DISMISSED / WELCOME_NOTICE_TOAST_SHOWN kept as no-ops
+  // so messages from any residual UI code don't throw "unknown type" errors.
+  UPDATE_NOTICE_DISMISSED: { async: true, handler: () => {} },
+  WELCOME_NOTICE_DISMISSED: { async: true, handler: () => {} },
+  WELCOME_NOTICE_TOAST_SHOWN: { async: true, handler: () => {} },
   // v1.5.7: API Key 測試 — 設定頁「測試」按鈕觸發。
   // Gemini 走 GET models/<model>?key=<key> 不耗 token；
   // OpenAI-compat 走 POST /chat/completions max_tokens=1 ping，耗 ~1 token。
@@ -522,7 +598,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // pricingOverride：傳入時（如 YouTube 獨立計價）使用；null 則沿用 settings.pricing
-async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOverride = null, cacheTag = '') {
+async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOverride = null, cacheTag = '', applyFixedGlossary = true, applyForbiddenTerms = true) {
   const settings = await getSettings();
   if (!settings.apiKey) {
     throw new Error('尚未設定 Gemini API Key，請至設定頁填入。');
@@ -540,15 +616,18 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
   // 優先順序：pricingOverride（字幕獨立計價） > modelOverride 查表 > settings.pricing
   let effectivePricing = pricingOverride;
   if (!effectivePricing && geminiOverrides.model) {
-    effectivePricing = getPricingForModel(geminiOverrides.model);
+    // v1.6.14: 帶 settings 讓 getPricingForModel 先查使用者的 modelPricingOverrides,
+    // 沒有 override 才 fallback 內建表(Google 改價時使用者能自己更新單價)。
+    effectivePricing = getPricingForModel(geminiOverrides.model, settings);
   }
   if (!effectivePricing) {
     effectivePricing = settings.pricing;
   }
 
   // v1.0.29: 讀取固定術語表（全域 + 當前網域），合併後傳給 translateBatch
+  // v1.5.8: 字幕路徑（applyFixedGlossary=false）跳過讀取，省 prompt token
   let fixedGlossaryEntries = null;
-  const fg = settings.fixedGlossary;
+  const fg = applyFixedGlossary ? settings.fixedGlossary : null;
   if (fg) {
     const globalEntries = Array.isArray(fg.global) ? fg.global.filter(e => e.source && e.target) : [];
     let domainEntries = [];
@@ -571,9 +650,11 @@ async function handleTranslate(payload, sender, geminiOverrides = {}, pricingOve
   // 同時計算 hash 加進 cache key 後綴，讓使用者修改清單後既有快取自動失效。
   // 空清單時 hash 為空字串，不附加後綴，向下相容既有 v1.5.5 之前的快取 key。
   // v1.7: zh-CN 模式下大陸用語是正確的，跳過黑名單
+  // v1.5.8: 字幕路徑（applyForbiddenTerms=false）跳過，省 prompt token。
   const forbiddenTermsList = (settings.uiLocale === 'zh-CN')
     ? []
-    : (Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : []);
+    : (applyForbiddenTerms && Array.isArray(settings.forbiddenTerms))
+      ? settings.forbiddenTerms : [];
 
   // v0.70: 若有術語表，快取 key 加上 glossary hash 後綴，
   // 確保「有術語表」與「無術語表」的翻譯分開快取。
@@ -751,13 +832,16 @@ async function testCustomProvider(payload) {
   const apiKey = (payload?.apiKey || '').trim();
   if (!baseUrl) return { ok: false, message: 'Base URL 為空。' };
   if (!model) return { ok: false, message: '模型 ID 為空。' };
-  if (!apiKey) return { ok: false, message: 'API Key 為空。' };
+  // v1.6.7: API Key 允許為空（本機 llama.cpp / Ollama 等不需要 key）。商用後端
+  // 若漏填會自然回 401，錯誤訊息由 provider 提供（例如 OpenAI: "Incorrect API key"）。
 
   const url = /\/chat\/completions$/.test(baseUrl) ? baseUrl : baseUrl + '/chat/completions';
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     const resp = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers,
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: 'ping' }],
@@ -786,10 +870,12 @@ async function testCustomProvider(payload) {
 // provider 自己處理配額；既有 fetchWithRetry 的 429 退避已能應付），cache key
 // 用 _oc base tag + baseUrl hash + safe model 分區，計價來自 customProvider 自填。
 // 與 Gemini 共用：fixedGlossary、forbiddenTerms、自動 glossary 注入、cache module。
-async function handleTranslateCustom(payload, sender) {
+async function handleTranslateCustom(payload, sender, cacheTag = '_oc', cpOverrides = null, applyFixedGlossary = true, applyForbiddenTerms = true) {
   const settings = await getSettings();
-  const cp = settings.customProvider || {};
-  if (!cp.apiKey) throw new Error('尚未設定自訂 Provider 的 API Key，請至設定頁填入。');
+  // v1.5.8: cpOverrides 給字幕路徑覆蓋特定欄位（例如 systemPrompt 改用字幕專屬），
+  // 其他欄位（baseUrl / model / apiKey / 計價）仍走「自訂模型」分頁主設定。
+  const cp = { ...(settings.customProvider || {}), ...(cpOverrides || {}) };
+  // v1.6.7: API Key 允許為空（本機 llama.cpp / Ollama 等不需要 key）；商用後端漏填會自然 401
   if (!cp.baseUrl) throw new Error('尚未設定自訂 Provider 的 Base URL。');
   if (!cp.model) throw new Error('尚未設定自訂 Provider 的模型 ID。');
 
@@ -797,8 +883,9 @@ async function handleTranslateCustom(payload, sender) {
   const glossary = payload.glossary || null;
 
   // 重用 handleTranslate 內的 fixedGlossary 合併邏輯
+  // v1.5.8: 字幕路徑（applyFixedGlossary=false）跳過
   let fixedGlossaryEntries = null;
-  const fg = settings.fixedGlossary;
+  const fg = applyFixedGlossary ? settings.fixedGlossary : null;
   if (fg) {
     const globalEntries = Array.isArray(fg.global) ? fg.global.filter(e => e.source && e.target) : [];
     let domainEntries = [];
@@ -817,12 +904,14 @@ async function handleTranslateCustom(payload, sender) {
   }
 
   // v1.7: zh-CN 模式下大陸用語是正確的，跳過黑名單
+  // v1.5.8: 字幕路徑（applyForbiddenTerms=false）跳過
   const forbiddenTermsList = (settings.uiLocale === 'zh-CN')
     ? []
-    : (Array.isArray(settings.forbiddenTerms) ? settings.forbiddenTerms : []);
+    : (applyForbiddenTerms && Array.isArray(settings.forbiddenTerms))
+      ? settings.forbiddenTerms : [];
 
-  // Cache key：'_oc' base tag + glossary/forbidden hash + baseUrl hash + safe model
-  let suffix = '_oc';
+  // Cache key：'_oc' (網頁) / '_oc_yt' (字幕) base tag + glossary/forbidden hash + baseUrl hash + safe model
+  let suffix = cacheTag;
   const allGlossaryForHash = [
     ...(glossary || []).map(e => `${e.source}:${e.target}`),
     ...(fixedGlossaryEntries || []).map(e => `F:${e.source}:${e.target}`),
@@ -1084,11 +1173,22 @@ browser.commands.onCommand.addListener(async (command) => {
 });
 
 // ─── 安裝/更新事件 ─────────────────────────────────────────
-browser.runtime.onInstalled.addListener(async ({ reason }) => {
-  debugLog('info', 'system', `extension ${reason}`, { version: browser.runtime.getManifest().version });
+browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
+  debugLog('info', 'system', `extension ${reason}`, {
+    version: browser.runtime.getManifest().version,
+    previousVersion: previousVersion || null,
+  });
   // 安裝/更新時也檢查一次版本（雙重保險，SW 啟動時已經跑過一次）
   const currentVersion = browser.runtime.getManifest().version;
   await cache.checkVersionAndClear(currentVersion);
+
+  // v1.6.5: welcome notice (disabled — user doesn't want update notification)
+  // const wrote = await maybeWriteWelcomeNotice({ reason, previousVersion, currentVersion });
+  // if (wrote) {
+  //   debugLog('info', 'system', 'welcome notice written', {
+  //     from: previousVersion, to: currentVersion,
+  //   });
+  // }
 
   // v0.62 起：API Key 從 browser.storage.sync 搬到 browser.storage.local，
   // 避免跨 Google 帳號同步。這裡做一次主動遷移：若 sync 裡還殘留舊的 apiKey，

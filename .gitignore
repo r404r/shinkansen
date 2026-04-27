@@ -24,3 +24,7 @@ CLAUDE-TEMPLATE-*.md
 *.log
 .env
 .env.*
+
+# debug harness 截圖輸出（tools/debug-harness.js）與一次性 probe 腳本
+.playwright-mcp/
+tools/probe-*.js

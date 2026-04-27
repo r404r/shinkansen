@@ -88,10 +88,17 @@
     }
 
     try {
-      const { autoTranslate = false } = await browser.storage.sync.get('autoTranslate');
+      const { autoTranslate = false, autoTranslateSlot } = await browser.storage.sync.get(['autoTranslate', 'autoTranslateSlot']);
       if (autoTranslate && await SK.isDomainWhitelisted()) {
-        SK.sendLog('info', 'spa', 'SPA nav: domain in auto-translate list, translating', { url: location.href });
-        SK.translatePage();
+        // v1.6.13: 走指定 preset slot,讓 SPA 導航的白名單觸發跟使用者期待的快速鍵一致。
+        const n = Number(autoTranslateSlot);
+        const slot = [1, 2, 3].includes(n) ? n : 2;
+        SK.sendLog('info', 'spa', 'SPA nav: domain in auto-translate list, translating', { url: location.href, slot });
+        if (typeof SK.handleTranslatePreset === 'function') {
+          SK.handleTranslatePreset(slot);
+        } else {
+          SK.translatePage();
+        }
         return;
       }
     } catch (err) {
@@ -124,6 +131,12 @@
 
   const SPA_URL_POLL_MS = 500;
   setInterval(() => {
+    // v1.6.10: 分頁隱藏時跳過 URL 輪詢——背景分頁不會由使用者觸發導航,
+    // pushState patch + popstate + hashchange 三條 listener 仍活躍,真正
+    // 主動觸發的 SPA 導航不會漏接。輪詢只是萬一上述 patch 沒套到的 safety
+    // net,在隱藏分頁完全無作用,純消耗 CPU。從 visible 切回時的 catch-up
+    // 由下方 visibilitychange listener 補一次。
+    if (document.hidden) return;
     if (location.href !== spaLastUrl) {
       if (STATE.translated && !STATE.stickyTranslate && STATE.translationScope !== 'selection' && document.querySelector('[data-shinkansen-translated]')) {
         SK.sendLog('info', 'spa', 'URL changed while translated content present — scroll-based update, skipping reset', { newUrl: location.href, oldUrl: spaLastUrl });
@@ -133,6 +146,15 @@
       handleSpaNavigation();
     }
   }, SPA_URL_POLL_MS);
+
+  // v1.6.10: 分頁從隱藏切回可見時補一次 URL 同步——萬一 hidden 期間頁面
+  // 透過 setTimeout 觸發 pushState 而 monkey-patch 因時序未生效（極端情境）,
+  // 切回前景時這次 catch-up 會抓到 URL 變化並走 handleSpaNavigation。
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && location.href !== spaLastUrl) {
+      handleSpaNavigation();
+    }
+  });
 
   // ─── MutationObserver（動態段落偵測） ─────────────────
 
@@ -176,6 +198,11 @@
 
   function runContentGuard() {
     if (!STATE.translated) return;
+    // v1.6.10: 分頁隱藏時跳過——使用者看不到的內容無需即時修復,且 sweep
+    // 每秒一次,每個 entry 都呼叫 getBoundingClientRect 強制 layout,長頁
+    // (上百 entry) 在背景分頁是純浪費 CPU + 電力。切回前景時下一次 sweep
+    // 在 1 秒內就會修復,使用者無感知差異。
+    if (document.hidden) return;
     // v1.5.0: dual 模式分派——監看 wrapper 被 SPA 刪除後 re-append。
     if (STATE.translatedMode === 'dual') {
       runContentGuardDual(false);
@@ -259,6 +286,13 @@
     }
     return restored;
   };
+
+  // v1.6.10: 給 regression spec 直接呼叫真正的 production runContentGuard
+  // （含所有 gate:STATE.translated / document.hidden / viewport rect）。
+  // 與 testRunContentGuard 的差別:test 版繞過 viewport 檢查,本 hook 不繞過任何
+  // 條件,用來驗證 hidden gate 行為。runContentGuard 沒回傳值,spec 需透過
+  // 「修復後元素 textContent」斷言。
+  SK._testRunContentGuardProd = function() { runContentGuard(); };
 
   function onSpaObserverMutations(mutations) {
     if (!STATE.translated) { stopSpaObserver(); return; }

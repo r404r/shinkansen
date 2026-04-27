@@ -3,6 +3,11 @@
 import { browser } from '../lib/compat.js';
 import { formatBytes, formatTokens, formatUSD } from '../lib/format.js';
 import { t, initLocale, applyLocale } from '../lib/i18n.js';
+// Update notification imports disabled — user doesn't want update notification
+// import { RELEASE_HIGHLIGHTS } from '../lib/release-highlights.js';
+// import { shouldShowWelcomeNotice } from '../lib/welcome-notice.js';
+// import { isWorthNotifying } from '../lib/update-check.js';
+import { pickPopupSlot } from '../lib/storage.js';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -85,12 +90,18 @@ async function refreshShortcutHint() {
   }
 }
 
+// v1.6.5/v1.6.3: welcome banner and update banner event handlers removed
+// (user doesn't want update notification)
+
 async function init() {
   // 從 manifest 動態讀版本號，避免日後忘記同步
   const manifest = browser.runtime.getManifest();
   $('version').textContent = 'v' + manifest.version;
 
   refreshShortcutHint();
+
+  // v1.6.5/v1.6.1: welcome banner and update banner logic removed
+  // (user doesn't want update notification)
 
   // v0.62 起：autoTranslate 仍走 sync（跨裝置同步），apiKey 改走 local（不同步）
   const { autoTranslate = false, displayMode = 'single' } = await browser.storage.sync.get(['autoTranslate', 'displayMode']);
@@ -137,8 +148,11 @@ $('translate-btn').addEventListener('click', async () => {
   const mode = $('translate-btn').dataset.mode;
   statusEl.textContent = mode === 'restore' ? t('popup_status_restoring') : t('popup_status_translating');
   try {
-    // TOGGLE_TRANSLATE 在 content.js 是 toggle 行為：已翻譯 → 還原，反之翻譯
-    await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_TRANSLATE' });
+    // v1.6.6: 讀 settings.popupButtonSlot 決定按鈕對應的 preset slot（預設 2 = Flash）
+    // content.js handleTranslatePreset 自帶 toggle 行為（已翻譯 → 還原 / 翻譯中 → abort / 閒置 → 翻譯）
+    const { popupButtonSlot } = await browser.storage.sync.get('popupButtonSlot');
+    const slot = pickPopupSlot(popupButtonSlot);
+    await browser.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PRESET', payload: { slot } });
     window.close();
   } catch (err) {
     statusEl.textContent = t('popup_status_no_content_script');
@@ -187,13 +201,12 @@ $('glossary-toggle').addEventListener('change', async (e) => {
 // 舊版點擊送 TOGGLE_SUBTITLE，content.js 走「翻面」YT.active；當設定值與 YT.active
 // desync（例如使用者手動按 Alt+S 啟動過、或處於 init 800ms 延遲窗口）時，點擊會反向作用。
 // 改為送 SET_SUBTITLE { enabled }，content.js 依 enabled 直接決定啟/停/no-op。
+// v1.6.23:改為「Option → Popup」單向 sync。popup toggle 變動只通知當前 tab 即時啟 / 停,
+// **不寫** storage 避免反向覆蓋 Option 的全域設定。Option 設定影響「下次進 YouTube 頁的預設行為」,
+// popup 的勾選只控制「當前 tab」即時狀態。
 $('yt-subtitle-toggle').addEventListener('change', async (e) => {
   const enabled = e.target.checked;
   try {
-    // 1. 更新設定（影響下次進 YouTube 頁是否自動啟動字幕翻譯）
-    const { ytSubtitle = {} } = await browser.storage.sync.get('ytSubtitle');
-    await browser.storage.sync.set({ ytSubtitle: { ...ytSubtitle, autoTranslate: enabled } });
-    // 2. 通知當前分頁把運行狀態調成 enabled
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       await browser.tabs.sendMessage(tab.id, {
@@ -209,6 +222,16 @@ $('yt-subtitle-toggle').addEventListener('change', async (e) => {
 
 $('options-btn').addEventListener('click', () => {
   browser.runtime.openOptionsPage();
+});
+
+// v1.6.23:popup 開著時 reactive sync ytSubtitle.autoTranslate(設定頁同步寫 storage 後立即反映)
+// popup 通常 click 外面就關閉,但 detached popup window 或極短時間視窗下這條 listener 確保一致
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+  if (!changes.ytSubtitle) return;
+  const newVal = changes.ytSubtitle.newValue || {};
+  // ytSubtitle.autoTranslate 預設視為 true(對齊 init 邏輯)
+  $('yt-subtitle-toggle').checked = newVal.autoTranslate !== false;
 });
 
 // v1.0.3: 編輯譯文按鈕

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shinkansen-Nozomi",
-  "version": "1.7.0.9",
+  "version": "1.8.0",
   "description": "快速、流暢的網頁翻譯擴充功能，使用 Google Gemini 將外語網頁翻譯成繁體中文／簡體中文／日本語。",
   "default_locale": "zh_TW",
   "browser_specific_settings": {
@@ -17,7 +17,8 @@
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -79,21 +80,21 @@
         "default": "Alt+A",
         "mac": "Alt+A"
       },
-      "description": "翻譯預設 1（預設 Gemini Flash Lite）"
+      "description": "翻譯預設 2（預設 Gemini Flash Lite）"
     },
     "translate-preset-2": {
       "suggested_key": {
         "default": "Alt+S",
         "mac": "Alt+S"
       },
-      "description": "翻譯預設 2（預設 Gemini Flash）"
+      "description": "翻譯主要預設（預設 Gemini Flash）"
     },
     "translate-preset-3": {
       "suggested_key": {
         "default": "Alt+D",
         "mac": "Alt+D"
       },
-      "description": "翻譯預設 3（預設 Google Translate）"
+      "description": "翻譯預設 3（預設 Google Translate,維持原 slot 3 編號）"
     }
   }
 }

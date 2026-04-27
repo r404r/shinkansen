@@ -25,7 +25,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", "Noto Sans TC", sans-serif;
       color: #1a1a1a;
       background: #fff;
       line-height: 1.7;
@@ -221,6 +221,27 @@
       color: #555;
     }
 
+    /* 近期重大更新 */
+    .recent-updates {
+      list-style: none;
+      padding: 0;
+      margin: 1rem 0 0;
+      display: grid;
+      gap: 0.6rem;
+      max-width: 760px;
+    }
+    .recent-updates li {
+      padding: 0.85rem 1.1rem;
+      background: #fff8e1;
+      border-left: 3px solid #f5b800;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      color: #2c2a1f;
+    }
+    .recent-updates li strong {
+      color: #1d1d1f;
+    }
+
     /* Privacy Hero — 專案核心動機 */
     .privacy-hero {
       background: #f0f5fa;
@@ -284,11 +305,24 @@
       <p class="tagline">你的瀏覽內容不該經過別人的伺服器<br>Shinkansen 由你的電腦直接呼叫 Google Gemini 翻譯，不經過任何第三方</p>
       <div class="btn-row">
         <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝<span class="btn-version">v<!-- cws-version-start -->1.4.22<!-- cws-version-end --> · 已上架</span></a>
-        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下載最新版<span class="btn-version">v1.7.0</span></a>
+        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下載最新版<span class="btn-version">v1.8.0</span></a>
       </div>
       <p class="hero-sub">開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
     </div>
   </div>
+
+  <!-- Recent updates — Hero 下方第一個 section，使用者一進站就看到亮點 -->
+  <section>
+    <div class="container">
+      <h2>近期重大更新</h2>
+      <ul class="recent-updates">
+        <li>新增<strong>AI 智慧分句</strong>，YouTube 自動產生字幕經 AI 重新分句，讓中文字幕更自然好讀</li>
+        <li>新增<strong>雙語對照模式</strong>，原文 + 譯文並列顯示</li>
+        <li>新增<strong>中國用語黑名單</strong>，明確要求 LLM 不能用視頻 / 軟件 / 數據等中國用語</li>
+        <li>新增<strong>自訂 AI 模型</strong>功能，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等百種模型</li>
+      </ul>
+    </div>
+  </section>
 
   <!-- Privacy — 專案核心動機，放在最顯眼的位置 -->
   <div class="container">

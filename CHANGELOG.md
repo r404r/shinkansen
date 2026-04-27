@@ -14,6 +14,314 @@
 
 ---
 
+## 使用者功能變更摘要
+
+> 這份摘要只涵蓋使用者能感知到的功能與 UX 變更。完整版本歷史與技術細節請見下方 v1.6.x 起的詳細紀錄。
+
+### 翻譯引擎與模型
+
+- **v1.6.19** — Code review 後修 5 條穩健性 bug:YouTube 字幕並行批次某批失敗不再拖累其他批字幕、跨 tab sticky 翻譯在 SW 喚醒當下連開多 tab 不再漏繼承、設定頁可正確輸入 0(不會被靜默改回預設)、fragment 注入遇到 DOM 重排不再 crash、batch timer 不再洩漏
+- **v1.6.18** — 自訂模型分頁加「思考強度」(自動 / 關閉 / 低 / 中 / 高)統一控制,涵蓋 OpenRouter / DeepSeek / Claude / OpenAI o-series / Grok / Qwen 6 家 thinking API 差異;另加「進階 JSON」逃生口給 power user 透傳 provider 專屬參數
+- **v1.6.12** — 修 Pro 模型(`gemini-3-pro-preview` / `gemini-2.5-pro` 等)翻譯失敗 bug,並升級到 Gemini 3 推薦的 `thinkingLevel` API
+- **v1.6.7** — 自訂模型支援本機後端（llama.cpp / Ollama 等不需 API Key 的服務）
+- **v1.5.7** — 新增「自訂 OpenAI 相容模型」分頁，可接 OpenRouter / Together / DeepSeek / Groq / Fireworks / Ollama 等任何 OpenAI 相容端點
+
+### 翻譯預設與快速鍵
+
+- **v1.6.6** — 工具列「翻譯本頁」按鈕可指定對應的翻譯預設
+
+### 顯示模式
+
+- **v1.5.3** — 雙語對照的「虛線底線」改為波浪底線，與連結直線底線視覺區分
+- **v1.5.2** — 雙語對照模式譯文繼承原文字型、字距、行距
+- **v1.5.0** — 新增雙語對照模式（譯文與原文並列，可在 popup 即時切換）
+
+### 翻譯品質與術語管理
+
+- **v1.5.6** — 新增中國用語黑名單分頁（預設 25 條禁用詞，可編輯）
+
+### YouTube 字幕翻譯
+
+- **v1.6.20** — YouTube 自動產生字幕整套重做:三種分句模式可切換(預設分句 / AI 分句 / 混合模式)、字幕完全旁路原生跳動 + 整句穩定顯示、譯文過長依標點動態斷行(2 行為主)、字體 / 顏色 / 透明度 / 字型動態對齊原生英文字幕;勾「自動翻譯字幕」+ CC 未開時自動開啟 CC
+- **v1.6.0** — 字幕分頁 tab 移到「一般設定」右邊；section 重組為「自動翻譯 → 翻譯引擎 → Gemini 設定 → 進階 → 視窗設定 → Prompt」
+- **v1.6.0** — 字幕引擎新增「自訂模型」選項（與文章翻譯共用設定，prompt 可獨立）
+- **v1.6.0** — 字幕新增「字幕也套用『固定術語表』/『禁用詞清單』」兩個 toggle（預設關，省 token）
+- **v1.5.5** — 修「編輯譯文」會被自動還原的 bug
+
+### 設定頁與用量紀錄
+
+- **v1.6.17** — 設定頁次按鈕視覺對齊主按鈕(高度/字級一致,主按鈕仍突出)
+- **v1.6.16** — 自訂模型分頁預填 OpenRouter DeepSeek V4 Pro(只剩 API Key 要填即可啟動);Gemini 分頁移除「後備路徑單價」UI;reset 按鈕補清空 v1.6.14 的計價覆蓋表
+- **v1.6.15** — Gemini 分頁移除「全域 Gemini 模型」下拉(後備路徑已不需要),Service Tier 搬到「LLM 參數微調」section
+- **v1.6.14** — 翻譯預設改名「主要預設 / 預設 2 / 預設 3」(原預設 2 突顯為「主要預設」加藍邊框);Gemini 分頁加 per-model 計價覆蓋表(Google 改價時可手動更新)
+- **v1.6.13** — 自動翻譯白名單可指定使用哪一組預設(原本走 Gemini 全域模型,現在跟快速鍵行為一致);Gemini 分頁的「模型/計價」section 重新標示為「後備路徑專用」消除混淆
+- **v1.6.11** — 用量紀錄分頁加「重新載入」按鈕(不需關閉設定頁也能看到最新紀錄)
+- **v1.6.0** — 設定頁加入「重設所有參數」與「重置為預設 Prompt」按鈕；每批段數預設 12→20；用量紀錄時間 filter 改 24 小時制 + 「現在時間」按鈕
+- **v1.5.7** — 用量紀錄「模型」欄改顯示 preset 標籤；Google MT 同 URL 批次自動合併
+
+### 效能與穩定性
+
+- **v1.6.10** — 分頁切到背景時暫停 Content Guard 與 SPA URL 輪詢,降低背景分頁的 CPU 與電力消耗
+- **v1.6.9** — 段落偵測階段大幅優化,長頁（Wikipedia / 論壇 / 長 Medium）翻譯啟動明顯變快
+
+### 通知與更新提示
+
+- **v1.6.8** — 「顯示翻譯進度通知」master switch（可完全關閉 toast）
+- **v1.6.5** — Chrome 商店自動更新後的「歡迎升級」提示（popup banner + toast 兩處）
+- **v1.6.4** — Patch 級更新不再提示，避免高頻打擾
+- **v1.6.1** — GitHub Releases 自動更新提示（給手動安裝 / unpacked 使用者）
+
+---
+
+## v1.7.x
+
+**v1.7.0** — YouTube 自動產生字幕(ASR)整套生產級體驗 + 設定簡化。Highlights:**AI 智慧分句**——把整批 ASR 片段送 Gemini 依語意重新分句後翻譯,中文字幕從「破碎的詞」變「完整句子」;**混合模式預設**——預設分句先秒出,AI 分句結果回來後替換成更精緻版本;**字幕 overlay 整句穩定顯示**——完全旁路 YouTube 原生 caption-segment 一字一字跳的問題,控制列出現時自動上移避開進度條;**設定 UI 簡化**——三選一 radio → 單一「AI 分句模式」toggle(開啟=混合 / 關閉=原始分句);**popup 紅點 CSS bug 修**——`.update-dot[hidden]` 規則漏寫導致殘留紅點永遠顯示。
+
+  - **AI 智慧分句**:`TRANSLATE_ASR_SUBTITLE_BATCH` 用 timestamp mode JSON,LLM 自由合句 + 時間戳對齊驗證。輸入 `[{s,e,t}]` → 輸出 `[{s,e,t}]`,合句後逐句翻譯,token 用量略高於原始分句但中文閱讀體驗大幅提升。
+  - **設定簡化(`options.html` + `options.js`)**:`ytSubtitle.asrMode` 內部仍三值('heuristic' / 'llm' / 'progressive'),UI 只顯示一個 checkbox(開啟=progressive、關閉=heuristic)。預設 progressive。舊 'llm' 值 load 時自動 normalize 為 progressive。
+  - **Popup → Option 改為單向 sync**:popup yt-subtitle-toggle 變動只發 SET_SUBTITLE 給當前 tab,**不**寫 storage,避免反向覆蓋 Option 全域設定。
+  - **welcome notice 殘留清除**:`shouldShowWelcomeNotice(welcomeNotice, currentVersion)` helper,不同 minor 系列的歷史殘留 popup 開啟時自動清除。
+  - **CSS specificity bug 雙修**:`.update-dot[hidden]` + `.row[hidden]` 補 `display: none !important`(原 `.update-dot { display: inline-block }` / `.row { display: flex }` 覆蓋了 user agent `[hidden]`)。
+  - **CLAUDE.md §13 §14 新硬規則**:UI 中文標點全形 + 說明段落尾端不加句號,Python 批次轉換腳本附在規則內。
+
+## v1.6.x
+
+**v1.6.22** — 混合模式字幕「預設 / AI 分句疊來疊去 + 中段消失」雙修:`_upsertDisplayCue` 加 `replaceRange` 選項,LLM 路徑寫入時清除被覆蓋範圍內殘留的 heuristic cue + sort by startMs;清除上限改用 LLM 原始 `endMs`(非延長後 `adjustedEnd`),避免閱讀延長範圍誤清 LLM 沒涵蓋的中段 heuristic 接力 cue。新 2 條 regression spec(疊來疊去 + 不誤清 SANITY 雙驗證)。286 條 spec 全綠。
+
+  - **`_upsertDisplayCue(opts.replaceRange)`(`content-youtube.js`)** — LLM 路徑(`_runAsrSubBatch`)呼叫時帶 `{ replaceRange: true }`,清除 startMs 落在 `(新 cue.startMs, llmEndMs)` 範圍內的舊 cue,避免 progressive 模式下 heuristic 中段 cue 殘留 → 視覺上預設分句 / AI 分句疊來疊去。
+  - **`adjustedEnd` vs `llmEndMs` 區分** — `adjustedEnd` 是「閱讀時間補償」用於顯示 endMs;`llmEndMs` 是「LLM 認為涵蓋的範圍」用於 replaceRange。誤用 adjustedEnd 會清掉 LLM 沒 cover 的中段 heuristic,造成中段字幕消失。
+  - **displayCues 排序** — `cues.sort((a, b) => a.startMs - b.startMs)`,確保 `_findActiveCue` 找 `nextStart` 順序正確。
+
+**v1.6.21** — AI 分句字幕「消失太快」修正:LLM 給的 endMs 是「下一段 ASR startMs」(英文密度),中文閱讀速度比英文慢 → `_upsertDisplayCue` 自動延長 endMs 至少 `max(800ms, 中文字數 × 200ms)`,讓使用者讀得完;`_findActiveCue` 加 `effectiveEnd = min(cue.endMs, 下一個 cue.startMs)` clamp 邏輯,前一句不會視覺壓到後一句。新 1 條 regression spec(8 字中文延長到 1600ms + clamp 到下一句 startMs 雙驗證)。284 條 spec 全綠。
+
+  - **`_upsertDisplayCue`(`content-youtube.js`)** — 寫 cue 時 `adjustedEnd = max(LLM endMs, startMs + max(800, 字數 × 200))`,實測校準參數(初版 250/1000 偏長 0.5s,改為 200/800)。
+  - **`_findActiveCue`** — loop 內計算 `nextStart` 取「startMs 嚴格大於當前 cue 的下一個 cue」,`effectiveEnd = min(cue.endMs, nextStart)` 確保前一句延長後不會壓到後一句顯示。同 startMs(progressive 模式 LLM 覆蓋 heuristic)的情況不算下一句。
+
+**v1.6.20** — YouTube 自動產生字幕(ASR)整套重做:overlay 顯示完全旁路原生 caption-segment 跳動 + 整句穩定顯示;三種分句模式(預設啟發式 / AI 自由分句 / 混合模式漸進覆蓋);譯文過長依標點動態斷行(2 行為主,maxLine 動態對應 video 寬);字體 / 顏色 / 透明度 / 字型動態同步原生英文字幕;勾「自動翻譯字幕」+ CC 未開時 forceSubtitleReload 主動開 CC;UI 用語「自動產生字幕分句模式」「預設分句 / AI 分句 / 混合模式」+ 中文標點全形修正。共新增 11 條 regression(9 條 ASR + 2 條 auto-CC)。280+ 條 spec 全綠。
+
+  - **G 路徑(`content-youtube.js` overlay 架構)** — 注入 `<shinkansen-yt-overlay>` 到 `#movie_player`,Shadow DOM 隔離 CSS;`displayCues = [{startMs, endMs, sourceText, targetText}]`,video.timeupdate 驅動找 active cue,整句進整句出。原生 caption-window 由全域 CSS `visibility:hidden` 隱藏(保留 layout 才能讀 native font-size)。
+  - **三種分句模式** — `ytSubtitle.asrMode = 'heuristic' | 'llm' | 'progressive'`,預設 `heuristic`。`heuristic` 走 client-side rule-based pipeline(split / merge / compact + 英文詞彙列表);`llm` 走 timestamp mode(`TRANSLATE_ASR_SUBTITLE_BATCH` JSON `[{s,e,t}]` 自由合句 + 時間戳邊界驗證);`progressive` heuristic 先 await 顯示後 LLM fire-and-forget 覆蓋。
+  - **譯文 wrap** — `_wrapTargetText` 以動態 `_calcMaxLineChars()`(`videoWidth × 0.7 / (fontSize × 0.8)`,clamp [15, 35])為門檻,優先在標點後切;regex 用 unicode escape `,.:;!?，．：；！？、。` 確保字符集純淨。
+  - **auto-CC** — `forceSubtitleReload` 在 CC `aria-pressed=false` 時主動 click + 設 `_autoCcToggled` 每 session 只自動開一次,尊重使用者後續手動關 CC 不再補開。
+
+**v1.6.19** — Code review audit 後修 5 條穩健性 bug:YouTube 字幕並行批次容錯、跨 tab sticky race、設定頁 `||` 0 falsy、fragment 注入 anchor、Promise.race timer leak。272 條 spec 全綠。
+
+  - **Bug B(中)— `content-youtube.js:564-585` translateWindowFrom 後續批次改 `Promise.allSettled`**:舊 `Promise.all` 任一批 reject 整個拒絕,外層 catch 跳過 `YT.batchApiMs = _batchApiMs` 同步 → debug 面板某些 batch 顯示「…」不會更新;失敗那批的字幕也不寫進 captionMap。改 allSettled 後失敗只 log 該批、其他批字幕仍正常寫回。abort 路徑也補同步 batchApiMs。
+  - **Bug A(中)— `background.js:200-235` `hydrateStickyTabs` 用 promise lock**:舊版 `if (_stickyHydrated) return; _stickyHydrated = true;` 兩行同步沒問題,但接著 `await storage.session.get` 期間第二個 `tabs.onCreated` listener 進來時直接 return(_stickyHydrated=true),Map 還空 → `stickyTabs.get(openerId)` 拿不到 slot → 漏繼承 sticky。改用 `_stickyHydratingPromise` 共用 in-flight promise,所有並行 caller 等到 Map 真正填好。
+  - **Bug C(低)— `options.js` 新增 `parseUserNum` helper,load/save/reset 三處 `\|\|` → `??`**:使用者設定頁輸入 `0`(safetyMargin / maxRetries / maxConcurrentBatches / maxUnitsPerBatch / maxCharsPerBatch / maxTranslateUnits)→ 舊版 `Number(v) \|\| default` 把 0 當 falsy 改回預設,使用者重開設定頁看到「我打的 0 怎麼變回 20」。新 `parseUserNum`:空字串/NaN 走 default,合法數字(含 0)保留。
+  - **Bug D(低)— `content-inject.js:317-322` fragment anchor 加 `endNode.parentNode === el` guard**:舊 `endNode.nextSibling` 在 endNode 被 SPA framework reparent 後會指向別的 parent 內的 sibling,`el.insertBefore` 拋 `NotFoundError`。新版偵測 endNode 已不在 el → anchor=null → 安全 appendChild。
+  - **Bug E(低)— `content.js:130-158` 新增 `sendMessageWithTimeout` helper**:舊 `Promise.race([sendMessage, setTimeout reject])` 在 sendMessage 先 settle 時不 clearTimeout,90s 後 timer 仍 fire。改 helper `.finally(() => clearTimeout(timer))`。兩處 call site(Gemini batch / Google Translate batch)都改用。
+  - **新 regression spec(2 條,SANITY 已驗)**:
+    - `youtube-batch-allsettled.spec.js`:mock 三批 sendMessage,batch 1 reject、其他成功,驗證 captionMap 仍含 batch 0+2 的 entries(≥9 條)、`YT.batchApiMs[2]` 已同步出去(>0)。SANITY:回退 Promise.all 後 batchApiMs[2]=undefined fail。
+    - `inject-fragment-detached-endnode.spec.js`:fixture 內 `.lead-a/.lead-b/.trailing` 三 children,spec 把 `.lead-b` reparent 到 detached div(模擬 SPA reconcile),驗證 `injectTranslation` 不拋 NotFoundError。SANITY:回退 anchor guard 後 insertBefore NotFoundError fail。
+  - **PENDING(3 條走路徑 B,理由各自寫)**:Bug A(時序窄窗難可控的 race)、Bug C(`parseUserNum` 沒 export)、Bug E(timer leak 屬實作細節 + 影響極低)。
+  - **Code review audit 注記**:本版起點是「review 整個 codebase 找 bug」。4 個 audit agent 並行掃描 12K 行得 36 條候選,Claude Code 端逐條看 source 驗證後 31 條判定為**誤報**(如 `content-spa.js:166 setInterval 多重保護不存在`、`cache.js:39-46 flushTouches 競態` 等,實際 code 早已有對應防護或 agent 看錯行號)。Agent 推理常用「可能/若...就會」,沒看完整上下文就下判斷,符合 §11 「以真實資料為基石,不靠推理」的反例。確認的 5 條才動 code。
+  - Full `npm test` 272 條(246 Playwright + 26 Jest)全綠。
+
+**v1.6.18** — 自訂模型新增「思考強度」統一控制 + 進階 JSON 透傳,涵蓋 OpenRouter / DeepSeek / Claude / OpenAI o-series / Grok / Qwen 6 家 thinking schema。296 條 spec 全綠。
+
+  - **使用者面向**:自訂模型分頁加「思考強度」dropdown(`自動 / 關閉 / 低 / 中 / 高`)。內部依 baseUrl + model 偵測 provider 自動翻譯成對應 API 寫法,使用者不必懂各家 thinking API 差異。同時加「進階」摺疊區,讓 power user 自填 JSON 直接 merge 進 chat.completions request body(可覆蓋自動 mapping、加 provider 專屬參數)。
+  - **6 家 provider mapping(2026-04 校準,文件來源見下)**:
+    - OpenRouter unified: `reasoning: { effort: low/medium/high, exclude: true }`(off → exclude=true)
+    - DeepSeek native: `extra_body.thinking: { type: enabled/disabled }`
+    - Claude (Anthropic): `thinking: { type: adaptive/disabled }`(高 → adaptive,低 → adaptive,off → disabled)
+    - OpenAI o-series: `reasoning_effort: minimal/low/medium/high`(off → minimal,沒真 disable)
+    - Grok (xAI): `reasoning_effort: low/medium/high`(off → 不送,因 grok 多數 model 不支援 disable)
+    - Qwen: `extra_body.enable_thinking: true/false`
+    - 不認識的 provider → 不送(走 provider 預設,避免送未知參數導致 4xx)
+  - **新檔 `lib/openai-compat-thinking.js`**(150 行):export `detectProvider` / `buildNativeThinking` / `safeParseJson` / `deepMerge` / `buildThinkingPayload`。`safeParseJson` 對 user 進階 JSON 做容錯處理,格式錯誤時 debugLog 一條 warn 並回 `{}`(不阻斷翻譯)。
+  - **新 unit spec** `test/unit/openai-compat-thinking-mapping.spec.js`(34 條):provider 偵測 11 條(baseUrl 優先 / model name fallback / unknown)+ buildNativeThinking 9 條(各 provider × level)+ safeParseJson 4 條(合法 / 空白 / 非 object / 格式錯)+ deepMerge 4 條(遞迴 / 覆蓋 / 陣列 / 型別衝突)+ buildThinkingPayload 整合 7 條(預設 / native / extraBody 覆蓋 / 加額外欄位 / auto / 解析失敗)。SANITY 已驗(把 OpenRouter 偵測破壞 → 5 條 fail,還原後全綠)。
+  - **lib/openai-compat.js 整合**:translateChunk 加 import + 入口 `buildThinkingPayload({ baseUrl, model, level, extraBodyRaw, onWarn })`,結果 spread 進 chat.completions request body。既有 7 條 openai-compat-injection / 3 條 segment-mismatch / 5 條 usage spec 不受影響(只新增 body 欄位,不動既有路徑)。
+  - **`DEFAULT_SETTINGS.customProvider` 加 2 欄**:`thinkingLevel: 'auto'`(預設不干涉)、`extraBodyJson: ''`(預設空白)。既有使用者升級 v1.6.18 後行為不變(auto 等同舊版完全不送 thinking 參數,讓 provider 自選預設)。
+  - **不在本版做的事**:沒處理 Gemini 路徑(走 lib/gemini.js,v1.6.12 已有 pickThinkingConfig 獨立處理);Grok 自動偵測限制在 model name 含 grok(沒分 multi-agent vs reasoning model,因 baseUrl 區分不易)。
+  - Full `npm test` 296 條(270 Playwright + 26 Jest) 全綠。
+
+  **資料來源(thinking schema)**:
+  - [OpenRouter Reasoning Tokens](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
+  - [DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode)
+  - [Anthropic Claude Extended Thinking](https://platform.claude.com/docs/en/docs/build-with-claude/extended-thinking)
+  - [OpenAI Reasoning Models Guide](https://developers.openai.com/api/docs/guides/reasoning)
+  - [xAI Grok Reasoning](https://docs.x.ai/docs/guides/reasoning)
+  - [Qwen Deep Thinking (Aliyun Model Studio)](https://help.aliyun.com/zh/model-studio/deep-thinking)
+
+**v1.6.17** — 設定頁次按鈕(`.secondary`)CSS 對齊主按鈕(`.primary`)的高度與字級。262 條 spec 全綠。
+
+  - **使用者面向**:設定頁的「儲存設定」(主按鈕)與「重設所有參數」(次按鈕)在 v1.6.16 之前因 padding / font-size / font-weight / border 累積差異,視覺高度差約 6px,看起來不像同一組按鈕。修法:`button.secondary` padding 從 `8px 16px` → `9px 20px`,font-size 從 `13px` → `14px`,讓兩按鈕高度貼齊;主按鈕仍因粗字 600 + 較大 padding(10px 24px)+ 無 border 視覺較突出,符合「主動作 vs 次動作」design pattern。
+  - **影響範圍**:全 extension 的 `.secondary` 按鈕(共 16 處,15 處 options 分頁 + 1 處 popup「編輯譯文」)都會跟著對齊,提升整體視覺一致性。功能不受影響。
+  - **未動其他 CSS**:`.btn-row` 對齊 / `.actions` flex container 等保持原樣。
+  - Full `npm test` 262 條(236 Playwright + 26 Jest) 全綠。
+
+**v1.6.16** — 移除「後備路徑單價」UI、reset 補清空計價覆蓋、自訂模型預填 OpenRouter DeepSeek V4 Pro。262 條 spec 全綠。
+
+  - **使用者面向 1:後備路徑單價 UI 移除**:Gemini 分頁的「模型計價」section 下半「後備路徑單價」整段(input/output 兩個欄位 + 說明文字)移除。原因 v1.6.15 把全域 model dropdown 拿掉後,`settings.pricing` 唯一可達路徑(`background.js:610` fallback)在「preset cards 只能選 3 個合法 model」前提下永遠不可達。`settings.pricing` storage 欄位保留作 belt-and-suspenders;UI 入口完全消失。
+  - **使用者面向 2:reset「重設所有參數」補清空 v1.6.14 的計價覆蓋表**:之前 reset 漏掉新加的 6 個 per-model override 欄位(Lite / Flash / Pro × input/output),按下 reset 後計價覆蓋值仍保留。修法:reset handler 加 6 個 input.value=''(預設 modelPricingOverrides:{} 對應 UI 全空 = 走內建表)。confirm 對話框文字同步更新,「計價」改成「模型計價覆蓋(清空走內建表)」明確告知行為。
+  - **使用者面向 3:自訂模型預填 OpenRouter DeepSeek V4 Pro**:`DEFAULT_SETTINGS.customProvider` 的 baseUrl/model/inputPerMTok/outputPerMTok 從空字串/0 改為 OpenRouter DeepSeek V4 Pro 的官方資料(來源 https://openrouter.ai/deepseek/deepseek-v4-pro,2026-04 校準)。新使用者打開自訂模型分頁立刻看到所有欄位預填,只剩 API Key 要填即可啟動。既有使用者若 storage 內已有 customProvider entry(打開過分頁),新預設不會自動覆蓋(getSettings 對 customProvider 走淺 merge,saved 在後);要套用走「回復預設設定」清掉 storage.sync 後重新 load 即可看到 DeepSeek 預填。
+  - **連帶清理**:options.js 移除 `inputPerMTok` event listener(全域成本估算 listener 陣列)、`updateYtPromptCostHint` 的 `mainInput` fallback 改用內建表 `MODEL_PRICING[mainModel]?.input ?? 0`(避免讀已不存在的 element 拋錯)。
+  - **完整 reset audit**:逐欄 audit DEFAULT_SETTINGS 與 load() 對映,確認所有預設值都正確載入(0 個漏洞,5 個設計如此的 nuance:apiKey 在 storage.local 故意保留 / model + pricing UI 移除但走 sync.clear 路徑仍能 reset / popup 管的 autoTranslate+displayMode+disableUpdateNotice 不在 options 頁 UI 但 sync.clear 仍清 / fixedGlossary 預設空白 / glossary 隱藏欄位透過 save 從 storage 拉空 fallback DEFAULT)。
+  - Full `npm test` 262 條(236 Playwright + 26 Jest) 全綠。
+
+**v1.6.15** — 移除 Gemini 分頁的「Gemini 模型與參數(後備路徑)」section,Service Tier 搬到「LLM 參數微調」section。262 條 spec 全綠。
+
+  - **使用者面向**:Gemini 分頁原本最上方的「Gemini 模型與參數(後備路徑)」整個 section 移除。Service Tier 搬到「LLM 參數微調」section 內(放在 Temperature 之上)。原因:v1.4.12 起 preset modelOverride 機制涵蓋翻譯流程 95%+ 場景,v1.6.13 補完自動翻譯白名單路徑後,**全域 model dropdown 真正活著的後備路徑剩下兩個**:
+    - 「測試 API Key」按鈕用此 model 驗證 key
+    - cache key 構建(每批翻譯帶當前 model 進 cache key,但永遠是 modelOverride 後的值,不是全域 dropdown 的值)
+    既然 95%+ 場景沒走到全域 dropdown,且使用者多次回報「兩個 Gemini 模型設定」混淆,直接移除是最乾淨方案。
+  - **「測試 API Key」按鈕改用主要預設(slot 2)的 model**:`getSelectedModel()` 改讀 `preset-engine-2 / preset-model-2`(若主要預設引擎不是 gemini → fallback `DEFAULTS.geminiConfig.model`)。
+  - **storage 不踩 migration**:`settings.geminiConfig.model` 欄位**保留**(只是 UI 不再顯示),既有使用者升級無感;save() 時從 `browser.storage.sync.get('geminiConfig')` 拉現存值寫回,保留結構。
+  - **連帶清理**:移除 `applyModelPricing` 函式 + `SERVICE_TIER_MULTIPLIER` 常數(原本是 model dropdown 切換時自動帶價的便利功能,UI 移除後沒觸發點;v1.6.14 已加 per-model override 表取代「自動帶價」的 UX);移除 `toggleCustomModelInput` + `.custom-model-row` CSS(自行輸入欄位隨 dropdown 一起移除);Gemini 重設按鈕的 confirm 文字同步更新欄位清單。
+  - **不在本版做的事**:`extractGlossary` 與 `translateChunk` 仍從 `settings.geminiConfig.model` destructure(實際拿到的永遠是 modelOverride 後的值,handleTranslate 入口都帶 modelOverride);沒拆出 model 欄位;`background.js:35` rate limiter init log 仍 log 全域 model(預設值,僅供 debug)。完全清理掉 `geminiConfig.model` 結構需要 storage migration,風險不對等收益。
+  - Full `npm test` 262 條(236 Playwright + 26 Jest) 全綠。
+
+**v1.6.14** — 翻譯預設改名「主要預設 / 預設 2 / 預設 3」+ 模型計價支援使用者覆蓋(防 Google 改價)。262 條 spec 全綠。
+
+  - **使用者面向 1:翻譯預設改名**:設定頁三張卡片標題從「預設 1 / 預設 2 / 預設 3」改成「**預設 2 / 主要預設 / 預設 3**」(原預設 2 是日常最常用,改名為「主要預設」突顯;原預設 1 順延編號為「預設 2」;預設 3 維持)。
+    - slot 2 卡片視覺強化:藍色邊框 + 淡藍底 + 標題加深加大。
+    - 「工具列『翻譯本頁』按鈕」與「自動翻譯網站使用的預設」兩個 dropdown 文字同步:「主要預設 / 預設 2 / 預設 3」。
+    - manifest commands description 同步:Alt+S 描述為「翻譯主要預設」。
+    - **內部 storage slot 編號 1/2/3 維持不變**(沒有 migration 風險),只動 UI 標籤。
+  - **使用者面向 2:per-model 計價覆蓋**:Google 改價時內建表(`lib/model-pricing.js`)會過時。原本只有後備路徑能填單價,preset 路徑硬走內建查表。Gemini 分頁的「模型計價」section 重新設計:
+    - 上半新增 per-model 覆蓋表(Lite / Flash / Pro 三組),每組顯示「內建 $X / $Y」+ 兩個 input(input/output 單價);填了就用,空白 fallback 內建。
+    - 加 `LAST_CALIBRATED_DATE = '2026-04'` 常數,UI 顯示「**(2026-04 校準)**」提示使用者內建表可能過時。
+    - 下半保留原「後備路徑單價」(只在後備路徑實際被觸發時用)。
+    - storage 加 `modelPricingOverrides: {}`(預設空物件,使用者沒覆蓋就 fallback 內建)。
+  - **getPricingForModel 簽名變更**:加 `settings` 參數,優先順序「override → 內建表 → null」。`background.js` line 607 呼叫處同步帶 settings。
+  - **新 unit spec** `test/unit/model-pricing-override.spec.js`(8 條):override 優先 / 字串 coerce / 非合法數字 fallback 內建 / 其他 model 不受影響 / 內建表 fallback / 未知 model null / 空值 null / LAST_CALIBRATED_DATE 格式驗證。SANITY 已驗。
+  - **不踩 storage migration**:既有使用者升級 v1.6.14,`modelPricingOverrides` 預設空物件,行為跟之前完全等價(內建表查價);改名只動 UI 標籤,內部 slot 編號 / `popupButtonSlot` / `autoTranslateSlot` / preset 卡片 storage 結構全部不變。
+  - Full `npm test` 262 條(236 Playwright + 26 Jest) 全綠。
+
+**v1.6.13** — 解 Gemini 模型設定混淆:自動翻譯白名單改走 preset slot + Gemini 分頁的「全域模型 + 計價」section 重新標示為「後備路徑專用」。254 條 spec 全綠。
+
+  - **使用者回報的 UX 混淆**:快速鍵預設卡片可選 Gemini 模型,Gemini 分頁底下也有一個「Gemini 模型」全域下拉。使用者改 preset 模型後到 Gemini 分頁看到另一個 model 設定不知道兩者怎麼互動,實際生效規則是「preset 有設就覆蓋全域,沒設 fallback 全域」(`background.js#TRANSLATE_BATCH#modelOverride`)。但 v1.4.12 起所有快速鍵 + popup 按鈕都帶 modelOverride,**全域 model 在 95% 場景沒被用到**,卻佔據 Gemini 分頁最顯眼位置。
+  - **修法 1:加 `autoTranslateSlot` 設定**(白名單觸發改走 preset slot):
+    - `lib/storage.js#DEFAULT_SETTINGS.autoTranslateSlot = 2`(預設 Flash,與 v1.6.12 之前的全域 fallback 等價)
+    - `lib/storage.js#pickAutoTranslateSlot(raw)` helper(同 `pickPopupSlot` 對稱設計,範圍外 fallback 2)
+    - `content.js` 首次載入 + `content-spa.js` SPA 導航兩處的 autoTranslate 觸發路徑改成 `SK.handleTranslatePreset(slot)` 取代裸 `SK.translatePage()`,白名單翻譯與 Alt+S 行為對齊(走 preset.model 的 modelOverride)。
+    - 設定頁「網域規則」section 加「自動翻譯使用的預設」dropdown,與「工具列『翻譯本頁』按鈕」section 設計對稱。
+  - **修法 2:Gemini 分頁標題重新框定**:
+    - 「Gemini 模型與參數」→ 「**Gemini 模型與參數(後備路徑)**」+ section 開頭 muted 說明「日常翻譯由翻譯快速鍵的 preset 自選模型決定,此處只在(1)上方『測試 API Key』按鈕(2)極少數沒走 preset 的後備路徑時生效」
+    - 「模型計價」→ 「**模型計價(後備路徑)**」+ 說明「preset 翻譯的計價自動從內建表查,此處單價只在後備模型實際被觸發時用」
+  - **新 unit spec** `test/unit/auto-translate-slot.spec.js`(4 條):合法 1/2/3 / 字串 coerce / undefined fallback / 範圍外 fallback。SANITY 已驗(把 fallback 從 2 改 1 → 2 條 fail)。
+  - **未動 storage migration**:既有使用者的 `geminiConfig.model` 仍保留(僅後備路徑使用,不會壞掉);新使用者升級 v1.6.13 後白名單會自動走 slot 2,行為等價於升級前。
+  - Full `npm test` 254 條(228 Playwright + 26 Jest) 全綠。
+
+**v1.6.12** — 修 Pro 模型翻譯失敗(`Budget 0 is invalid. This model only works in thinking mode`)+ 整體升級到 Gemini 3 推薦的 `thinkingLevel` API。250 條 spec 全綠。
+
+  - **使用者回報的 bug**:設定頁切到 Pro 模型(如 `gemini-3-pro-preview` / `gemini-2.5-pro`)後翻譯失敗,toast 顯示「翻譯部分失敗:50/50 段失敗」加 API 錯誤訊息「Budget 0 is invalid. This model only works in thinking mode」。
+  - **根因(用 `tools/probe-gemini-pro.js` 真實 API 驗證後確認)**:`lib/gemini.js` 主翻譯與術語表兩處 generationConfig 寫死 `thinkingConfig: { thinkingBudget: 0 }`,Gemini Pro 系列 API 強制 thinking-only(`Pro 模型必須思考`),不允許 budget=0。從 Gemini 2.5 起此限制就存在,Gemini 3 加碼推薦改用 `thinkingLevel` 取代 `thinkingBudget`(後者標記 not recommended)。
+  - **修法**:新增 `pickThinkingConfig(model)` helper(export 出來方便 unit spec 測試),依模型名選 thinking level:
+    - 含 `pro` (case-insensitive) → `{ thinkingLevel: 'low' }`(probe 實測 'minimal' 在 Gemini 3 Pro 被拒,最低支援 'low')
+    - 其他(Flash / Flash Lite) → `{ thinkingLevel: 'minimal' }`(thoughts=0 等同舊 budget=0,不額外計費)
+    `extractGlossary` 與 `translateChunk` 兩處改呼 `pickThinkingConfig(model)`。
+  - **新 unit spec** `test/unit/gemini-thinking-config.spec.js`(5 條):Pro 對映 'low' / Flash 對映 'minimal' / case-insensitive / 空值 fallback / 不送舊 thinkingBudget 欄位。SANITY 已驗(把 fix 改回「Pro 也回 minimal」→ 2 條 Pro spec fail)。
+  - **既有 spec 同步更新**:`glossary-json-parsing.spec.js` 與 `segment-mismatch-fallback.spec.js` 內鎖死舊 `{ thinkingBudget: 0 }` 的 3 條 assertion 改成 `{ thinkingLevel: 'minimal' }`(test settings 用的是 `gemini-2.5-flash`,對映 minimal)。
+  - **Pro 模型成本警示**:Pro 強制 thinking 即使 'low' 也會花 ~240 thoughts token / request,翻譯本來就不需要深度推理,Pro 對翻譯品質提升微乎其微但成本可能比 Flash 貴 10 倍以上。設定頁尚未加成本警告(範圍外,先解 bug),建議使用者用 Pro 之前先看用量紀錄分頁觀察費用。
+  - Full `npm test` 250 條(224 Playwright + 26 Jest) 全綠。
+
+**v1.6.11** — 用量紀錄分頁加「重新載入」按鈕 + 新增 standalone debug harness 工具(內部開發用,不影響使用者)。
+
+  - **使用者面向:用量紀錄「重新載入」按鈕**:設定頁「用量紀錄」分頁底部操作列加 `<button id="usage-reload">重新載入</button>`,放在「匯出 CSV」前。使用者回報:translatePage 寫入新紀錄後,設定頁停留在用量分頁不會自動刷新,Cmd+R 也會回到預設分頁。新按鈕呼叫既有的 `loadUsageData()`(會保留當前的篩選狀態:日期範圍 / 搜尋字串 / 模型 filter / 日週月粒度),只重抓底層資料 + 重渲染。`title` attribute 提示「不需關閉設定頁」。
+  - **內部 dev tooling:`tools/debug-harness.js`**:standalone Node script(不在 extension 內,不影響使用者),Claude Code 用來在真實站點上自驗修改後的 extension 行為。流程:`launchPersistentContext` 自動載 extension → navigate 到目標 URL → 透過 Debug Bridge `TRANSLATE` 觸發翻譯 → 輪詢 `GET_STATE` 等狀態 idle → dump DOM 翻譯狀態 + warn/error log → 截圖到 `.playwright-mcp/`。用法:`npm run debug` 或 `TARGET_URL=https://... node tools/debug-harness.js`。支援 `--keep`(留 browser)/`--no-translate`(免 API key)/`--fresh`(砍 user data dir)/`SHINKANSEN_HEADED=1`(顯示視窗)旗標。CDP `Runtime.evaluate` 走 isolated world `contextId`,可直接呼叫 Debug Bridge CustomEvent(與 `test/regression/helpers/run-inject.js` 同套機制)。
+  - **CLAUDE.md 更新**:除錯手段優先序從「Playwright fixture / Chrome MCP / 真實頁面人眼」三段改為「fixture / debug-harness / Chrome MCP / 真實頁面人眼」四段,新加「自動化除錯(真實站點 probe)」說明 + 「修偵測類 bug 的硬規則:先 probe 真實站點再改 code」工作流(對應歷史教訓 Wikipedia ambox v0.51-v0.54 三輪修復)。
+  - **`.gitignore` 加 `.playwright-mcp/`(harness 截圖輸出) + `tools/probe-*.js`(一次性 probe 腳本)**:probe 腳本是「跑真實站點驗假設」的拋棄式工具,用完即刪不進版控。
+  - **不需 regression spec**:harness 是 dev tooling 不影響 extension 行為;按鈕純 UI 補漏(click → 既有函式),既有 245 條 spec 已涵蓋 loadUsageData 路徑。
+  - Full `npm test` 245 條(219 Playwright + 26 Jest) 全綠。
+
+**v1.6.10** — 分頁隱藏時暫停 Content Guard 與 SPA URL 輪詢(背景分頁能源優化)。245 條 spec 全綠(219 Playwright + 26 Jest,含 1 條新加 regression spec)。
+
+  - **Content Guard `document.hidden` gate**：原本 `runContentGuard` 由 `setInterval(1000ms)` 觸發,只要 STATE.translated=true 就永遠在跑。每次 sweep 都遍歷 `STATE.translatedHTML` Map(可能上百 entry),每 entry 呼叫 `getBoundingClientRect` 強制 layout reflow。即使分頁切到背景使用者根本看不到,也照樣每秒 force layout 一次,純消耗 CPU + 電力(尤其 macOS 筆電 / iPad 等需要省電的裝置)。新加 `if (document.hidden) return;` early-return,分頁隱藏時跳過。切回前景時下一次 sweep 在 1 秒內修復,使用者無感差異。
+  - **SPA URL 輪詢 `document.hidden` gate**：原本 `setInterval(500ms)` 比對 `location.href !== spaLastUrl`,2 次/秒永遠在跑。背景分頁不會由使用者觸發導航,輪詢只是 pushState patch 沒套到的 safety net,在隱藏分頁完全無作用。新加同樣 `if (document.hidden) return;`,切回前景時 visibilitychange listener 補一次 catch-up。
+  - **新 regression spec** `test/regression/guard-hidden-tab-gate.spec.js`(1 條,SANITY 已驗):透過 `Object.defineProperty(document, 'hidden', ...)` 模擬分頁隱藏,呼叫新增的 `_testRunContentGuardProd` debug hook(production 路徑,所有 gate 啟用),驗證 hidden=true 時不修復、切回 visible 後修復。
+  - **不在本版做的事**:MutationObserver 沒加 hidden gate(SPA 框架在背景時可能加新內容,切回前景時需要立即翻譯,跳過 mutation 風險過大)。`spaObserverDebounceTimer` 也保持原樣。後續若觀察到背景分頁的 mutation 量大且確認可安全跳過再評估。
+  - **不影響的場景**:分頁可見時行為完全不變;`testRunContentGuard`(test API,繞過 viewport gate)也繞過 hidden gate,既有 spec 不受影響。
+
+**v1.6.9** — 段落偵測效能優化（針對長頁如 Wikipedia / 論壇 / 長 Medium）。`collectParagraphs` 三項內部優化,行為等價,244 條 spec（218 Playwright + 26 Jest）全綠。
+
+  - **`innerText` → `textContent`**（5 處）：`isCandidateText` / leaf anchor 補抓 / leaf div/span 補抓 / grid cell 補抓（4 處呼叫）。`innerText` 每次呼叫都觸發 layout reflow（瀏覽器需重算整頁版面後才回字串）,在長頁面上動輒被叫上千次,是偵測階段最大瓶頸。`textContent` 純讀 DOM 字串樹不 force layout,對長度判斷 / 語言偵測場景語意等價。`isInteractiveWidgetContainer` 刻意保留 innerText（>=300 字判定該函式語意要求「使用者實際看得到的字數」,改成 textContent 會讓含隱藏 modal/menu 字的 Twitter / Gmail widget 漏過篩選被誤翻）。
+  - **leaf div/span 收緊 selector 為 `:not(:has(*))`**：原本 `document.querySelectorAll('div, span')` 在長頁可能回傳數萬個 element,後續 JS forEach 才用 `d.children.length > 0` 過濾掉非葉節點。改成讓原生 CSS engine 直接過濾「無 element 子節點」的 div/span,實測長頁從幾萬 element 降至數百個,後續 isVisible / textContent / isCandidateText 等檢查減少 95% 以上呼叫。`:has()` Chrome 105+ / Firefox 121+ / Safari 15.4+ 都已 stable 多年,Manifest V3 環境零相容性風險。
+  - **`isInsideExcludedContainer` 加 per-call memo**：偵測階段反覆問「這個元素是否在被排除的容器內」（FOOTER/role=banner/contenteditable/譯文 wrapper 等）,每次都要從 el 走到 body,長頁同一條祖先鏈會被走數百次。新加 `Map<el, bool>` cache,任何後代命中已算過的祖先即 O(1) 短路。memo 為純函式緩存（單次 collectParagraphs 期間 DOM 不變動）,語意完全等價。
+  - **行為等價驗證**:65 條相關 spec（27 detect / 38 inject+guard+spa+iframe+restore+sticky）+ full suite 244 條全綠。
+ 新增「顯示翻譯進度通知」master switch（一般設定分頁），可完全關閉 toast。
+
+  - **使用者回報**：原本 toast 透明度最低只能設到 10%，沒有「完全關閉」選項；雖然視覺上看不見，但 DOM、Shadow root、訊息與計時器都還在跑。
+  - **新設定**：一般設定 →「翻譯進度通知」section 最上方加 checkbox「顯示翻譯進度通知」（預設 ON 維持現行為），關閉後 `SK.showToast()` 入口直接 return（不渲染 DOM、不發訊息）；切換時即時生效（`onChanged` listener 同步狀態並隱藏目前 toast）。
+  - **新 helper** `SK.shouldShowToast()`（與 `SK.shouldDisableInFrame` 同 pattern）：暴露 master switch 查詢給呼叫端與 regression spec 共用。
+  - **新 regression spec** `test/regression/toast-master-switch.spec.js`：驗證 `SK.shouldShowToast()` 跟著 `storage.showProgressToast` 變化（預設 true / set false 同步 / set true 恢復）。SANITY 已驗（query 函式改成永遠 true → 第 2 步 fail）。
+
+**v1.6.7** — 自訂模型支援本機後端（llama.cpp / Ollama 等）：API Key 允許留空。
+
+  - **修使用者回報的 bug**：自訂模型分頁的「測試」按鈕在 API Key 為空時硬擋報錯（`✗ API Key 為空。`），導致 llama.cpp 等不需要 key 的本機後端使用者無法測試也無法翻譯。
+  - **三處同步移除 / 條件化**：(1) `background.js#testCustomProvider` 拿掉「API Key 為空」前置 guard；(2) `background.js#handleTranslateCustom` 拿掉 `cp.apiKey` 必填 throw；(3) `lib/openai-compat.js#translateChunk` 拿掉同樣 throw、且 fetch headers 在 apiKey 為空時不送 `Authorization`（OpenAI 相容規範允許省略）。商用後端（OpenAI / OpenRouter / DeepSeek 等）漏填 key 時自然回 401，錯誤訊息由 provider 提供（例如「Incorrect API key」），對使用者也很清楚。
+  - **UI 提示更新**：自訂模型分頁的 API Key 欄位 placeholder 與下方說明文字加上「本機 llama.cpp / Ollama 等可留空」。
+  - **新 unit spec 兩條**：apiKey 為空 → 不 throw 且 headers 不含 Authorization；apiKey undefined（settings 沒這欄位）→ 同上。SANITY 已驗（headers 改回硬送 → 兩條 fail）。
+
+**v1.6.6** — 新增「工具列『翻譯本頁』按鈕」可指定對應的翻譯預設。
+
+  - **新設定**：一般設定分頁多一個 section「工具列『翻譯本頁』按鈕」，dropdown 三選項顯示各 preset 的 label（例如「預設 1：Flash Lite / 預設 2：Flash / 預設 3：Google MT」），預設仍為 slot 2（與 v1.4.12 起的 popup 硬碼行為一致），現有使用者升級不會感受到任何行為差異。
+  - **改 popup.js**：「翻譯本頁」按鈕改送 `TRANSLATE_PRESET { slot: settings.popupButtonSlot }` 取代既有硬碼 `TOGGLE_TRANSLATE`；content.js 的 `TOGGLE_TRANSLATE` handler 仍保留作 backward-compat 路徑。
+  - **新 helper** `lib/storage.js#pickPopupSlot`：共用 slot 解析（合法 1/2/3 原樣回 / 其餘 fallback 2），popup.js 與 unit spec 共用同一段邏輯。
+  - **新 unit spec** `test/unit/popup-button-slot.spec.js`（4 條）：合法 / 字串 coerce / undefined fallback / 範圍外 fallback。SANITY 已驗（fallback 改 1 → 2 條 fail）。
+
+**v1.6.5** — 新增 CWS 自動更新後的「歡迎升級」提示（popup banner + 翻譯成功 toast 兩處）；同時修三個更新提示機制的潛在 bug。
+
+  - **新功能：CWS 自動更新後的歡迎提示**：使用者透過 Chrome Web Store 自動升級到 major/minor 新版時，下次開 popup 會看到綠色「🎉 已升級至 vX.Y」banner + 三條近期重大更新 bullet + 「知道了」按鈕（永久 dismiss）；翻譯成功 toast 也順帶顯示一次「已升級至 vX.Y — 點工具列圖示看新功能」（每日節流）。Patch 級自動更新（1.6.4 → 1.6.5）跳過避免高頻打擾。
+  - **新模組** `lib/release-highlights.js`：近期重大更新文字單一來源，下次新功能升級時改一處同步生效。
+  - **新模組** `lib/welcome-notice.js`：封裝 onInstalled handler 內的判斷邏輯（reason='update' + previousVersion + isWorthNotifying）方便 unit 測試。
+  - **release.sh 加 minor/major bump 提醒**：偵測到 major 或 minor 不同時印警告 + 暫停等使用者按 Enter 繼續或 Ctrl+C 中止，提醒檢查 RELEASE_HIGHLIGHTS 是否要更新（純內部升級可用通用條目「改善效能與穩定性」之類）。
+  - **修法：時區造成跨日重複顯示**：`new Date().toISOString().slice(0, 10)` 取的是 **UTC 日期**，台灣（UTC+8）使用者凌晨 0–8 點仍是 UTC 昨天，導致「今日已 dismiss」誤判為「跨日要重新顯示」（剛點過幾小時又看到）。新加 `localTodayKey()` helper 統一用本地時區，content-ns.js 鏡像一份（content script 不能 import lib），涵蓋 4 處（markUpdateNoticeShown / shouldShowTodayNotice / WELCOME_NOTICE_TOAST_SHOWN handler / maybeBuildXxxNotice）。
+  - **修法：banner 顯示前缺二次過濾**：popup / options banner 顯示條件原本只看「storage 內 updateAvailable 物件存在」，沒檢查 storage 內版本是否真的 > 當前版本。導致 storage 殘留 stale 資料時 banner 仍錯誤顯示「v1.6.4 可下載 你目前是 v1.6.4」這種詭異訊息。修法：三處（popup / options / content-ns）顯示前都加 `isWorthNotifying(storage.version, current)` 二次過濾。
+  - **修法（最關鍵）：CSS `display: flex` 覆寫 hidden attribute**：`.update-banner / .welcome-banner / .update-banner-row` 三處都寫 `display: flex`，class selector specificity 高於 user-agent stylesheet 的 `[hidden] { display: none }`，導致 hidden=true 仍顯示空殼 banner。從 v1.6.1 update banner 上線就潛在存在的 bug，但之前一直在測「storage 有資料」場景所以 JS 主動設 hidden=false 顯示，沒被觀察到。修法：三處 CSS 各加 `[hidden] { display: none !important }` 強制覆寫。
+  - **belt-and-suspenders 多層防禦**：(1) update-check 寫 storage 前 isWorthNotifying；(2) 偵測到 latest === current 主動清 storage；(3) 三層 UI 顯示前再 isWorthNotifying 過濾；(4) dismissed=true / disableUpdateNotice=true 永久關閉；(5) lastNoticeShownDate 每日節流（本地時區）。
+  - **新加 spec**：`test/unit/welcome-notice.spec.js`（9 條：major/minor 寫入、patch/install/browser_update/降版/缺 prev 不寫、RELEASE_HIGHLIGHTS 結構驗證）；`update-check.spec.js` 補 1 條 `localTodayKey` 用本地時區驗證。
+  - Full `npm test` 211 條（Playwright）+ 26 條（Jest）全綠。
+
+**v1.6.4** — 修 popup / 設定頁 update banner 點擊行為（彻底擺脫 a-tag navigate 的怪 bug）+ 加 patch 級更新節流避免高頻打擾。版號跳過 1.6.3（用作測試假 release）。
+
+  - **修法 1：兩處 banner 從 `<a>` 改 `<button>`**：v1.6.1 ~ v1.6.2 期間 popup banner 點擊跳到 popup.html#、設定頁 banner 點擊跳到 options.html# 自身的 bug，根因是 `<a target="_blank" href="#">` 在 chrome popup 環境下不會開新分頁、會 navigate 到 href 自身。改成 `<button type="button">` 徹底擺脫 a-tag 預設 navigate。
+  - **修法 2：用 document-level event delegation**：banner click handler 不再依賴 init() async timing 一次性掛上，改在檔案頂層註冊一次 document.addEventListener('click', ...)，handler 內臨時 await storage 拿 release URL，避免任何 race condition。
+  - **修法 3：三層 fallback URL**：popup / options / toast 三處 click 邏輯都改成 `storage.releaseUrl > /tag/v${version} > /releases 索引頁` 三層 fallback——即使 storage 內缺 releaseUrl 或損壞（早期 race 寫入問題），使用者點 banner 仍會跳到合理頁面。content-ns.js 的 `maybeBuildUpdateNotice()` 也加同樣 fallback。
+  - **新行為：patch 級更新不提示**（`isWorthNotifying` 函式）：頻繁 patch 提示會讓使用者疲勞、忽略真正重要的版本。新規則只對 major / minor 升級提示——例如 1.6.4 → 1.6.5 不提示、1.6.4 → 1.7.0 / 2.0.0 才提示。`checkForUpdate()` 改用 `isWorthNotifying` 判斷是否寫 storage / 觸發提示。
+  - **新增 spec**：`isWorthNotifying` 三段式邏輯（major/minor 升提示、patch 升不提示、相同/舊版不提示）；既有 `checkForUpdate` test fixture 從 patch diff（1.6.0→1.6.1）改為 minor diff（1.6.0→1.7.0），同時新加「latest 只是 patch 升 → 不寫 storage」對照組。
+  - **跳號 v1.6.3**：v1.6.3 tag 用於測試 update notice 流程的假 release，code 沒實際 bump 到 1.6.3，本版直接跳到 v1.6.4。
+  - Full `npm test` 201 條（Playwright）+ 26 條（Jest）全綠。
+
+**v1.6.2** — 修 v1.6.1 設定頁更新 banner 點擊跳到自身 settings 頁的 bug。
+
+  - **根因**：v1.6.1 的設定頁 banner HTML 結構是 `<a target="_blank"><strong>...</strong><span>...</span><button>不再提示</button></a>`——把 `<button>` 巢嵌在 `<a>` 裡是 invalid HTML，Chrome 解析後行為錯亂，點 banner 主體沒開新分頁、反而被當成 navigate 到 `href="#"`（即當前 settings 頁）。
+  - **修法**：拆成 `div` wrapper + 內部 `<a>` + 並列 `<button>` 結構（HTML valid），對應 CSS 改成 `.update-banner-row` flex container + `.update-banner-link` 主體；options.js 的 `hidden` 切換管 wrapper 而非 `<a>`。
+  - **popup banner 不受影響**：popup 的 banner 沒嵌 button（只有 strong + span），是合法 HTML，不用動。
+  - Full `npm test` 199 條（Playwright）+ 26 條（Jest）全綠。
+
+**v1.6.1** — 新增 GitHub Releases 自動更新提示，解決手動安裝（unpacked / GitHub）使用者不知道有新版可下載的問題。
+
+  - **新模組 `lib/update-check.js`**：透過 GitHub Releases API（`https://api.github.com/repos/jimmysu0309/shinkansen/releases/latest`）拿最新 `tag_name`，與 `manifest.version` 三段式比對；只對 `installType === 'development'` / `'sideload'` 觸發（CWS 安裝跳過避免與原生自動更新撞車）。
+  - **三層觸發**確保使用快速鍵不開 popup 的使用者也看得到提示：(1) SW 第一次喚醒 fire-and-forget；(2) `chrome.runtime.onStartup`（Chrome 啟動時）；(3) `chrome.alarms 'update-check'` 24h 定時備援（Chrome 一直開著的 case）。GitHub API 未驗證 60 req/hr/IP 上限離爆量很遠。
+  - **三層 UI 提示**（同樣為了確保不會錯過）：
+    - **翻譯成功 toast**：detail 下方加黃底 callout「📦 vX.Y.Z 可下載 — 點此前往」+ 「×」按鈕，**每日節流**（同日翻譯多次只第一次顯示），點連結或「×」都標記今日已顯示
+    - **Popup**：標題後紅點 + 黃底 banner 顯示「v1.6.1（你目前是 v1.6.0）」
+    - **設定頁「一般設定」分頁頂部** banner + 「不再提示」按鈕（寫入 `disableUpdateNotice: true` 永久關閉）
+  - **storage 結構**：`chrome.storage.local.updateAvailable: { version, releaseUrl, checkedAt, lastNoticeShownDate }`；`DEFAULT_SETTINGS.disableUpdateNotice: false`（toggle 走 sync 跨裝置同步）。失敗（network / 4xx / non-JSON）不清舊紀錄，避免 stale flap；版本一致時主動清掉 storage 避免殘留。
+  - **新 message handler**：`UPDATE_NOTICE_DISMISSED`（toast 內互動觸發 `markUpdateNoticeShown` 寫今日日期）。
+  - **manifest 加 `alarms` permission**（24h 定時用）；`chrome.management.getSelf()` 不需 permission 故未加 `management`，避免 CWS 審核疑慮。
+  - **12 條新 unit spec** `test/unit/update-check.spec.js`：parseVersion / isNewer 三段式比對、checkForUpdate 五個情境（latest > / === / < current、CWS 跳過、network error 不清 stale、保留 lastNoticeShownDate）、shouldShowTodayNotice / markUpdateNoticeShown 節流邏輯。SANITY 驗破壞 isNewer 與 isManualInstall 各別 fail。
+  - Full `npm test` 199 條（Playwright）+ 26 條（Jest）全綠。
+
+**v1.6.0** — v1.5.7 之後一系列 UX 打磨與多項調整累積到 1.6.0 minor bump。
+
+  - **YouTube 字幕分頁版面重組**：tab 移到「一般設定」右邊（最常用功能優先）；section 順序改為「自動翻譯 → 翻譯引擎 → Gemini 設定（合併原翻譯模型 + Temperature） → 進階：固定術語表 & 禁用詞清單 → 翻譯視窗設定 → 字幕翻譯 Prompt」。「Gemini 設定」與「字幕翻譯 Prompt」兩個 wrapper 依引擎條件顯示——選 Google Translate 全隱藏、選自訂模型只剩 Prompt（共用「自訂模型」分頁的 baseUrl/model/key）。
+  - **YouTube 字幕新加自訂模型引擎**：「翻譯引擎」下拉從「Gemini / Google MT」擴成三選項（加「自訂模型」）。字幕路徑與文章翻譯共用 `customProvider` baseUrl/model/apiKey/計價，但 prompt 字幕專屬（`ytSubtitle.systemPrompt` 走 cpOverrides 覆蓋）；cache key 用 `_oc_yt` 命名空間。
+  - **字幕路徑省 token toggle**：YouTube 字幕分頁新增「字幕也套用『固定術語表』/『禁用詞清單』」兩個 toggle（預設關），含動態成本估算（依目前模型與計價算「打開後一支 30 分鐘影片約多花多少」）。字幕本來就走獨立 prompt 設計，且字幕短句 LLM 不太會誤翻黑名單詞，預設關省下高頻字幕場景的累積 token 開銷。
+  - **Bug 修正：preset 自訂模型引擎被強制重置**：`save()` 端 whitelist 只認 `'google'/'gemini'`，使用者選「自訂模型」儲存後被強制改回 `'gemini'`——意即 v1.5.7 上線後使用者的自訂模型 preset 從未真正生效。修法：擴 whitelist 為三選項，model 欄只對 gemini 有意義。
+  - **「重設所有參數」按鈕**：Gemini 分頁底部「儲存設定」旁加，confirm 對話框防誤觸；不直接寫 storage，要使用者按「儲存設定」才生效。
+  - **「重置為預設 Prompt」按鈕**：自訂模型分頁加，把翻譯 Prompt 重設為與 Gemini 同款 `DEFAULT_SYSTEM_PROMPT`。
+  - **每批段數上限預設 12 → 20**：減少高頻 API call、提升整體翻譯效率。
+  - **用量紀錄時間 filter 改 24 小時制**：放棄 `<input type="datetime-local">`（Chrome 對它的時間制完全跟 OS locale 走、HTML 無法 override），改成「`<input type="date">` + 兩個 `<select>` (HH 00–23 / MM 00–59)」拆三段，24h 制完全由 select option 控制；新加「現在時間」按鈕一鍵把「到」設為當下時間。
+  - **用量紀錄版面對齊**：所有 widget 統一 `height: 32px` + 同 border / radius / padding；日週月按鈕從第一列搬到第二列與搜尋框並排；模型篩選 select 收斂為固定 200px 寬不再被內容撐爆觸發 wrap；「現在時間」貼第一列右側、「全部模型」貼第二列右側形成兩端勻稱。
+  - **Debug log 新增 prompt 注入計數**：`api: gemini request` / `api: openai-compat request` 加 `glossaryCount` / `fixedGlossaryCount` / `forbiddenTermsCount` 三欄，使用者從 Debug 分頁直接看出本批 prompt 末端注入了幾條（驗證 YouTube 字幕的兩個 toggle 是否生效、文章翻譯有沒有讀到設定）。
+  - **禁用詞清單 UI**：備註欄加 `title` attribute（hover 顯示原生 tooltip 看完整內容）+ focus 時 input 浮起放寬（CSS `position:absolute` lift），編輯時看得到完整文字。
+  - **設定頁文字調整一輪**：所有 muted 說明段落結尾句號移除（14 處）；自訂模型分頁多處用詞統一（OpenAI 相容、模型計價、翻譯 Prompt、移除過時引導文字）；landing page 用詞統一；DEFAULT_FORBIDDEN_TERMS 對照表標題從「中國大陸用語」改為「中國用語」（與全域用語規範對齊）。
+  - **Landing page 加「近期重大更新」section**：列出雙語對照模式 / 中國用語黑名單 / 自訂 AI 模型三條近期亮點。
+  - Full `npm test` 187 條（Playwright）+ 26 條（Jest）全綠。
+
 ## v1.5.x
 
 **v1.5.7** — 新增自訂 OpenAI 相容模型功能 + 用量紀錄多項改進 + WordPress 含 hero 圖標題的偵測/注入修法 + 設定頁版面對齊與多處文字調整。

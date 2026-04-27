@@ -10,8 +10,6 @@
 // 一律回傳空 body（包含 main world / isolated world / service worker），
 // 即使是 same-origin 的請求也一樣（只要 URL 含 exp=xpv/xpe 就需要 POT）。
 // 唯一能拿到資料的方式，是等 YouTube 播放器自己發出請求，再擷取 response。
-//
-// 參考：沉浸式翻譯 dist/chrome/video-subtitle/inject.js 的同概念做法。
 
 (function () {
   const TIMEDTEXT_RE = /\/api\/timedtext/;

@@ -133,6 +133,22 @@
   // 防止 Gemini API 無回應時整頁翻譯永久卡住。
   const BATCH_TIMEOUT_MS = 90_000;
 
+  // v1.6.19: 把 Promise.race 包成 helper,sendMessage 先 settle 時 clearTimeout
+  // 釋放 timer。舊版每個 batch 都留一個 90s timer 直到 fire(雖然 race 已 settle
+  // 後 reject 被忽略,但 timer 物件 + Error 物件占住到 fire 才 GC,長頁面 50+
+  // batch 累積成 timer leak)。
+  function sendMessageWithTimeout(message, timeoutMs) {
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(SK.t('cs_batch_timeout', timeoutMs / 1000))),
+        timeoutMs,
+      );
+    });
+    return Promise.race([browser.runtime.sendMessage(message), timeoutPromise])
+      .finally(() => clearTimeout(timer));
+  }
+
   async function runWithConcurrency(jobs, maxConcurrent, workerFn) {
     const n = Math.min(maxConcurrent, jobs.length);
     if (n === 0) return;
@@ -265,17 +281,12 @@
         // v1.5.7: engine='openai-compat' 時走 TRANSLATE_BATCH_CUSTOM 走 lib/openai-compat.js；
         // 預設 'gemini' 維持既有 TRANSLATE_BATCH 行為。
         const messageType = engine === 'openai-compat' ? 'TRANSLATE_BATCH_CUSTOM' : 'TRANSLATE_BATCH';
-        const response = await Promise.race([
-          browser.runtime.sendMessage({
-            type: messageType,
-            // v1.4.12: modelOverride 來自 preset 快速鍵，覆蓋全域 geminiConfig.model（僅 Gemini 路徑生效，
-            // OpenAI-compat 路徑以 customProvider 整組為準）
-            payload: { texts: job.texts, glossary: glossary || null, modelOverride: modelOverride || null },
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(SK.t('cs_batch_timeout', BATCH_TIMEOUT_MS / 1000))), BATCH_TIMEOUT_MS)
-          ),
-        ]);
+        const response = await sendMessageWithTimeout({
+          type: messageType,
+          // v1.4.12: modelOverride 來自 preset 快速鍵，覆蓋全域 geminiConfig.model（僅 Gemini 路徑生效，
+          // OpenAI-compat 路徑以 customProvider 整組為準）
+          payload: { texts: job.texts, glossary: glossary || null, modelOverride: modelOverride || null },
+        }, BATCH_TIMEOUT_MS);
         const elapsed = Date.now() - t0;
         const cacheHit = response?.usage?.cacheHits || 0;
         const apiCalls = job.texts.length - cacheHit;
@@ -771,15 +782,10 @@
       if (signal?.aborted) return;
       const batchIdx = jobs.indexOf(job);
       try {
-        const response = await Promise.race([
-          browser.runtime.sendMessage({
-            type: 'TRANSLATE_BATCH_GOOGLE',
-            payload: { texts: job.texts },
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(SK.t('cs_batch_timeout', 90))), BATCH_TIMEOUT_MS)
-          ),
-        ]);
+        const response = await sendMessageWithTimeout({
+          type: 'TRANSLATE_BATCH_GOOGLE',
+          payload: { texts: job.texts },
+        }, BATCH_TIMEOUT_MS);
         if (!response?.ok) throw new Error(response?.error || SK.t('cs_unknown_error'));
         totalChars += response.usage?.chars || 0;
         const translations = response.result;
@@ -1324,12 +1330,21 @@
         }
       }
 
-      const { autoTranslate = false } = await browser.storage.sync.get('autoTranslate');
+      const { autoTranslate = false, autoTranslateSlot } = await browser.storage.sync.get(['autoTranslate', 'autoTranslateSlot']);
       if (!autoTranslate) return;
       if (await SK.isDomainWhitelisted()) {
-        SK.sendLog('info', 'system', 'domain in auto-translate list, translating on load', { url: location.href });
-        // v1.4.16: toast 前綴顯示「[自動翻譯]」讓使用者知道本次是 whitelist 觸發的，不是自己按的
-        SK.translatePage({ label: SK.t('cs_auto_translate') });
+        // v1.6.13: 走指定 preset slot 而非裸 translatePage(),讓白名單行為跟使用者
+        // 期待的「按下對應快速鍵」一致(走 preset.model 的 modelOverride)。
+        // 沒設過 / 範圍外時 fallback slot 2,跟 v1.6.12 之前的行為等價。
+        const n = Number(autoTranslateSlot);
+        const slot = [1, 2, 3].includes(n) ? n : 2;
+        SK.sendLog('info', 'system', 'domain in auto-translate list, translating on load', { url: location.href, slot });
+        if (typeof SK.handleTranslatePreset === 'function') {
+          SK.handleTranslatePreset(slot);
+        } else {
+          // 防禦性 fallback
+          SK.translatePage({ label: SK.t('cs_auto_translate') });
+        }
       }
     } catch (err) {
       SK.sendLog('warn', 'system', 'auto-translate check failed on load', { error: err.message });

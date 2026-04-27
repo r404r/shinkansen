@@ -115,18 +115,33 @@ test.describe('OpenAI-compat translateBatch', () => {
     expect(sys.startsWith('我是自訂 prompt 的 base 段。')).toBe(true);
   });
 
-  test('apiKey 缺失 → throw 提示訊息', async () => {
+  // v1.6.7: apiKey 為空時改成允許（本機 llama.cpp / Ollama 等不需要 key），
+  // 且不送 Authorization header（OpenAI 相容規範允許省略；商用端會自然 401）。
+  test('apiKey 為空 → 不 throw 且不送 Authorization header（本機後端相容）', async () => {
+    await translateBatch(['Hello'], makeSettings({ apiKey: '' }), null, null, null);
+    expect(fetchCalls.length).toBe(1);
+    expect(fetchCalls[0].headers.Authorization).toBeUndefined();
+  });
+
+  test('apiKey 為 undefined（settings.customProvider 沒這欄位）→ 不 throw 且不送 Authorization', async () => {
+    await translateBatch(['Hello'], makeSettings({ apiKey: undefined }), null, null, null);
+    expect(fetchCalls[0].headers.Authorization).toBeUndefined();
+  });
+
+  test('model 缺失 → 仍會 throw（model 是必填）', async () => {
     let err = null;
     try {
-      await translateBatch(['Hello'], makeSettings({ apiKey: '' }), null, null, null);
+      await translateBatch(['Hello'], makeSettings({ model: '' }), null, null, null);
     } catch (e) { err = e; }
     expect(err).not.toBeNull();
-    expect(err.message).toContain('API Key');
+    expect(err.message).toContain('模型');
   });
 });
 
 // SANITY 紀錄（已在 Claude Code 端驗證）：
-//   把 lib/openai-compat.js translateChunk 的
-//     `const effectiveSystem = buildEffectiveSystemInstruction(...)` 改成 `const effectiveSystem = baseSystem;`
-//   → 「forbiddenTerms 注入」與「fixedGlossary 注入」兩條 spec fail（systemInstruction 不含黑名單 / 術語表）。
-//   還原後全部 pass。
+//   (1) 把 lib/openai-compat.js translateChunk 的
+//       `const effectiveSystem = buildEffectiveSystemInstruction(...)` 改成 `const effectiveSystem = baseSystem;`
+//       → 「forbiddenTerms 注入」與「fixedGlossary 注入」兩條 spec fail。還原後全部 pass。
+//   (2) v1.6.7: 把 headers 改回硬送 `{ 'Authorization': \`Bearer ${apiKey}\` }`
+//       → 「apiKey 為空 → 不送 Authorization」與「apiKey undefined」兩條新 spec fail。
+//       還原為 `apiKey ? { 'Authorization': ... } : {}` 後全部 pass。

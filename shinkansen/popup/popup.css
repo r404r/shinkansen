@@ -1,7 +1,7 @@
 body {
   width: 280px;
   margin: 0;
-  font-family: -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   color: #1d1d1f;
   background: #ffffff;
 }
@@ -53,6 +53,10 @@ button.secondary:hover { background: #f0f4ff; }
   margin-top: 14px;
   font-size: 13px;
 }
+/* v1.6.23:同 .update-dot / .update-banner 的 hidden 覆寫修法——
+   .row 上面顯式 display:flex 覆蓋了 user agent 的 [hidden] { display: none },
+   讓 yt-subtitle-row 在非 YouTube 頁面也錯誤顯示。明確列 .row[hidden] 才能蓋住。 */
+.row[hidden] { display: none !important; }
 
 .row select {
   padding: 4px 8px;
@@ -137,3 +141,87 @@ button.link {
 .cache-info { color: #86868b; font-size: 11px; }
 button.link.small { font-size: 12px; }
 button.link.small:hover { text-decoration: underline; }
+
+/* v1.6.1: 更新提示 */
+.update-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+  margin-left: 6px;
+  vertical-align: super;
+  font-size: 0;
+}
+/* v1.6.23: 同 .update-banner 的 hidden 覆寫修法——上面 .update-dot 顯式
+   display:inline-block 會覆蓋 user agent 的 [hidden] { display: none } 規則,
+   讓 hidden=true 的紅點仍渲染。明確列 .update-dot[hidden] 才能蓋住。 */
+.update-dot[hidden] { display: none !important; }
+.update-banner {
+  /* v1.6.3: 從 <a> 改 <button>——加 button reset 維持 banner 視覺 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #fff8e1;
+  border: 1px solid #f5b800;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #2c2a1f;
+  text-decoration: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.update-banner:hover { background: #fff3c4; }
+.update-banner strong { color: #1d1d1f; }
+.update-banner span { color: #6e6e73; }
+/* v1.6.5: 強制覆寫 hidden attribute——上方 display:flex 會 override 掉 user-agent
+   stylesheet 的 [hidden] { display: none }，造成 hidden=true 仍顯示的 bug。 */
+.update-banner[hidden] { display: none !important; }
+
+/* v1.6.5: 剛升級綠色 welcome banner（CWS 自動更新後顯示一次） */
+.welcome-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #ecfdf3;
+  border: 1px solid #b6efc9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1d3a26;
+}
+.welcome-banner strong { color: #117a3e; font-size: 13px; }
+.welcome-banner-subtitle {
+  margin: 2px 0 0;
+  color: #1d3a26;
+  font-size: 11px;
+}
+.welcome-bullets {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.welcome-bullets li { color: #2c2a1f; line-height: 1.4; }
+.welcome-bullets strong { color: #1d1d1f; font-size: inherit; }
+.welcome-banner-dismiss {
+  align-self: flex-end;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #b6efc9;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #117a3e;
+  font-family: inherit;
+  cursor: pointer;
+}
+.welcome-banner-dismiss:hover { background: #f0fdf4; }
+/* v1.6.5: 同 .update-banner 的 hidden 覆寫修法 */
+.welcome-banner[hidden] { display: none !important; }

@@ -40,7 +40,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 網頁翻譯 | ✅ | Option+S（Gemini）/ Option+G（Google Translate）切換；單語覆蓋 / 雙語對照雙模式；漸進分批注入；還原原文；選區翻譯 |
 | 選區翻譯 | ✅ | v1.6 新增；有選取文字時按快速鍵只翻譯選區內段落；`Range.intersectsNode` 過濾；不啟動 rescan/sticky；`STATE.translationScope` 控制 |
 | 雙語對照模式 | ✅ | v1.5.0 新增；popup toggle 切換；譯文以 `<shinkansen-translation>` wrapper 形式 append 在原段落後/內；4 種視覺標記 |
-| YouTube 字幕翻譯 | ✅ | XHR 預翻 + on-the-fly 備援；時間視窗批次；seek/rate 補償；字幕框展開置中；SPA 導航自動重啟 |
+| YouTube 字幕翻譯 | ✅ | XHR 預翻 + on-the-fly 備援；時間視窗批次；seek/rate 補償；字幕框展開置中；SPA 導航自動重啟；ASR(自動字幕)走獨立合句路徑(v1.6.20) |
 | SPA 支援 | ✅ | History API 攔截 + URL 輪詢；MutationObserver rescan；Content Guard；stickyTranslate 續翻 |
 | 段落偵測 | ✅ | walker + mixed-content fragment；PRE 條件排除；leaf DIV / grid cell 補抓；nav 放行 |
 | 佔位符序列化 | ✅ | 配對型 ⟦N⟧…⟦/N⟧ + 原子型 ⟦*N⟧；媒體保留；含圖連結重建 |
@@ -116,7 +116,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateCon
 
 多段文字以 `\n<<<SHINKANSEN_SEP>>>\n` 串接後一次送出，回應以相同分隔符拆分對齊。
 
-**分批策略**：字元預算 + 段數上限雙門檻 greedy 打包。`maxCharsPerBatch`（預設 3500，設定頁可調）與 `maxUnitsPerBatch`（預設 12，設定頁可調）任一觸發即封口。超大段落獨佔一批，不切段落本身。
+**分批策略**：字元預算 + 段數上限雙門檻 greedy 打包。`maxCharsPerBatch`（預設 3500，設定頁可調）與 `maxUnitsPerBatch`（v1.5.8 起預設 20，設定頁可調）任一觸發即封口。超大段落獨佔一批，不切段落本身。
 
 **對齊失敗 fallback**：回傳段數不符時退回逐段單獨呼叫模式。
 
@@ -427,7 +427,7 @@ scripts/
   "tpmOverride": null,
   "rpdOverride": null,
   "maxConcurrentBatches": 10,
-  "maxUnitsPerBatch": 12,
+  "maxUnitsPerBatch": 20,
   "maxCharsPerBatch": 3500,
   "maxTranslateUnits": 1000,
   "toastOpacity": 0.7,
@@ -608,6 +608,8 @@ v1.4.12 起提供三組 preset 快捷鍵：
 | type | payload | 回應 |
 |------|---------|------|
 | `TRANSLATE_BATCH` | `{ texts, slots, … }` | `{ ok, result, usage }` |
+| `TRANSLATE_SUBTITLE_BATCH` | `{ texts, glossary }` | `{ ok, result, usage }` — YouTube 字幕逐條翻譯(人工字幕路徑) |
+| `TRANSLATE_ASR_SUBTITLE_BATCH` | `{ texts: [json], glossary }` | `{ ok, result: [json], usage }` — v1.6.20:ASR 字幕專用,texts 是單一 [{s,e,t}] JSON 字串,LLM 自由合句後回 [{s,e,t}] JSON 字串 |
 | `EXTRACT_GLOSSARY` | `{ input }` | `{ ok, terms, _diag }` |
 | `LOG` | `{ level, category, message, data }` | — |
 | `LOG_USAGE` | `{ inputTokens, outputTokens, … }` | `{ ok }` |
