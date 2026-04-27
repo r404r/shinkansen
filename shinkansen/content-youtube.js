@@ -1089,7 +1089,6 @@
       entriesWritten: writtenCount,
       entriesDropped: droppedCount,
       captionMapSize: YT.captionMap.size,
-      domSegmentCount: domSegs.length,
     });
   }
 
