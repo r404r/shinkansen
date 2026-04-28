@@ -774,13 +774,16 @@
     const srcEl = host.shadowRoot.querySelector('.src');
     if (!targetText) {
       tgtEl.textContent = '';
+      delete tgtEl.dataset.skText;
       host.style.display = 'none';
       return;
     }
     const wrapped = _wrapTargetText(targetText);
     // Nozomi: 用 DOM API 替代 innerHTML（Mozilla AMO 合規）
-    // Codex P2: 內容未變時跳過 DOM 寫入，避免每 tick 重建節點造成閃爍
-    if (tgtEl.textContent === wrapped) return;
+    // Codex P2: 內容未變時跳過 DOM 寫入，避免每 tick 重建節點造成閃爍。
+    // textContent 不含 <br> 的換行，改用 data attribute 記錄上次寫入的原始文字。
+    if (tgtEl.dataset.skText === wrapped) return;
+    tgtEl.dataset.skText = wrapped;
     const frag = document.createDocumentFragment();
     const lines = wrapped.split('\n');
     for (let li = 0; li < lines.length; li++) {
