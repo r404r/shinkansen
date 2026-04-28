@@ -624,7 +624,7 @@ async function save() {
     // 之前只認 'google' / 'gemini' → 使用者改成 'openai-compat' 儲存後被強制 reset。
     translatePresets: [1, 2, 3].map(slot => {
       const raw = $(`preset-engine-${slot}`).value;
-      const engine = (raw === 'google' || raw === 'openai-compat') ? raw : 'gemini';
+      const engine = VALID_ENGINES.includes(raw) ? raw : 'gemini';
       // model 欄只對 gemini 有意義（google 與 openai-compat 都用各自分頁的設定）
       const model = engine === 'gemini' ? ($(`preset-model-${slot}`).value || null) : null;
       const label = ($(`preset-label-${slot}`).value || '').trim() || `預設 ${slot}`;
