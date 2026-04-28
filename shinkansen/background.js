@@ -5,6 +5,7 @@ import { browser } from './lib/compat.js';
 import { translateBatch, extractGlossary } from './lib/gemini.js';
 import { translateBatch as translateBatchCustom } from './lib/openai-compat.js'; // v1.5.7
 import { translateGoogleBatch } from './lib/google-translate.js';
+import { translateBingBatch } from './lib/bing-translate.js'; // Nozomi: Bing Translate
 import { getSettings, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
 import { debugLog, getLogs, clearLogs, getPersistedLogs, clearPersistedLogs } from './lib/logger.js';
 import * as cache from './lib/cache.js';
@@ -330,6 +331,11 @@ const messageHandlers = {
   TRANSLATE_BATCH_GOOGLE: {
     async: true,
     handler: (payload, sender) => handleTranslateGoogle(payload, sender, '_gt'),
+  },
+  // Nozomi: Bing Translate 網頁翻譯（不需 API Key，不走 rate limiter，快取 key 用 _bt 後綴）
+  TRANSLATE_BATCH_BING: {
+    async: true,
+    handler: (payload, sender) => handleTranslateBing(payload, sender, '_bt'),
   },
   // v1.5.7: OpenAI-compatible 自訂 Provider 翻譯（chat.completions endpoint）
   // 不走 rate limiter，cache key 加 baseUrl hash + model 分區。
@@ -1097,6 +1103,88 @@ async function handleTranslateGoogle(payload, sender, cacheSuffix) {
   return {
     result,
     usage: { engine: 'google', chars: totalChars, cacheHits },
+  };
+}
+
+// ─── Nozomi: Bing Translate 批次處理 ────────────────────────
+// 與 handleTranslateGoogle 同構，但呼叫 translateBingBatch + 傳入 endpointMode。
+async function handleTranslateBing(payload, sender, cacheSuffix) {
+  const texts = payload?.texts;
+  if (!Array.isArray(texts) || texts.length === 0) {
+    return { result: [], usage: { engine: 'bing', chars: 0 } };
+  }
+
+  const settings = await getSettings();
+  const targetLang = settings.uiLocale || 'zh-TW';
+  const endpointMode = settings.bingTranslate?.endpointMode || 'auto';
+
+  // 1. 先查快取
+  const cached = await cache.getBatch(texts, cacheSuffix);
+  const missingIdxs = [];
+  const missingTexts = [];
+  cached.forEach((tr, i) => {
+    if (tr == null) {
+      missingIdxs.push(i);
+      missingTexts.push(texts[i]);
+    }
+  });
+
+  const cacheHits = texts.length - missingTexts.length;
+  debugLog('info', 'cache', 'bing batch cache lookup', {
+    total: texts.length, hits: cacheHits, misses: missingTexts.length,
+  });
+
+  // 2. 缺失的部分呼叫 Bing Translate
+  let fresh = [];
+  let totalChars = 0;
+  if (missingTexts.length > 0) {
+    const t0 = Date.now();
+    debugLog('info', 'api', 'bing translateBatch start', { count: missingTexts.length, endpointMode });
+    const res = await translateBingBatch(missingTexts, targetLang, endpointMode);
+    fresh = res.translations;
+    totalChars = res.chars;
+    debugLog('info', 'api', 'bing translateBatch done', {
+      count: missingTexts.length,
+      chars: totalChars,
+      elapsed: Date.now() - t0,
+    });
+
+    // 3. 寫回快取
+    await cache.setBatch(missingTexts, fresh, cacheSuffix);
+
+    // 4. 記錄用量（費用 $0，以字元計）
+    // 注意：upsertGoogleUsage 只合併 engine='google' 的紀錄，
+    // engine='bing' 會 fallback 到 logTranslation（每批一筆），長頁面會產生多筆紀錄。
+    // 後續可擴展 upsertGoogleUsage 支援 bing 合併，但 MVP 先用 logTranslation。
+    try {
+      await usageDB.logTranslation({
+        url: sender?.tab?.url || '',
+        title: sender?.tab?.title || '',
+        engine: 'bing',
+        model: 'bing-translate',
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedTokens: 0,
+        billedInputTokens: 0,
+        billedCostUSD: 0,
+        costUSD: 0,
+        chars: totalChars,
+        segments: missingTexts.length,
+        cacheHits: cacheHits,
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      debugLog('warn', 'usage', 'bing usage logging failed', { error: err.message });
+    }
+  }
+
+  // 5. 合併結果
+  const mergedResult = cached.slice();
+  missingIdxs.forEach((idx, k) => { mergedResult[idx] = fresh[k]; });
+
+  return {
+    result: mergedResult,
+    usage: { engine: 'bing', chars: totalChars, cacheHits },
   };
 }
 
