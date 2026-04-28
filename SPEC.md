@@ -15,7 +15,7 @@
 
 **每次修改 Extension 的行為、UI、設定結構、或檔案組織，都必須同步更新本文件。**
 
-- Extension 版本號規則：三段式格式（`1.0.0` → `1.0.1`）。v1.0.0 以前的歷史版本使用兩段式。
+- Extension 版本號規則：三段式格式（`1.0.0` → `1.0.1`），beta 版使用四段式（`1.8.0.1`）。v1.0.0 以前的歷史版本使用兩段式。
 - Extension 版本號統一由 `manifest.json` 的 `version` 欄位控管；Popup 顯示版本透過 `chrome.runtime.getManifest().version` 動態讀取，不得寫死。
 - 本 SPEC 文件的版本號與 Extension 版本號獨立管理；SPEC 有結構性變動時 +0.1。
 
@@ -38,7 +38,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 功能區塊 | 狀態 | 簡述 |
 |---------|------|------|
 | 網頁翻譯 | ✅ | Option+S（Gemini）/ Option+G（Google Translate）切換；單語覆蓋 / 雙語對照雙模式；漸進分批注入；還原原文；選區翻譯 |
-| 選區翻譯 | ✅ | v1.6 新增；有選取文字時按快速鍵只翻譯選區內段落；`Range.intersectsNode` 過濾；不啟動 rescan/sticky；`STATE.translationScope` 控制 |
+| 選區翻譯 | ✅ | Nozomi v1.6 新增；有選取文字時按快速鍵只翻譯選區內段落；`Range.intersectsNode` 過濾；不啟動 rescan/sticky；`STATE.translationScope` 控制 |
 | 雙語對照模式 | ✅ | v1.5.0 新增；popup toggle 切換；譯文以 `<shinkansen-translation>` wrapper 形式 append 在原段落後/內；4 種視覺標記 |
 | YouTube 字幕翻譯 | ✅ | XHR 預翻 + on-the-fly 備援；時間視窗批次；seek/rate 補償；字幕框展開置中；SPA 導航自動重啟；ASR(自動字幕)走獨立合句路徑(v1.6.20) |
 | SPA 支援 | ✅ | History API 攔截 + URL 輪詢；MutationObserver rescan；Content Guard；stickyTranslate 續翻 |
@@ -48,15 +48,15 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 自動術語擷取 | ✅ | Gemini 預翻前擷取專有名詞；長度三級策略；術語快取（`gloss_` prefix） |
 | 固定術語表 | ✅ | 全域 + 網域兩層；設定頁編輯；優先覆蓋 LLM 自動術語 |
 | 翻譯快取 | ✅ | `chrome.storage.local`；SHA-1 key；版本變更自動清空 |
-| 自訂 OpenAI-compat 模型 | ✅ | v1.5.7 新增；OpenRouter / DeepSeek / Ollama 等百種 provider；v1.6.18 思考強度控制（auto/off/low/medium/high） |
-| YouTube ASR 智慧分句 | ✅ | v1.6.20 新增；自動字幕 AI 重組分句（heuristic / progressive / llm 三模式）；overlay 旁路原生 caption-segment |
-| per-model 計價覆蓋 | ✅ | v1.6.14 新增；使用者可在 Gemini 分頁針對各模型個別覆蓋內建計價表 |
-| 段落偵測效能優化 | ✅ | v1.6.9：textContent 取代 innerText；leaf div+span :not(:has(*)) 補抓 |
-| 分頁隱藏省電 | ✅ | v1.6.10：document.hidden 時暫停 Content Guard sweep + URL 輪詢 |
-| Toast master switch | ✅ | v1.6.8：showProgressToast 可完全關閉翻譯進度通知 |
-| 延續翻譯開關 | ✅ | v1.7 Nozomi 新增；stickyTranslateEnabled 可關閉跨導航自動續翻 |
-| 中國用語黑名單 | ✅ | v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；zh-CN 模式自動跳過；`lib/forbidden-terms.js` 偵測層 |
-| Firefox 快捷鍵編輯 | ✅ | v1.7 新增；設定頁點擊徽章即時編輯，`browser.commands.update()` API；Chrome 無此 API，維持跳轉 |
+| 自訂 OpenAI-compat 模型 | ✅ | upstream v1.5.7 新增；OpenRouter / DeepSeek / Ollama 等百種 provider；upstream v1.6.18 思考強度控制（auto/off/low/medium/high） |
+| YouTube ASR 智慧分句 | ✅ | upstream v1.6.20–v1.7.0 新增；自動字幕 AI 重組分句（heuristic / progressive / llm 三模式）；overlay 旁路原生 caption-segment |
+| per-model 計價覆蓋 | ✅ | upstream v1.6.14 新增；使用者可在 Gemini 分頁針對各模型個別覆蓋內建計價表 |
+| 段落偵測效能優化 | ✅ | upstream v1.6.9：textContent 取代 innerText；leaf div+span :not(:has(*)) 補抓 |
+| 分頁隱藏省電 | ✅ | upstream v1.6.10：document.hidden 時暫停 Content Guard sweep + URL 輪詢 |
+| Toast master switch | ✅ | upstream v1.6.8：showProgressToast 可完全關閉翻譯進度通知 |
+| 延續翻譯開關 | ✅ | Nozomi v1.7 新增；stickyTranslateEnabled 可關閉跨導航自動續翻 |
+| 中國用語黑名單 | ✅ | upstream v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；`lib/forbidden-terms.js` 偵測層。Nozomi v1.7 追加 zh-CN 模式自動跳過 |
+| Firefox 快捷鍵編輯 | ✅ | Nozomi v1.7 新增；設定頁點擊徽章即時編輯，`browser.commands.update()` API；Chrome 無此 API，維持跳轉 |
 | 設定頁 | ✅ | 7 Tab：一般設定 / Gemini / 自訂模型 / 術語表 / 禁用詞清單 / YouTube 字幕 / 用量紀錄 / Debug；匯入匯出 |
 | Popup 面板 | ✅ | 翻譯/還原；快取/費用統計；自動翻譯開關；YouTube 字幕 toggle |
 | Toast 提示 | ✅ | 進度條 + 計時器；可調透明度與位置；`toastAutoHide` 自動關閉選項 |
@@ -730,7 +730,7 @@ window.__shinkansen = {
 
 ---
 
-## 17. 多語言支援（v1.5）
+## 17. 多語言支援（Nozomi v1.5）
 
 ### 17.1 支援語言
 
@@ -758,7 +758,7 @@ window.__shinkansen = {
 
 ---
 
-## 18. 構建與發佈流程（v1.5）
+## 18. 構建與發佈流程（Nozomi v1.5）
 
 ### 18.1 雙平台構建
 
