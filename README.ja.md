@@ -142,13 +142,13 @@ v1.4.0 より Google Translate を第2の翻訳エンジンとしてサポート
 
 適した用途：英語フォーラム、ニュース、商品ページなど「意味が分かればOK」のコンテンツを大量に閲覧する場合は Google MT で API 費用を節約。精密な翻訳（文学、学術論文、固有名詞の処理）が必要な場合は Gemini に切替。
 
-## Bing Translate 翻訳エンジン
+## Bing Translate 翻訳エンジン（Microsoft Translator）
 
-Nozomi 独自機能。Microsoft Bing の非公式翻訳エンドポイントを使用。Google Translate と同様ですが、重要な利点があります：
+Nozomi 独自機能。Microsoft Translator API（Edge ブラウザ内蔵翻訳と同じバックエンド）を使用。無料、API キー不要：
 
-- **中国本土で利用可能**：`cn.bing.com` は中国本土で正常に動作します（Google Translate はブロックされています）
-- **API キー不要**：完全無料
-- **自動ドメイン検出**：デフォルトの `auto` モードでは `www.bing.com` を試し、失敗した場合は自動的に `cn.bing.com` にフォールバック
+- **中国本土で利用可能**：Token エンドポイント（`edge.microsoft.com`）と翻訳エンドポイント（`api.cognitive.microsofttranslator.com`）は中国本土で正常に接続可能（2026-04-28 検証済み）
+- **API キー不要**：Microsoft Edge の公開認証エンドポイントから JWT Bearer token を自動取得
+- **高い安定性**：標準 REST API を使用（ウェブページのリバースエンジニアリングではない）、Bing ウェブ改変の影響を受けない
 - **品質は Google Translate と同等**
 
 設定方法：設定ページの「翻訳ショートカット」で任意のプリセットエンジンを「Bing Translate」に変更。

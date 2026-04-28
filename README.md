@@ -143,13 +143,13 @@ v1.4.0 起支援 Google Translate 作為第二翻譯引擎：
 
 適合場景：大量瀏覽英文論壇、新聞、商品頁等「讀懂意思就好」的內容，用 Google MT 省 API 費用；需要精準翻譯（文學、學術文章、專有名詞處理）時切 Gemini。
 
-## Bing Translate 翻譯引擎
+## Bing Translate 翻譯引擎（Microsoft Translator）
 
-Nozomi 獨有功能。使用 Microsoft Bing 的非官方翻譯端點，與 Google Translate 類似但有一個關鍵優勢：
+Nozomi 獨有功能。使用 Microsoft Translator API（與 Edge 瀏覽器內建翻譯相同的後端），免費、無需 API Key：
 
-- **中國大陸可用**：`cn.bing.com` 在大陸正常運作（Google Translate 被封鎖）
-- **不需要 API Key**：完全免費
-- **自動域名偵測**：預設 `auto` 模式會嘗試 `www.bing.com`，失敗則自動 fallback 到 `cn.bing.com`
+- **中國大陸可用**：Token 端點（`edge.microsoft.com`）和翻譯端點（`api.cognitive.microsofttranslator.com`）在大陸均可正常連線（已驗證 2026-04-28）
+- **不需要 API Key**：透過 Microsoft Edge 公開認證端點自動取得 JWT Bearer token
+- **穩定性高**：使用標準 REST API（非網頁逆向工程），不受 Bing 網頁改版影響
 - **品質與 Google Translate 相當**
 
 設定方式：設定頁「翻譯快速鍵」任一預設引擎改為「Bing Translate」即可。

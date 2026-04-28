@@ -55,6 +55,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 分頁隱藏省電 | ✅ | upstream v1.6.10：document.hidden 時暫停 Content Guard sweep + URL 輪詢 |
 | Toast master switch | ✅ | upstream v1.6.8：showProgressToast 可完全關閉翻譯進度通知 |
 | 延續翻譯開關 | ✅ | Nozomi v1.7 新增；stickyTranslateEnabled 可關閉跨導航自動續翻 |
+| Bing Translate（Microsoft Translator） | ✅ | Nozomi v1.8 新增；JWT Bearer token（`edge.microsoft.com/translate/auth`）+ REST API（`api.cognitive.microsofttranslator.com/translate`）；免費無需 API Key；中國大陸可用 |
 | 中國用語黑名單 | ✅ | upstream v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；`lib/forbidden-terms.js` 偵測層。Nozomi v1.7 追加 zh-CN 模式自動跳過 |
 | Firefox 快捷鍵編輯 | ✅ | Nozomi v1.7 新增；設定頁點擊徽章即時編輯，`browser.commands.update()` API；Chrome 無此 API，維持跳轉 |
 | 設定頁 | ✅ | 7 Tab：一般設定 / Gemini / 自訂模型 / 術語表 / 禁用詞清單 / YouTube 字幕 / 用量紀錄 / Debug；匯入匯出 |
@@ -353,6 +354,8 @@ shinkansen/
 │   ├── system-instruction.js  # 共用 batch 構建 helper（v1.5.7，從 gemini.js 抽出）
 │   ├── forbidden-terms.js     # 中國用語黑名單偵測層（v1.5.6）
 │   ├── google-translate.js    # Google Translate 免費端點
+│   ├── bing-token.js          # Microsoft Translator JWT token 管理（Nozomi）
+│   ├── bing-translate.js      # Microsoft Translator 翻譯 API（Nozomi）
 │   ├── cache.js               # 翻譯快取（LRU + debounced flush）
 │   ├── storage.js             # 設定讀寫、預設值、getDefaultPromptsForLocale()
 │   ├── rate-limiter.js        # 三維 Rate Limiter
