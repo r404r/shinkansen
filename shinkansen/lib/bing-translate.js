@@ -1,18 +1,24 @@
-// lib/bing-translate.js — Bing Translate 翻譯 API（Nozomi 獨立模組）
+// lib/bing-translate.js — Microsoft Translator 翻譯 API（Nozomi 獨立模組）
 //
-// 使用 Bing 非官方端點（/ttranslatev3），免費、無需 API Key。
-// 中國大陸可用（cn.bing.com）。
+// 使用 Microsoft Cognitive Services Translator API（免費、無需 API Key）。
+// Token 來自 edge.microsoft.com/translate/auth（JWT Bearer）。
+// 翻譯端點：api.cognitive.microsofttranslator.com/translate
+// 中國大陸可用（已驗證 2026-04-28）。
 // 介面對齊 lib/google-translate.js 的 translateGoogleBatch。
 
 import { getBingToken } from './bing-token.js';
 
-// Bing 單次翻譯上限（公開頁面標示 1000 字元）
-const MAX_CHARS_PER_REQUEST = 1000;
+const TRANSLATE_URL = 'https://api.cognitive.microsofttranslator.com/translate';
+const API_VERSION = '3.0';
 
-// 並發控制：同時最多 3 個翻譯請求（避免被限流）
+// Microsoft Translator 單次最大字元數
+// 官方文檔：5000 字元（比 Bing 網頁端點的 1000 寬鬆得多）
+const MAX_CHARS_PER_REQUEST = 5000;
+
+// 並發控制：同時最多 3 個翻譯請求
 const MAX_CONCURRENCY = 3;
 
-// 語言代碼映射：uiLocale → Bing API 格式
+// 語言代碼映射：uiLocale → Microsoft Translator API 格式
 const LANG_MAP = {
   'zh-TW': 'zh-Hant',
   'zh-CN': 'zh-Hans',
@@ -21,25 +27,24 @@ const LANG_MAP = {
 
 /**
  * 批次翻譯字串陣列（自動偵測語言 → 目標語言）。
- * 逐段翻譯（不串接），並發控制最多 3 個同時請求。
+ * 每段獨立 POST，並發控制最多 3 個同時請求。
+ * 超過 5000 字元的段落自動拆分再串接。
  *
  * @param {string[]} texts — 待翻譯文字陣列
  * @param {string} [targetLang='zh-TW'] — 目標語言（zh-TW / zh-CN / ja）
- * @param {string} [endpointMode='auto'] — 域名策略（auto / global / china）
  * @returns {Promise<{ translations: string[], chars: number }>}
  */
-export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMode = 'auto') {
+export async function translateBingBatch(texts, targetLang = 'zh-TW') {
   if (!texts || texts.length === 0) return { translations: [], chars: 0 };
 
   const totalChars = texts.reduce((s, t) => s + (t?.length || 0), 0);
   const result = new Array(texts.length).fill('');
-  const bingLang = LANG_MAP[targetLang] || targetLang;
+  const msLang = LANG_MAP[targetLang] || targetLang;
 
-  // 取得 token（快取 + 自動刷新）
-  let tokenData = await getBingToken(endpointMode);
+  // 取得 Bearer token
+  let token = await getBingToken();
 
   // 將長文本拆分為不超過 MAX_CHARS_PER_REQUEST 的 chunk
-  // 超過上限的文本拆成多段分別翻譯，結果串接回去（Codex P2-1）
   const jobs = [];
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i] || '';
@@ -50,7 +55,6 @@ export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMo
     if (text.length <= MAX_CHARS_PER_REQUEST) {
       jobs.push({ idx: i, text, partOf: null });
     } else {
-      // 拆分為多個 chunk，記錄歸屬同一 idx
       const parts = [];
       for (let offset = 0; offset < text.length; offset += MAX_CHARS_PER_REQUEST) {
         parts.push(text.slice(offset, offset + MAX_CHARS_PER_REQUEST));
@@ -61,24 +65,22 @@ export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMo
     }
   }
 
-  // 用於收集拆分段落的部分結果
+  // 收集拆分段落的部分結果
   const partialResults = {};
 
-  // 共享 token 刷新狀態（Codex P2-2：所有 worker 共享刷新後的 token）
-  let _refreshedTokenData = null;
+  // 共享 token 刷新狀態
+  let _refreshedToken = null;
 
-  async function _doTranslateWithRetry(text, lang, currentTokenData, mode) {
-    // 若已有刷新過的 token，優先使用
-    const td = _refreshedTokenData || currentTokenData;
+  async function _doTranslateWithRetry(text, lang, currentToken) {
+    const tk = _refreshedToken || currentToken;
     try {
-      return await _translateSingle(text, lang, td);
+      return await _translateSingle(text, lang, tk);
     } catch (err) {
       if (_isAuthError(err)) {
-        // 只刷新一次，所有 worker 共享結果
-        if (!_refreshedTokenData) {
-          _refreshedTokenData = await getBingToken(mode, true);
+        if (!_refreshedToken) {
+          _refreshedToken = await getBingToken(true);
         }
-        return await _translateSingle(text, lang, _refreshedTokenData);
+        return await _translateSingle(text, lang, _refreshedToken);
       }
       throw err;
     }
@@ -90,7 +92,6 @@ export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMo
     } else {
       if (!partials[job.idx]) partials[job.idx] = new Array(job.partOf.total).fill('');
       partials[job.idx][job.partOf.partIdx] = translated;
-      // 所有 part 都完成時串接
       if (partials[job.idx].every(p => p !== '')) {
         resultArr[job.idx] = partials[job.idx].join('');
       }
@@ -105,10 +106,9 @@ export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMo
       const job = jobs[cursor++];
       if (!job) break;
       try {
-        const translated = await _doTranslateWithRetry(job.text, bingLang, tokenData, endpointMode);
+        const translated = await _doTranslateWithRetry(job.text, msLang, token);
         _writeResult(job, translated, result, partialResults);
       } catch {
-        // 翻譯失敗 fallback 原文
         _writeResult(job, job.text, result, partialResults);
       }
     }
@@ -125,37 +125,27 @@ export async function translateBingBatch(texts, targetLang = 'zh-TW', endpointMo
 }
 
 /**
- * 單次 Bing 翻譯請求。
+ * 單次 Microsoft Translator API 請求。
  * @param {string} text — 單段文字
- * @param {string} toLang — Bing 語言代碼（zh-Hant / zh-Hans / ja）
- * @param {{ ig, iid, key, token, baseUrl }} tokenData — token 資訊
+ * @param {string} toLang — Microsoft 語言代碼（zh-Hant / zh-Hans / ja）
+ * @param {string} bearerToken — JWT Bearer token
  * @returns {Promise<string>} — 譯文
  */
-async function _translateSingle(text, toLang, tokenData) {
-  const { ig, iid, key, token, baseUrl } = tokenData;
-
-  const url = `${baseUrl}/ttranslatev3?isVertical=1&IG=${ig}&IID=${iid}`;
-
-  const body = new URLSearchParams({
-    fromLang: 'auto-detect',
-    to: toLang,
-    text: text,
-    token: token,
-    key: key,
-  });
+async function _translateSingle(text, toLang, bearerToken) {
+  const url = `${TRANSLATE_URL}?api-version=${API_VERSION}&to=${encodeURIComponent(toLang)}`;
 
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${bearerToken}`,
     },
     credentials: 'omit',
-    body: body.toString(),
+    body: JSON.stringify([{ Text: text }]),
   });
 
   if (!resp.ok) {
-    const err = new Error(`Bing Translate HTTP ${resp.status}`);
+    const err = new Error(`Microsoft Translator HTTP ${resp.status}`);
     err.status = resp.status;
     throw err;
   }
@@ -167,14 +157,7 @@ async function _translateSingle(text, toLang, tokenData) {
     return data[0].translations[0].text;
   }
 
-  // 錯誤格式：{ statusCode: 400, errorMessage: "..." }
-  if (data?.statusCode) {
-    const err = new Error(data.errorMessage || `Bing error ${data.statusCode}`);
-    err.status = data.statusCode;
-    throw err;
-  }
-
-  throw new Error('Unexpected Bing Translate response format');
+  throw new Error('Unexpected Microsoft Translator response format');
 }
 
 /**
@@ -182,5 +165,5 @@ async function _translateSingle(text, toLang, tokenData) {
  */
 function _isAuthError(err) {
   const s = err?.status;
-  return s === 400 || s === 401 || s === 403;
+  return s === 401 || s === 403;
 }

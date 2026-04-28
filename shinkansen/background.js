@@ -1106,8 +1106,8 @@ async function handleTranslateGoogle(payload, sender, cacheSuffix) {
   };
 }
 
-// ─── Nozomi: Bing Translate 批次處理 ────────────────────────
-// 與 handleTranslateGoogle 同構，但呼叫 translateBingBatch + 傳入 endpointMode。
+// ─── Nozomi: Microsoft Translator 批次處理 ────────────────────────
+// 與 handleTranslateGoogle 同構，使用 Microsoft Translator API（免費 Bearer token）。
 async function handleTranslateBing(payload, sender, cacheSuffix) {
   const texts = payload?.texts;
   if (!Array.isArray(texts) || texts.length === 0) {
@@ -1116,7 +1116,6 @@ async function handleTranslateBing(payload, sender, cacheSuffix) {
 
   const settings = await getSettings();
   const targetLang = settings.uiLocale || 'zh-TW';
-  const endpointMode = settings.bingTranslate?.endpointMode || 'auto';
 
   // 1. 先查快取
   const cached = await cache.getBatch(texts, cacheSuffix);
@@ -1139,8 +1138,8 @@ async function handleTranslateBing(payload, sender, cacheSuffix) {
   let totalChars = 0;
   if (missingTexts.length > 0) {
     const t0 = Date.now();
-    debugLog('info', 'api', 'bing translateBatch start', { count: missingTexts.length, endpointMode });
-    const res = await translateBingBatch(missingTexts, targetLang, endpointMode);
+    debugLog('info', 'api', 'bing translateBatch start', { count: missingTexts.length });
+    const res = await translateBingBatch(missingTexts, targetLang);
     fresh = res.translations;
     totalChars = res.chars;
     debugLog('info', 'api', 'bing translateBatch done', {

@@ -254,10 +254,7 @@ export const DEFAULT_SETTINGS = {
   // 內容會以 <forbidden_terms_blacklist> 區塊注入到 systemInstruction 末端，
   // 且修改清單後快取 key 會帶 _b<hash> 後綴讓既有快取自動失效。
   forbiddenTerms: DEFAULT_FORBIDDEN_TERMS,
-  // Nozomi: Bing Translate 設定
-  bingTranslate: {
-    endpointMode: 'auto', // 'auto'=自動偵測 | 'global'=www.bing.com | 'china'=cn.bing.com
-  },
+  // Nozomi: Bing Translate（使用 Microsoft Translator API，不需要額外設定）
   // v1.6.1: 「不再顯示更新提示」toggle。預設 false（顯示提示）。
   // 對應 storage.local 的 updateAvailable 物件由 lib/update-check.js 寫入，不在 sync。
   disableUpdateNotice: false,
