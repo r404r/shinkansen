@@ -754,7 +754,9 @@
   // <a> 連結（【N】/【/N】）與 atomic 元素（【*N】），其餘 span/b/i/abbr 直接取文字。
   // 相比 v1.4.1 的 serializeWithPlaceholders+⟦→【 轉換，本版大幅減少標記數量
   // （通常 2-4 個，而非 10+），Google MT 不再被過多標記搞亂位置。
-  SK.translateUnitsGoogle = async function translateUnitsGoogle(units, { onProgress, signal } = {}) {
+  // Nozomi: messageType 參數讓 Bing 復用同一條路徑（只改 message type）
+  SK.translateUnitsGoogle = async function translateUnitsGoogle(units, { onProgress, signal, messageType } = {}) {
+    const _msgType = messageType || 'TRANSLATE_BATCH_GOOGLE';
     const total = units.length;
 
     // ── 序列化：只標 <a> 連結與 atomic 元素（footnote sup 等），其餘取純文字 ──
@@ -783,7 +785,7 @@
       const batchIdx = jobs.indexOf(job);
       try {
         const response = await sendMessageWithTimeout({
-          type: 'TRANSLATE_BATCH_GOOGLE',
+          type: _msgType,
           payload: { texts: job.texts },
         }, BATCH_TIMEOUT_MS);
         if (!response?.ok) throw new Error(response?.error || SK.t('cs_unknown_error'));
@@ -818,9 +820,12 @@
   SK.translatePageGoogle = async function translatePageGoogle(gtOptions = {}) {
     // v1.4.12: gtOptions.slot 由 preset 快速鍵注入，供 STICKY_SET
     // v1.4.13: gtOptions.label 顯示於 loading toast
+    const _isBing = !!gtOptions._bingMode; // Nozomi: Bing 復用 Google 路徑
+    const _engineName = _isBing ? 'bing' : 'google';
+    const _msgType = _isBing ? 'TRANSLATE_BATCH_BING' : 'TRANSLATE_BATCH_GOOGLE';
     let labelPrefix = gtOptions.label ? `[${gtOptions.label}] ` : '';
     // 若同一引擎已翻譯 → 還原（toggle）
-    if (STATE.translated && STATE.translatedBy === 'google') {
+    if (STATE.translated && (STATE.translatedBy === 'google' || STATE.translatedBy === 'bing')) {
       restorePage();
       return;
     }
@@ -910,6 +915,7 @@
     try {
       const { done, failures, chars } = await SK.translateUnitsGoogle(units, {
         signal: abortSignal,
+        messageType: _msgType, // Nozomi: Bing 用 TRANSLATE_BATCH_BING
         onProgress: (d, t) => SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, d, t), {
           progress: d / t,
         }),
@@ -937,7 +943,7 @@
       }
 
       STATE.translated = true;
-      STATE.translatedBy = 'google';  // v1.4.0
+      STATE.translatedBy = _engineName;  // v1.4.0 / Nozomi: 'google' 或 'bing'
       STATE.translationScope = selectionMode ? 'selection' : 'page';  // v1.6
       // v1.7: 延續翻譯開關
       if (!selectionMode && settings.stickyTranslateEnabled !== false) {
@@ -1044,6 +1050,9 @@
     }
     if (preset.engine === 'google') {
       SK.translatePageGoogle({ slot, label: preset.label || null });
+    } else if (preset.engine === 'bing') {
+      // Nozomi: Bing Translate 走 Google 同路徑，僅 message type 不同
+      SK.translatePageGoogle({ slot, label: preset.label || null, _bingMode: true });
     } else if (preset.engine === 'openai-compat') {
       // v1.5.7: 自訂 OpenAI-compatible Provider。model / baseUrl / API Key 全部從
       // settings.customProvider 拿（preset.model 略過），preset 只決定 engine + label。
