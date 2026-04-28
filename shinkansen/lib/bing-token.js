@@ -53,8 +53,8 @@ async function _clearCached() {
  * @returns {{ ig: string, iid: string, key: string, token: string, tokenTs: number, tokenExpiryInterval: number } | null}
  */
 function _extractTokenFromHTML(html) {
-  // IG — 頁面 session ID
-  const igMatch = html.match(/IG:"([A-Fa-f0-9]+)"/);
+  // IG — 頁面 session ID（格式可能是 IG:"xxx" 或 data-iid 格式）
+  const igMatch = html.match(/IG:"([A-Fa-f0-9]+)"/) || html.match(/ig["\s]*[:=]["\s]*"?([A-Fa-f0-9]{32})"?/i);
   if (!igMatch) return null;
   const ig = igMatch[1];
 
@@ -63,21 +63,39 @@ function _extractTokenFromHTML(html) {
   const iid = iidMatch ? iidMatch[1] : 'translator.5023';
 
   // key + token + tokenTs + tokenExpiryInterval
-  // 格式：params_AbusePreventionHelper = [timestamp, "token", timeout, "key", ...]
-  // 或：var params_AbusePreventionHelper = [timestamp,"token",timeout,"key",...];
-  const paramsMatch = html.match(
-    /params_AbusePreventionHelper\s*=\s*\[(\d+),\s*"([^"]+)",\s*(\d+),\s*"([^"]+)"/
-  );
+  // 格式：params_AbusePreventionHelper = [timestamp,"token",timeout,"key",...];
+  // 參考 plainheart/bing-translate-api：提取整個陣列再 parse，不依賴精確欄位順序
+  // Codex P2: \s* 允許任意空白；不用 JSON.parse 而用寬容的 JS 字面量解析
+  const paramsMatch = html.match(/params_AbusePreventionHelper\s*=\s*([^\]]+\])/);
   if (!paramsMatch) return null;
 
-  return {
-    ig,
-    iid,
-    key: paramsMatch[4],
-    token: paramsMatch[2],
-    tokenTs: Number(paramsMatch[1]),
-    tokenExpiryInterval: Number(paramsMatch[3]),
-  };
+  // 從 JS 陣列字面量中提取數字和字串，不依賴 JSON.parse（避免尾逗號、單引號等問題）
+  const raw = paramsMatch[1];
+  const numbers = [];
+  const strings = [];
+  // 提取數字
+  for (const m of raw.matchAll(/(?:^|[,\[]\s*)(\d+(?:\.\d+)?)/g)) {
+    numbers.push(Number(m[1]));
+  }
+  // 提取字串（支援雙引號和單引號）
+  for (const m of raw.matchAll(/["']([^"']+)["']/g)) {
+    strings.push(m[1]);
+  }
+  const params = [...numbers.map(n => n), ...strings]; // 合併供下方分類
+
+  // 陣列格式：[timestamp, "token", expiryInterval, "key", ...]
+  // 但欄位順序可能變動，用型別判斷而非固定索引
+  let key = '', token = '', tokenTs = 0, tokenExpiryInterval = 0;
+  for (const v of params) {
+    if (typeof v === 'number' && v > 1e12) tokenTs = v; // 毫秒時間戳（13 位數）
+    else if (typeof v === 'number' && v > 0 && v < 1e6) tokenExpiryInterval = v; // 過期秒數
+    else if (typeof v === 'string' && v.length > 20) token = v; // token 通常較長
+    else if (typeof v === 'string' && v.length > 0 && !key) key = v; // key 較短，取第一個
+  }
+
+  if (!key || !token) return null;
+
+  return { ig, iid, key, token, tokenTs, tokenExpiryInterval };
 }
 
 // ─── 核心邏輯 ────────────────────────────────────────────
