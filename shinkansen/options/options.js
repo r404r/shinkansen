@@ -225,7 +225,7 @@ async function load() {
 
   // v1.4.13: 三組 preset 快速鍵
   // v1.5.7: engine 接受三種 'gemini' / 'google' / 'openai-compat'，不認識的回退 'gemini'
-  const VALID_ENGINES = ['gemini', 'google', 'openai-compat'];
+  const VALID_ENGINES = ['gemini', 'google', 'openai-compat', 'bing'];
   const presets = Array.isArray(s.translatePresets) && s.translatePresets.length > 0
     ? s.translatePresets
     : DEFAULTS.translatePresets;
@@ -303,7 +303,7 @@ function getSelectedMarkStyle() {
 function updatePresetModelVisibility(slot) {
   const engine = $(`preset-engine-${slot}`).value;
   const row = $(`preset-model-row-${slot}`);
-  if (row) row.hidden = (engine === 'google' || engine === 'openai-compat');
+  if (row) row.hidden = (engine === 'google' || engine === 'openai-compat' || engine === 'bing');
 }
 
 // v1.5.8: YouTube 字幕分頁 — 依引擎切換 section 可見性。
