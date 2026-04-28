@@ -19,6 +19,8 @@ const MODEL_PRICING = Object.fromEntries(
   Object.entries(LIB_MODEL_PRICING).map(([model, p]) => [model, { input: p.inputPerMTok, output: p.outputPerMTok }])
 );
 
+// Nozomi: 合法引擎列表（load + save 共用）
+const VALID_ENGINES = ['gemini', 'google', 'openai-compat', 'bing'];
 
 // v1.6.15: 全域 #model dropdown 已移除（v1.4.12 起 preset modelOverride 涵蓋
 // 95%+ 場景,真實後備路徑剩 testGeminiKey 按鈕 + cache key 構建）。改讀
@@ -225,7 +227,6 @@ async function load() {
 
   // v1.4.13: 三組 preset 快速鍵
   // v1.5.7: engine 接受三種 'gemini' / 'google' / 'openai-compat'，不認識的回退 'gemini'
-  const VALID_ENGINES = ['gemini', 'google', 'openai-compat', 'bing'];
   const presets = Array.isArray(s.translatePresets) && s.translatePresets.length > 0
     ? s.translatePresets
     : DEFAULTS.translatePresets;
