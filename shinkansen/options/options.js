@@ -1786,7 +1786,7 @@ function renderTable(records) {
   const emptyMsg = $('usage-empty');
 
   if (!records || records.length === 0) {
-    clearChildren(tbody);
+    tbody.replaceChildren();
     emptyMsg.hidden = false;
     return;
   }
@@ -2055,18 +2055,6 @@ function getFilteredLogs() {
   });
 }
 
-// 把 jsonText 中所有 search 字串包成 <mark>，與 escapeHtml 兼容
-// （先 escapeHtml，再對 escape 後字串做大小寫不敏感的 mark 包裝）。
-// search 為空時直接回傳 escapeHtml 結果不動。
-function highlightSearch(text, searchLower) {
-  const escaped = escapeHtml(text);
-  if (!searchLower) return escaped;
-  // 在 escaped 字串中以大小寫不敏感方式包 <mark>。
-  // 用 RegExp 但要 escape regex meta 字。
-  const safe = searchLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped.replace(new RegExp(safe, 'gi'), m => `<mark class="log-search-hit">${m}</mark>`);
-}
-
 // ─── 渲染 ───────────────────────────────────────────────
 const LOG_CAT_LABELS = {
   translate:   'translate',
@@ -2094,7 +2082,7 @@ function renderLogTable() {
   }
 
   if (filtered.length === 0) {
-    clearChildren(tbody);
+    tbody.replaceChildren();
     emptyMsg.hidden = allLogs.length > 0 ? true : false;
     if (allLogs.length > 0 && filtered.length === 0) {
       emptyMsg.textContent = '沒有符合篩選條件的 Log';

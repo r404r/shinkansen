@@ -782,10 +782,15 @@
     }
     const wrapped = _wrapTargetText(str);
     if (wrapped.indexOf('\n') >= 0) {
-      // 有切點:用 innerHTML + <br>(textContent 走不出 <br>,設 \n 也會被
-      // YouTube 既有 white-space: nowrap 吞掉)。先 escape 防 XSS。
-      const html = _escapeHtml(wrapped).replace(/\n/g, '<br>');
-      if (el.innerHTML !== html) el.innerHTML = html;
+      // 有切點:用 DOM API + <br>(textContent 走不出 <br>,設 \n 也會被
+      // YouTube 既有 white-space: nowrap 吞掉)。AMO 合規:不用 innerHTML。
+      const frag = document.createDocumentFragment();
+      const parts = wrapped.split('\n');
+      for (let i = 0; i < parts.length; i++) {
+        if (i > 0) frag.appendChild(document.createElement('br'));
+        frag.appendChild(document.createTextNode(parts[i]));
+      }
+      el.replaceChildren(frag);
     } else {
       if (el.textContent !== wrapped) el.textContent = wrapped;
     }
@@ -1512,16 +1517,13 @@
             } else if (message.type === 'STREAMING_SEGMENT') {
               if (!YT.active) return;
               const idx = message.payload.segmentIdx;
-              const tr = message.payload.translation;
+              const tr = SK.sanitizeMarkers(message.payload.translation);
               if (typeof idx === 'number' && idx >= 0 && idx < batchUnits.length && tr) {
                 _injectBatchResult([batchUnits[idx]], [tr], 0, Date.now() - _t0);
               }
             } else if (message.type === 'STREAMING_DONE') {
               const elapsed = Date.now() - _t0;
               _batchApiMs[0] = elapsed;
-              // v1.8.10 B:hadMismatch=true(LLM 偷懶把 N 段合併成 1 段)時 reject,
-              // 觸發既有 mid-failure catch 重翻 batch 0 走 non-streaming(整批 resolve 後一次 split)。
-              // segment 0 可能已被 streaming 注入合併譯文(A 已 sanitize),retry 會用乾淨版本覆蓋。
               // v1.8.10 B:hadMismatch=true(LLM 偷懶把 N 段合併成 1 段)時 reject,
               // 觸發既有 mid-failure catch 重翻 batch 0 走 non-streaming(整批 resolve 後一次 split)。
               // segment 0 可能已被 streaming 注入合併譯文(A 已 sanitize),retry 會用乾淨版本覆蓋。

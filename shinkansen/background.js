@@ -741,8 +741,11 @@ async function handleTranslateStream(payload, sender, streamId, tabId, opts = {}
       fixedGlossaryEntries = [...globalEntries, ...domainEntries];
     }
   }
-  const forbiddenTermsList = (applyForbiddenTerms && Array.isArray(settings.forbiddenTerms))
-    ? settings.forbiddenTerms : [];
+  // Nozomi: zh-CN skip forbidden terms (與 handleTranslate / handleTranslateCustom 對齊)
+  const forbiddenTermsList = (settings.uiLocale === 'zh-CN')
+    ? []
+    : (applyForbiddenTerms && Array.isArray(settings.forbiddenTerms))
+      ? settings.forbiddenTerms : [];
 
   // v1.8.1/v1.8.9: cache key suffix(跟 handleTranslate 對齊)— 起始 cacheTag('_yt' / '')
   // glossary 存在時會被覆蓋成 '_g<hash>',維持跟非 streaming 路徑同 key 規則。
