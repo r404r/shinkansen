@@ -809,7 +809,7 @@
       }
     });
 
-    SK.sendLog('info', 'translate', 'translateUnitsGoogle complete', {
+    SK.sendLog('info', 'translate', `translateUnits${_msgType === 'TRANSLATE_BATCH_BING' ? 'Bing' : 'Google'} complete`, {
       elapsed: Date.now() - t0All, done, total, failures: failures.length, chars: totalChars,
     });
 
@@ -910,13 +910,15 @@
     const total = units.length;
     if (selectionMode) labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;
 
-    SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, 0, total), { progress: 0, startTimer: true });
+    // Nozomi: Bing 和 Google 共用路徑，用不同 i18n key 顯示正確引擎名稱
+    const _progressKey = _isBing ? 'cs_bing_progress' : 'cs_google_progress';
+    SK.showToast('loading', SK.t(_progressKey, labelPrefix, 0, total), { progress: 0, startTimer: true });
 
     try {
       const { done, failures, chars } = await SK.translateUnitsGoogle(units, {
         signal: abortSignal,
-        messageType: _msgType, // Nozomi: Bing 用 TRANSLATE_BATCH_BING
-        onProgress: (d, t) => SK.showToast('loading', SK.t('cs_google_progress', labelPrefix, d, t), {
+        messageType: _msgType,
+        onProgress: (d, t) => SK.showToast('loading', SK.t(_progressKey, labelPrefix, d, t), {
           progress: d / t,
         }),
       });
@@ -956,18 +958,20 @@
       browser.runtime.sendMessage({ type: 'SET_BADGE_TRANSLATED' }).catch(() => {});
 
       if (!failures.length) {
+        const _completeKey = _isBing ? 'cs_bing_complete' : 'cs_google_complete';
+        const _completeTruncKey = _isBing ? 'cs_bing_complete_truncated' : 'cs_google_complete_truncated';
+        const _charsKey = _isBing ? 'cs_bing_chars' : 'cs_google_chars';
         const successMsg = truncatedCount > 0
-          ? SK.t('cs_google_complete_truncated', total, truncatedCount)
-          : SK.t('cs_google_complete', total);
+          ? SK.t(_completeTruncKey, total, truncatedCount)
+          : SK.t(_completeKey, total);
         SK.showToast('success', successMsg, {
           progress: 1,
           stopTimer: true,
-          detail: SK.t('cs_google_chars', chars.toLocaleString()),
+          detail: SK.t(_charsKey, chars.toLocaleString()),
         });
       }
 
-      // 記錄用量（engine 欄位由 background 的 handleTranslateGoogle 寫入）
-      SK.sendLog('info', 'translate', 'google page translation done', {
+      SK.sendLog('info', 'translate', `${_engineName} page translation done`, {
         segments: total, chars, elapsed: Date.now() - translateStartTime, url: location.href,
       });
 
