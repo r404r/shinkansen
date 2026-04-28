@@ -657,15 +657,14 @@
     }
     if (!host.shadowRoot) {
       const shadow = host.attachShadow({ mode: 'open' });
-      shadow.innerHTML = `
-        <style>
+      // Nozomi: 用 DOM API 構建 Shadow DOM（避免 innerHTML，Mozilla AMO 合規）
+      const _style = document.createElement('style');
+      _style.textContent = `
           :host {
             font-family: var(--sk-cue-font-family,
               "PingFang TC", "Microsoft JhengHei", "微軟正黑體",
               "Heiti TC", "Noto Sans CJK TC", sans-serif);
           }
-          /* .window:絕對定位的字幕視窗,水平居中於 player,垂直 bottom 由 CSS variable 控制
-             (chrome 顯示時上移避開控制列,見全域 CSS 規則 .html5-video-player:not(.ytp-autohide) ...) */
           .window {
             position: absolute;
             bottom: var(--sk-cue-bottom, 30px);
@@ -674,12 +673,11 @@
             right: 0;
             display: flex;
             flex-direction: column;
-            align-items: center;        /* horizontal center 內部 cue rows */
+            align-items: center;
             gap: 4px;
             padding: 0 24px;
             box-sizing: border-box;
           }
-          /* cue rows:用 span + display:inline-block,寬度 shrink-to-fit 內容 */
           .cue {
             display: inline-block;
             max-width: 100%;
@@ -700,12 +698,16 @@
             font-size: var(--sk-cue-size, 18px);
           }
           .src[hidden], .tgt:empty { display: none; }
-        </style>
-        <div class="window">
-          <span class="cue src" hidden></span>
-          <span class="cue tgt"></span>
-        </div>
       `;
+      const _window = document.createElement('div');
+      _window.className = 'window';
+      const _src = document.createElement('span');
+      _src.className = 'cue src';
+      _src.hidden = true;
+      const _tgt = document.createElement('span');
+      _tgt.className = 'cue tgt';
+      _window.append(_src, _tgt);
+      shadow.append(_style, _window);
     }
     return host;
   }
@@ -771,15 +773,21 @@
     const tgtEl = host.shadowRoot.querySelector('.tgt');
     const srcEl = host.shadowRoot.querySelector('.src');
     if (!targetText) {
-      if (tgtEl.innerHTML !== '') tgtEl.innerHTML = '';
+      tgtEl.textContent = '';
       host.style.display = 'none';
       return;
     }
     const wrapped = _wrapTargetText(targetText);
-    // 用 innerHTML + <br> 寫入(比 textContent + \n + white-space:pre-wrap 更穩定,
-    // 不受 inline-block 的 wrap 行為差異影響)。先 escape HTML 字元防注入。
-    const html = _escapeHtml(wrapped).replace(/\n/g, '<br>');
-    if (tgtEl.innerHTML !== html) tgtEl.innerHTML = html;
+    // Nozomi: 用 DOM API 替代 innerHTML（Mozilla AMO 合規）
+    // Codex P2: 內容未變時跳過 DOM 寫入，避免每 tick 重建節點造成閃爍
+    if (tgtEl.textContent === wrapped) return;
+    const frag = document.createDocumentFragment();
+    const lines = wrapped.split('\n');
+    for (let li = 0; li < lines.length; li++) {
+      if (li > 0) frag.appendChild(document.createElement('br'));
+      frag.appendChild(document.createTextNode(lines[li]));
+    }
+    tgtEl.replaceChildren(frag);
     // source 暫不顯示(避免跟原生 ASR caption 三層字幕重疊;之後可加 toggle)
     if (sourceText !== undefined && srcEl) srcEl.hidden = true;
     host.style.display = 'block';

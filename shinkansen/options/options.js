@@ -375,20 +375,48 @@ function updateYtPromptCostHint() {
     return `$${usd.toFixed(3)}`;
   }
 
+  // Nozomi: 用 DOM API 替代 innerHTML（Mozilla AMO 合規）
+  function _buildHint(parts) {
+    // parts: [{ tag: 'strong'|'code'|'span'|'text'|'br', text?, style? }]
+    const frag = document.createDocumentFragment();
+    for (const p of parts) {
+      if (p.tag === 'br') { frag.appendChild(document.createElement('br')); continue; }
+      if (p.tag === 'text') { frag.appendChild(document.createTextNode(p.text)); continue; }
+      const el = document.createElement(p.tag);
+      el.textContent = p.text || '';
+      if (p.style) el.style.cssText = p.style;
+      frag.appendChild(el);
+    }
+    hintEl.replaceChildren(frag);
+  }
+
   if (engine === 'google') {
-    hintEl.innerHTML = '<strong>Google Translate 不會送 prompt</strong>，這兩個 toggle 對 Google MT 不適用。';
+    _buildHint([
+      { tag: 'strong', text: 'Google Translate 不會送 prompt' },
+      { tag: 'text', text: '，這兩個 toggle 對 Google MT 不適用。' },
+    ]);
     return;
   }
   if (!inputPrice) {
-    hintEl.innerHTML = '<strong>無法估算費用</strong>：請在對應的計價欄位設定 input 單價（USD / 1M tokens）。';
+    _buildHint([
+      { tag: 'strong', text: '無法估算費用' },
+      { tag: 'text', text: '：請在對應的計價欄位設定 input 單價（USD / 1M tokens）。' },
+    ]);
     return;
   }
 
-  hintEl.innerHTML =
-    `<strong>token 開銷估算</strong>（以目前模型 <code>${escapeHtml(modelDisplay)}</code> 計，input $${inputPrice}/1M tokens、30 分鐘影片約 60 批）：<br>` +
-    `<span style="display:inline-block; margin-left: 12px;">• 套用「固定術語表」（${fgCount} 條）→ 每批 prompt +${fgTok} token，全片約 ${fmtUSD(fgTok)}（cache 命中後 ~${fmtUSD(fgTok, 0.25)}）</span><br>` +
-    `<span style="display:inline-block; margin-left: 12px;">• 套用「禁用詞清單」（${fbCount} 條）→ 每批 prompt +${fbTok} token，全片約 ${fmtUSD(fbTok)}（cache 命中後 ~${fmtUSD(fbTok, 0.25)}）</span><br>` +
-    `<span style="font-size: 11px; color: #999;">※ token 為粗估，實際以 Gemini tokenizer 為準。Gemini implicit cache 命中需 prompt prefix ≥1024 token 且穩定，命中部分 25% 計費。</span>`;
+  _buildHint([
+    { tag: 'strong', text: 'token 開銷估算' },
+    { tag: 'text', text: `（以目前模型 ` },
+    { tag: 'code', text: modelDisplay },
+    { tag: 'text', text: ` 計，input $${inputPrice}/1M tokens、30 分鐘影片約 60 批）：` },
+    { tag: 'br' },
+    { tag: 'span', text: `• 套用「固定術語表」（${fgCount} 條）→ 每批 prompt +${fgTok} token，全片約 ${fmtUSD(fgTok)}（cache 命中後 ~${fmtUSD(fgTok, 0.25)}）`, style: 'display:inline-block; margin-left: 12px;' },
+    { tag: 'br' },
+    { tag: 'span', text: `• 套用「禁用詞清單」（${fbCount} 條）→ 每批 prompt +${fbTok} token，全片約 ${fmtUSD(fbTok)}（cache 命中後 ~${fmtUSD(fbTok, 0.25)}）`, style: 'display:inline-block; margin-left: 12px;' },
+    { tag: 'br' },
+    { tag: 'span', text: '※ token 為粗估，實際以 Gemini tokenizer 為準。Gemini implicit cache 命中需 prompt prefix ≥1024 token 且穩定，命中部分 25% 計費。', style: 'font-size: 11px; color: #999;' },
+  ]);
 }
 
 // v1.4.13: 從 chrome.commands.getAll() 讀取實際綁定鍵位顯示在每張 card 右上角
