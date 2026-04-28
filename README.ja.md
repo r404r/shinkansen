@@ -142,6 +142,17 @@ v1.4.0 より Google Translate を第2の翻訳エンジンとしてサポート
 
 適した用途：英語フォーラム、ニュース、商品ページなど「意味が分かればOK」のコンテンツを大量に閲覧する場合は Google MT で API 費用を節約。精密な翻訳（文学、学術論文、固有名詞の処理）が必要な場合は Gemini に切替。
 
+## Bing Translate 翻訳エンジン
+
+Nozomi 独自機能。Microsoft Bing の非公式翻訳エンドポイントを使用。Google Translate と同様ですが、重要な利点があります：
+
+- **中国本土で利用可能**：`cn.bing.com` は中国本土で正常に動作します（Google Translate はブロックされています）
+- **API キー不要**：完全無料
+- **自動ドメイン検出**：デフォルトの `auto` モードでは `www.bing.com` を試し、失敗した場合は自動的に `cn.bing.com` にフォールバック
+- **品質は Google Translate と同等**
+
+設定方法：設定ページの「翻訳ショートカット」で任意のプリセットエンジンを「Bing Translate」に変更。
+
 ## Google Docs 翻訳
 
 Google Docs の編集画面は Canvas でテキストをレンダリングするため、一般的なウェブ翻訳拡張機能はその内容にアクセスできません。Shinkansen-Nozomi は Google Docs ページを自動検出し、以下のフローで処理します：

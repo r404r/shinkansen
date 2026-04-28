@@ -122,12 +122,18 @@
   </section>
 
   <h2>4. 傳送到第三方的資料</h2>
-  <p>Shinkansen-Nozomi 唯一的對外網路連線是向 <strong>Google Gemini API</strong>（<code>generativelanguage.googleapis.com</code>）發送翻譯請求。每次翻譯時，以下資訊會傳送至 Google：</p>
-  <p>您的 Gemini API Key（作為身份驗證）、待翻譯的網頁文字段落，以及翻譯系統提示詞。</p>
-  <p>這些資料的處理受 <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 隱私權政策</a>與 <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener">Gemini API 服務條款</a>規範。建議您在使用前閱讀相關條款。</p>
+  <p>Shinkansen-Nozomi 的對外網路連線包括以下翻譯服務（依使用者選擇的翻譯引擎而定）：</p>
+  <ul>
+    <li><strong>Google Gemini API</strong>（<code>generativelanguage.googleapis.com</code>）：AI 翻譯，需要使用者自備 API Key。</li>
+    <li><strong>Google Translate</strong>（<code>translate.googleapis.com</code>）：免費機器翻譯，不需 API Key。</li>
+    <li><strong>Microsoft Bing Translate</strong>（<code>www.bing.com</code> 或 <code>cn.bing.com</code>）：免費機器翻譯，不需 API Key。中國大陸可用。</li>
+    <li><strong>自訂 OpenAI 相容端點</strong>（使用者自行設定的 URL）：使用者自備 API Key 與端點。</li>
+  </ul>
+  <p>每次翻譯時，待翻譯的網頁文字段落會傳送至對應服務。使用 Gemini 或自訂模型時，API Key 會作為身份驗證一併傳送。</p>
+  <p>這些資料的處理分別受各服務提供商的隱私權政策規範。建議您在使用前閱讀相關條款。</p>
 
   <h2>5. 我們不做的事</h2>
-  <p>Shinkansen-Nozomi 不會追蹤您的瀏覽紀錄或瀏覽行為、不會收集個人識別資訊、不會將資料傳送到開發者或任何第三方伺服器（Google Gemini API 除外）、不會顯示廣告或使用分析追蹤工具、不會販售或分享您的任何資料。</p>
+  <p>Shinkansen-Nozomi 不會追蹤您的瀏覽紀錄或瀏覽行為、不會收集個人識別資訊、不會將資料傳送到開發者或任何第三方伺服器（上述翻譯服務除外）、不會顯示廣告或使用分析追蹤工具、不會販售或分享您的任何資料。</p>
 
   <h2>6. 權限說明</h2>
   <p>本擴充功能要求以下 Chrome 權限：</p>

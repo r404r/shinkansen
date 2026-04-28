@@ -143,6 +143,17 @@ v1.4.0 起支援 Google Translate 作為第二翻譯引擎：
 
 適合場景：大量瀏覽英文論壇、新聞、商品頁等「讀懂意思就好」的內容，用 Google MT 省 API 費用；需要精準翻譯（文學、學術文章、專有名詞處理）時切 Gemini。
 
+## Bing Translate 翻譯引擎
+
+Nozomi 獨有功能。使用 Microsoft Bing 的非官方翻譯端點，與 Google Translate 類似但有一個關鍵優勢：
+
+- **中國大陸可用**：`cn.bing.com` 在大陸正常運作（Google Translate 被封鎖）
+- **不需要 API Key**：完全免費
+- **自動域名偵測**：預設 `auto` 模式會嘗試 `www.bing.com`，失敗則自動 fallback 到 `cn.bing.com`
+- **品質與 Google Translate 相當**
+
+設定方式：設定頁「翻譯快速鍵」任一預設引擎改為「Bing Translate」即可。
+
 ## Google Docs 翻譯
 
 Google Docs 的編輯畫面使用 Canvas 渲染文字，一般的網頁翻譯擴充功能無法存取其內容。Shinkansen-Nozomi 會自動偵測 Google Docs 頁面，並採用以下流程：
