@@ -165,9 +165,18 @@ export const DEFAULT_SETTINGS = {
     prompt: DEFAULT_GLOSSARY_PROMPT,
     temperature: 0.1,                  // 術語表要穩定，不要有創意
     skipThreshold: 1,                  // ≤ 此批次數完全不建術語表
-    blockingThreshold: 5,              // > 此批次數則阻塞等術語表回來再翻譯
+    // v1.7.3: 預設從 5 提高到 10 — 中等長度頁面(6-10 批)走 fire-and-forget 不阻塞,
+    // 省下 EXTRACT_GLOSSARY 1.5-7.4 秒 blocking 等待;短頁本就跳過、長頁(>10 批)
+    // 仍 blocking 確保跨批次術語一致。使用者可在設定頁 0(永遠 fire-and-forget)
+    // ~ 50(極長頁才 blocking)區間調整。
+    blockingThreshold: 10,             // > 此批次數則阻塞等術語表回來再翻譯
     timeoutMs: 60000,                  // 術語表請求逾時（毫秒），超過則 fallback（v0.70: 60s）
     maxTerms: 200,                     // 術語表上限條目數
+    // v1.7.2: 術語表獨立模型。空字串表示「跟主翻譯同一個 model」(舊行為);
+    // 預設 'gemini-3.1-flash-lite-preview' — 術語抽取任務簡單,Flash Lite 比 Flash 快
+    // 1.5-3 倍且便宜 5 倍。實測啟用 glossary 時 EXTRACT_GLOSSARY 用 Flash 耗時
+    // 1.5-7.4 秒,改用 Flash Lite 預期可壓到 0.5-2.5 秒。
+    model: 'gemini-3.1-flash-lite-preview',
   },
   domainRules: { whitelist: [] },
   autoTranslate: false,
@@ -221,6 +230,14 @@ export const DEFAULT_SETTINGS = {
   // v1.0.1: 單頁翻譯段落數上限。超大頁面（如維基百科長條目）超過此上限時截斷。
   // 設為 0 表示不限制。
   maxTranslateUnits: 1000,
+  // v1.8.3:「只翻文章開頭」節省模式。enabled=true 時只翻 batch 0(經 prioritizeUnits
+  // 推前的文章開頭 N 段),跳過 batch 1+,大幅減少 token 用量。使用者想看完整翻譯時
+  // 關閉此選項並重新翻譯,前面已翻好的段落會從本地快取自動命中(不重複收費)。
+  // maxUnits 範圍 5-50;chars 限制走內部 BATCH0_CHARS=3700 不暴露給使用者。
+  partialMode: {
+    enabled: false,
+    maxUnits: 25,
+  },
   // v1.0.17: Toast 透明度（0.1–1.0），讓使用者在無限捲動網站上降低 toast 干擾
   toastOpacity: 0.7,
   // v1.1.3: Toast 自動關閉——翻譯完成/錯誤等 toast 在數秒後自動消失。
@@ -340,6 +357,8 @@ export async function getSettings() {
     glossary: { ...DEFAULT_SETTINGS.glossary, ...(saved.glossary || {}) },
     // v1.2.39: 深層 merge ytSubtitle，確保新欄位（model / pricing）有預設值
     ytSubtitle: { ...DEFAULT_SETTINGS.ytSubtitle, ...(saved.ytSubtitle || {}) },
+    // v1.8.3: partialMode 深層 merge,確保 maxUnits 預設值有 fallback
+    partialMode: { ...DEFAULT_SETTINGS.partialMode, ...(saved.partialMode || {}) },
     // v1.4.12: translatePresets——使用者自訂三組就完全以自訂為準（不做 per-slot merge），
     // 否則套用預設三組。陣列非空時視為使用者已自訂。
     translatePresets: (Array.isArray(saved.translatePresets) && saved.translatePresets.length > 0)

@@ -7,7 +7,7 @@
 - 最後更新：2026-04-28（v1.8.0）
 - 目標平台：Chrome & Firefox（Manifest V3）
 - 作業系統：macOS 26
-- 目前 Extension 版本：1.8.0
+- 目前 Extension 版本：1.9.0
 
 ---
 
@@ -31,7 +31,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 
 ## 2. 功能範圍
 
-### 2.1 已實作（v1.8.0 為止）
+### 2.1 已實作（v1.9.0 為止）
 
 詳細版本歷史見 [`CHANGELOG.md`](CHANGELOG.md)。
 
@@ -72,6 +72,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 功能區塊 | 優先度 | 簡述 |
 |---------|--------|------|
 | EPUB 翻譯 | 中 | 擴充頁面（epub.html）；JSZip 解壓縮 + OPF 解析；重用現有 Gemini 批次翻譯流程；拖曳 EPUB 檔案進頁面後逐章翻譯並顯示 |
+| Gemini structured output（治本多段協定 mismatch）| 中 | 改用 Gemini `responseSchema` + `responseMimeType: "application/json"` 強制 JSON 輸出（`[{idx, text}, ...]`），由 API 層保證格式，根本不會 escape 成「«N» + <<<SHINKANSEN_SEP>>> + 合併段落」的 hadMismatch 情境。需重寫 prompt（去掉 SEP / «N» 規則）+ parser（split → JSON.parse）+ streaming SSE 解析（partial JSON parser，比文字 SEP 切分難寫）。涵蓋範圍只限 Gemini engine；OpenAI-compat 各 provider structured output 支援度不一、Claude 與部分本機模型仍要靠 v1.8.10 的 sanitize（A）+ mismatch retry（B）兩層防禦。預估工程 1-2 天。 |
 
 ### 2.3 明確不做
 

@@ -145,12 +145,15 @@ async function fetchWithRetry(url, body, { maxRetries = 3 } = {}) {
 export async function extractGlossary(compressedText, settings) {
   const { apiKey, geminiConfig, glossary: glossaryConfig } = settings;
   const {
-    model,
     serviceTier,
     topP,
     topK,
     maxOutputTokens,
   } = geminiConfig;
+
+  // v1.7.2: 術語表獨立模型優先(預設 Flash Lite,使用者可在 options 改);空字串
+  // / 不存在 / 找不到 model 時 fallback 到主翻譯 model。
+  const model = (glossaryConfig?.model || '').trim() || geminiConfig.model;
 
   const glossaryPrompt = glossaryConfig?.prompt || '';
   const glossaryTemperature = glossaryConfig?.temperature ?? 0.1;
@@ -529,4 +532,237 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
     return { parts: aligned, usage: aggUsage, hadMismatch: true };
   }
   return { parts, usage: chunkUsage, hadMismatch: false };
+}
+
+/**
+ * v1.8.0: Streaming 版翻譯——只給 content.js translateUnits 內 batch 0 用。
+ *
+ * 透過 callbacks 增量回送結果:
+ *   onFirstChunk():第一個 SSE chunk 抵達時觸發(讓呼叫端同步 dispatch batch 1+)
+ *   onSegment(idx, translation, hadMismatch):incremental parser 解出完整一段譯文時觸發
+ * 整批結束 return: { translations, usage, hadMismatch, finishReason }
+ *
+ * Scope 限制(reports/streaming-probe-2026-04-28.md §6):
+ *   ✅ 給 TRANSLATE_BATCH_STREAM(文章翻譯 batch 0)用
+ *   ❌ 不給字幕(TRANSLATE_SUBTITLE_BATCH / ASR)用
+ *   ❌ 不給術語抽取(EXTRACT_GLOSSARY)用
+ *   ❌ 不給 Google Translate / 自訂模型用
+ *
+ * 跟 translateBatch 的差異:
+ *   - 走 streamGenerateContent endpoint(?alt=sse)
+ *   - 不做 chunked packBatches(streaming 是單一 request)
+ *   - 不做 segment-mismatch 逐段 fallback(那留給呼叫端決定整批 retry)
+ *   - 不做 retry on transient errors(streaming 失敗時 partial 可能已 inject,呼叫端決定如何 fallback)
+ *
+ * @param {string[]} texts batch 0 所有 unit 的原文 array
+ * @param {object} settings 完整 settings
+ * @param {Array<{source,target,type}>|null} glossary
+ * @param {Array<{source,target,type}>|null} fixedGlossary
+ * @param {Array<string>|null} forbiddenTerms
+ * @param {object} callbacks { onFirstChunk?, onSegment? }
+ * @param {AbortSignal} [signal] 跨 streaming + 並行 batch 1+ 的中斷
+ */
+export async function translateBatchStream(texts, settings, glossary, fixedGlossary, forbiddenTerms, callbacks = {}, signal = undefined) {
+  if (!texts?.length) {
+    return { translations: [], usage: { inputTokens: 0, outputTokens: 0, cachedTokens: 0 }, hadMismatch: false, finishReason: 'STOP' };
+  }
+
+  const { apiKey, geminiConfig } = settings;
+  const { model, serviceTier, temperature, topP, topK, maxOutputTokens, systemInstruction } = geminiConfig;
+
+  // 跟 translateChunk 一致:多段時加 «N» 序號標記
+  const useSeqMarkers = texts.length > 1;
+  const markedTexts = useSeqMarkers ? texts.map((t, i) => `«${i + 1}» ${t}`) : texts;
+  const joined = markedTexts.join(DELIMITER);
+
+  const effectiveSystem = buildEffectiveSystemInstruction(systemInstruction, texts, joined, glossary, fixedGlossary, forbiddenTerms);
+
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: joined }] }],
+    systemInstruction: { parts: [{ text: effectiveSystem }] },
+    generationConfig: {
+      temperature, topP, topK, maxOutputTokens,
+      thinkingConfig: pickThinkingConfig(model),
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+  };
+  if (serviceTier && serviceTier !== 'DEFAULT') body.service_tier = serviceTier.toLowerCase();
+
+  // streamGenerateContent endpoint with alt=sse
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+
+  await debugLog('info', 'api', 'gemini stream request', {
+    model, segments: texts.length, chars: joined.length,
+    inputPreview: joined.slice(0, 200),
+    glossaryCount: glossary?.length || 0,
+    fixedGlossaryCount: fixedGlossary?.length || 0,
+  });
+
+  const t0 = Date.now();
+  const SEQ_MARKER_RE = /^«\d+»\s*/;
+
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (err) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      throw new Error('streaming aborted');
+    }
+    throw err;
+  }
+
+  if (!resp.ok) {
+    let errText = '';
+    try { errText = await resp.text(); } catch (_) {}
+    await debugLog('error', 'api', 'gemini stream HTTP error', { status: resp.status, error: errText.slice(0, 200) });
+    throw new Error(`Gemini API HTTP ${resp.status}${errText ? ': ' + errText.slice(0, 200) : ''}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let allText = '';
+  let firstChunkFired = false;
+  let segmentsEmitted = 0;
+  let lastUsage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
+  let finishReason = 'unknown';
+  let blockReason = null;
+
+  // 增量 emit segment:每收到完整 DELIMITER 就 emit 前一段。流結束時 emit 最後一段。
+  // 占位符可能切在 chunk 中間(例如 `⟦/0⟧` 切成 `⟦/0` 跟 `⟧`),但 DELIMITER 是
+  // 多字元固定字串(`\n<<<SHINKANSEN_SEP>>>\n`),如果 split 找不到就代表「這一段譯文還沒收完」,
+  // 不要 emit。等下一個 chunk 把 DELIMITER 補完才 emit。所以「以 DELIMITER 為 segment 邊界」
+  // 自動處理占位符斷裂——占位符在 segment 內部,DELIMITER 不會切到占位符中間。
+  function tryEmitSegments() {
+    if (!callbacks.onSegment) return;
+    const allParts = allText.split(DELIMITER);
+    // allParts 最後一個 element 是「尚未完成的當前段落」(因為它後面沒 DELIMITER 接),先不 emit
+    const numComplete = allParts.length - 1;
+    while (segmentsEmitted < numComplete && segmentsEmitted < texts.length) {
+      const segText = allParts[segmentsEmitted].trim().replace(SEQ_MARKER_RE, '');
+      callbacks.onSegment(segmentsEmitted, segText, false);
+      segmentsEmitted++;
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      if (!firstChunkFired) {
+        firstChunkFired = true;
+        try { callbacks.onFirstChunk?.(); } catch (_) { /* swallow */ }
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE event 用 \r\n\r\n 或 \n\n 分隔
+      while (true) {
+        const m = buffer.match(/\r?\n\r?\n/);
+        if (!m) break;
+        const eventBlock = buffer.slice(0, m.index);
+        buffer = buffer.slice(m.index + m[0].length);
+        if (!eventBlock.startsWith('data: ')) continue;
+        const dataStr = eventBlock.slice(6);
+
+        let json;
+        try {
+          json = JSON.parse(dataStr);
+        } catch (_) {
+          continue;  // SSE chunk 切到 JSON 中間;buffer 下一輪會接上
+        }
+
+        const candidate = json?.candidates?.[0];
+        const partText = candidate?.content?.parts?.[0]?.text || '';
+        const fr = candidate?.finishReason;
+        if (fr) finishReason = fr;
+        if (json?.promptFeedback?.blockReason) blockReason = json.promptFeedback.blockReason;
+
+        if (partText) {
+          allText += partText;
+          tryEmitSegments();
+        }
+
+        // 每個 SSE event 都帶 usageMetadata,取最後一個就是整批最終 usage
+        const meta = json?.usageMetadata;
+        if (meta) {
+          lastUsage = {
+            inputTokens: meta.promptTokenCount || 0,
+            outputTokens: meta.candidatesTokenCount || 0,
+            cachedTokens: meta.cachedContentTokenCount || 0,
+          };
+        }
+      }
+    }
+  } catch (err) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      throw new Error('streaming aborted');
+    }
+    throw err;
+  } finally {
+    try { reader.releaseLock?.(); } catch (_) {}
+  }
+
+  const elapsed = Date.now() - t0;
+
+  // 流結束後 emit 最後一段(allText 最後一個 split element 是 trailing segment)
+  if (callbacks.onSegment) {
+    const allParts = allText.split(DELIMITER);
+    while (segmentsEmitted < allParts.length && segmentsEmitted < texts.length) {
+      const segText = allParts[segmentsEmitted].trim().replace(SEQ_MARKER_RE, '');
+      callbacks.onSegment(segmentsEmitted, segText, false);
+      segmentsEmitted++;
+    }
+  }
+
+  await debugLog('info', 'api', 'gemini stream response', {
+    elapsed, segments: texts.length, segmentsEmitted,
+    inputTokens: lastUsage.inputTokens,
+    outputTokens: lastUsage.outputTokens,
+    cachedTokens: lastUsage.cachedTokens,
+    finishReason,
+    outputPreview: allText.slice(0, 300),
+  });
+
+  if (blockReason) {
+    throw new Error(`Gemini 拒絕處理此請求(promptFeedback.blockReason: ${blockReason})`);
+  }
+
+  if (allText.length === 0) {
+    const reasonMsg = {
+      SAFETY: '內容被 Gemini 安全過濾器擋下',
+      RECITATION: 'Gemini 偵測到輸出與已知作品高度重複(recitation filter)',
+      MAX_TOKENS: '輸出超過 maxOutputTokens 上限',
+      OTHER: 'Gemini 回傳空內容(finishReason: OTHER)',
+    };
+    throw new Error(reasonMsg[finishReason] || `Gemini 回傳空內容(finishReason: ${finishReason})`);
+  }
+
+  // 計算對齊後的譯文 array(跟 non-streaming 一致),hadMismatch 留給呼叫端決定如何處理
+  const translations = allText.split(DELIMITER).map(s => s.trim().replace(SEQ_MARKER_RE, ''));
+  const hadMismatch = translations.length !== texts.length;
+
+  if (hadMismatch) {
+    await debugLog('warn', 'api', 'gemini stream segment mismatch', {
+      expected: texts.length, got: translations.length, elapsed,
+    });
+  }
+
+  return {
+    translations,
+    usage: lastUsage,
+    hadMismatch,
+    finishReason,
+  };
 }

@@ -508,4 +508,72 @@
     return parts.join('\n');
   };
 
+  // ─── v1.7.1+: 翻譯優先級排序(v1.7.2 加入 tier 0 細分) ──────────
+  // 把「使用者最想看的內容」推到 array 前面,讓 batch 0 翻譯完成時視覺上是
+  // 「文章開頭變中文」而不是「導覽列變中文」。本函式只重排 array 順序,
+  // 不過濾任何單元——所有 unit 都還是會翻,只是時序不同。
+  //
+  // tier 0:祖先含 <main>/<article> + readability score >= 5 → 文章核心(高信心)
+  // tier 1:祖先含 <main>/<article> + score < 5 → 工具列 / tab(GitHub UI、Wikipedia
+  //         閱讀工具切換等。框架把 chrome 也塞進語意 main 容器的常見問題)
+  // tier 2:祖先無 main/article + 文字長度 ≥ 80 + 連結密度 < 0.5 → 一般內文段落
+  // tier 3:其他 → 短連結 / nav / 補抓出來的零碎元素
+  //
+  // V8 的 Array.prototype.sort 自 2018 起為 stable sort(Chrome 70+),
+  // 同 tier 內維持原 DOM 順序——TreeWalker 走過的次序保留,只是把高 tier 推前。
+  // 注入用 element reference,不依賴 array index → 排序不影響注入位置。
+  //
+  // readability score 借用 Mozilla Readability 的評分啟發式,只取結構訊號(文字長度、
+  // 逗號數、heading tag、含 P 子孫),刻意不用 class/id 名稱啟發式——避免命中
+  // 「ca-nstab-main」這類含 main 字眼但實際是 chrome 的元素(符合硬規則 §8 結構通則)。
+  function readabilityScore(el) {
+    if (!el) return 0;
+    let score = 0;
+    const text = el.textContent || '';
+    score += text.length / 100;                                    // 文字長度
+    score += (text.match(/[,,]/g) || []).length;                   // 逗號數(內文訊號,nav/tab 通常無逗號)
+    if (/^H[1-3]$/.test(el.tagName)) score += 5;                   // 標題 tag 加分
+    if (el.querySelector && el.querySelector('p')) score += 3;     // 含 <p> 子孫加分
+    return score;
+  }
+
+  SK.prioritizeUnits = function prioritizeUnits(units) {
+    const tierCache = new Map();
+
+    function computeTier(unit) {
+      // fragment 用 unit.el(parent block,符合 extractInlineFragments push 結構);
+      // element 用 unit.el。兩者統一。
+      const el = unit.el;
+      if (!el || !el.parentElement) return 3;
+
+      // 祖先檢查:HTML5 語意 tag 或 ARIA role
+      let cur = el.parentElement;
+      let inMainOrArticle = false;
+      while (cur && cur !== document.body) {
+        const tag = cur.tagName;
+        if (tag === 'MAIN' || tag === 'ARTICLE') { inMainOrArticle = true; break; }
+        const role = cur.getAttribute && cur.getAttribute('role');
+        if (role === 'main' || role === 'article') { inMainOrArticle = true; break; }
+        cur = cur.parentElement;
+      }
+
+      if (inMainOrArticle) {
+        // tier 0/1 細分:用 readability score 切「真內文」vs「main 內的工具列」
+        return readabilityScore(el) >= 5 ? 0 : 1;
+      }
+
+      // 祖先沒 main/article:用文字長度 + 連結密度判斷
+      const text = (el.textContent || '').trim();
+      if (text.length < 80) return 3;
+      let linkChars = 0;
+      const anchors = el.querySelectorAll ? el.querySelectorAll('a') : [];
+      for (const a of anchors) linkChars += (a.textContent || '').length;
+      if (text.length > 0 && linkChars / text.length >= 0.5) return 3;
+      return 2;
+    }
+
+    for (const u of units) tierCache.set(u, computeTier(u));
+    return units.slice().sort((a, b) => tierCache.get(a) - tierCache.get(b));
+  };
+
 })(window.__SK);

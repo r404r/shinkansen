@@ -6,8 +6,11 @@
 // 不能 import 此 module）。
 
 /**
- * 近期重大更新（給使用者看的，要白話簡短，不超過四條）。
+ * 近期重大更新（給使用者看的，要白話簡短）。
  * 順序由近到遠（最新放最前）。
+ *
+ * v1.8.7 起放 6 條（之前是 4 條上限）；popup welcome banner 與 toast welcome callout
+ * 視高度自然撐開，內容多時可捲。
  *
  * 維護規則（release.sh 的 minor/major bump 提醒會提示這條）：
  *   - **有新功能的 minor/major 升級** → 把最舊那條移除、最新的補進第一條
@@ -22,8 +25,10 @@
  * 註：本檔修改後 README.md 與 docs/index.html 的「近期重大更新」段落也要手動同步。
  */
 export const RELEASE_HIGHLIGHTS = [
-  '新增**AI 智慧分句**，YouTube 自動產生字幕經 AI 重新分句，讓中文字幕更自然好讀',
+  '新增**極速秒翻**，按下翻譯 1 秒看到頁面開始變中文（限 Gemini）',
   '新增**雙語對照模式**，原文 + 譯文並列顯示',
+  '新增**自訂 AI 模型**，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等所有模型',
+  '新增**AI 分句**，YouTube 自動產生字幕經 AI 重新分句，中文字幕更自然好讀',
   '新增**中國用語黑名單**，明確要求 LLM 不能用視頻 / 軟件 / 數據等中國用語',
-  '新增**自訂 AI 模型**功能，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等百種模型',
+  '新增**只翻文章開頭**選項，先翻前 N 段預覽，大幅節省 token',
 ];

@@ -46,11 +46,14 @@ globalThis.chrome = {
 
 let nextFetchResponse = null;
 let fetchCalls = [];
-globalThis.fetch = async (url) => {
+// 包成 function 而非 inline,beforeEach 內重新設定 globalThis.fetch,
+// 避免被其他 spec(workers=1 共享 globalThis)污染。
+const fetchMock = async (url) => {
   fetchCalls.push(url);
   if (nextFetchResponse?.error) throw nextFetchResponse.error;
   return nextFetchResponse;
 };
+globalThis.fetch = fetchMock;
 
 const { checkForUpdate, parseVersion, isNewer, isWorthNotifying, markUpdateNoticeShown, shouldShowTodayNotice, localTodayKey } =
   await import('../../shinkansen/lib/update-check.js');
@@ -72,6 +75,9 @@ test.beforeEach(() => {
   fetchCalls = [];
   installType = 'development';
   manifestVersion = '1.6.0';
+  // v1.8.0: 重新綁定 fetch mock,避免被前面的 spec(streaming-batch-incremental.spec.js
+  // 等)留下的 fetch 殘留污染。
+  globalThis.fetch = fetchMock;
 });
 
 test.describe('parseVersion / isNewer', () => {

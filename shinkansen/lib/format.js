@@ -28,3 +28,16 @@ export function formatUSD(n) {
   if (n < 1) return '$' + n.toFixed(3);
   return '$' + n.toFixed(2);
 }
+
+/**
+ * 解析使用者輸入的數字。空字串/非法字元走 default,合法有限數字(含 0、負數)保留。
+ *
+ * 取代 `Number(v) || default`(舊寫法會把 0 當 falsy 改回預設值,造成
+ *「使用者輸入 0 → 設定頁顯示預設值」的 UI 體感 bug)。
+ */
+export function parseUserNum(rawValue, defaultValue) {
+  const v = String(rawValue ?? '').trim();
+  if (v === '') return defaultValue;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : defaultValue;
+}

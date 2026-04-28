@@ -109,6 +109,11 @@
   async function rescanTick() {
     rescanTimer = null;
     if (!STATE.translated) return;
+    // v1.8.5: 「只翻文章開頭」啟用時,延遲 rescan 不掃新段落 — 使用者明確只想要文章開頭。
+    if (STATE.partialModeActive) {
+      SK.sendLog('info', 'translate', 'partialMode: skip rescan');
+      return;
+    }
     const newUnits = SK.collectParagraphs();
     if (newUnits.length > 0) {
       try {
@@ -170,16 +175,22 @@
 
   // ─── Greedy 打包 ─────────────────────────────────────
 
-  function packBatches(texts, units, slotsList, maxUnits, maxChars) {
+  // v1.7.2: 加入 firstMaxUnits / firstMaxChars 讓 batch 0 用較小的 limit。
+  // batch 0 序列等 Gemini,token 少回送快;batch 1+ 並行不吃序列延遲,維持原 limit 衝吞吐。
+  // 兩個新參數預設 null = 走舊行為(全部 batch 用同 limit),向下相容 translateUnitsGoogle / 字幕路徑。
+  function packBatches(texts, units, slotsList, maxUnits, maxChars, firstMaxUnits = null, firstMaxChars = null) {
     const jobs = [];
     let cur = null;
     const flush = () => {
       if (cur && cur.texts.length > 0) jobs.push(cur);
       cur = null;
     };
+    // 「正在切第一批」= jobs 還沒 push 任何 batch + (firstMaxUnits / firstMaxChars 有值)
+    const limU = () => (jobs.length === 0 && firstMaxUnits != null) ? firstMaxUnits : maxUnits;
+    const limC = () => (jobs.length === 0 && firstMaxChars != null) ? firstMaxChars : maxChars;
     for (let i = 0; i < texts.length; i++) {
       const len = (texts[i] || '').length;
-      if (len > maxChars) {
+      if (len > limC()) {
         flush();
         jobs.push({
           start: i,
@@ -191,7 +202,7 @@
         });
         continue;
       }
-      if (cur && (cur.chars + len > maxChars || cur.texts.length >= maxUnits)) {
+      if (cur && (cur.chars + len > limC() || cur.texts.length >= limU())) {
         flush();
       }
       if (!cur) cur = { start: i, texts: [], units: [], slots: [], chars: 0 };
@@ -223,8 +234,9 @@
 
   // ─── translateUnits ──────────────────────────────────
 
-  SK.translateUnits = async function translateUnits(units, { onProgress, glossary, signal, modelOverride, engine } = {}) {
+  SK.translateUnits = async function translateUnits(units, { onProgress, glossary, signal, modelOverride, engine, ignorePartialMode } = {}) {
     const total = units.length;
+    const tu_entry = Date.now();
     const serialized = units.map(unit => {
       if (unit.kind === 'fragment') {
         return SK.serializeFragmentWithPlaceholders(unit);
@@ -240,13 +252,16 @@
     });
     const texts = serialized.map(s => s.text);
     const slotsList = serialized.map(s => s.slots);
+    SK.sendLog('info', 'translate', 'milestone:tu_serialize_done', { t: Date.now() - tu_entry, units: total });
 
     // v1.1.9: 合併讀取設定（減少 browser.storage.sync.get 呼叫次數）
     let maxConcurrent = SK.DEFAULT_MAX_CONCURRENT;
     let maxUnitsPerBatch = SK.DEFAULT_UNITS_PER_BATCH;
     let maxCharsPerBatch = SK.DEFAULT_CHARS_PER_BATCH;
+    // v1.8.3: partialMode(只翻文章開頭,節省費用)
+    let partialMode = { enabled: false, maxUnits: 25 };
     try {
-      const batchCfg = await browser.storage.sync.get(['maxConcurrentBatches', 'maxUnitsPerBatch', 'maxCharsPerBatch']);
+      const batchCfg = await browser.storage.sync.get(['maxConcurrentBatches', 'maxUnitsPerBatch', 'maxCharsPerBatch', 'partialMode']);
       if (Number.isFinite(batchCfg.maxConcurrentBatches) && batchCfg.maxConcurrentBatches > 0) {
         maxConcurrent = batchCfg.maxConcurrentBatches;
       }
@@ -256,7 +271,14 @@
       if (Number.isFinite(batchCfg.maxCharsPerBatch) && batchCfg.maxCharsPerBatch >= 500) {
         maxCharsPerBatch = batchCfg.maxCharsPerBatch;
       }
+      if (batchCfg.partialMode && typeof batchCfg.partialMode === 'object') {
+        if (typeof batchCfg.partialMode.enabled === 'boolean') partialMode.enabled = batchCfg.partialMode.enabled;
+        if (Number.isFinite(batchCfg.partialMode.maxUnits) && batchCfg.partialMode.maxUnits >= 5 && batchCfg.partialMode.maxUnits <= 50) {
+          partialMode.maxUnits = batchCfg.partialMode.maxUnits;
+        }
+      }
     } catch (_) { /* 保持 default */ }
+    SK.sendLog('info', 'translate', 'milestone:tu_storage_loaded', { t: Date.now() - tu_entry, partialMode });
 
     let done = 0;
     const pageUsage = {
@@ -264,7 +286,19 @@
       billedInputTokens: 0, billedCostUSD: 0,
       cacheHits: 0,
     };
-    const jobs = packBatches(texts, units, slotsList, maxUnitsPerBatch, maxCharsPerBatch);
+    // v1.8.3: partialMode 啟用時,第一批 limit 用使用者設定的 maxUnits;chars 仍用 BATCH0_CHARS 內部限制
+    // v1.8.8: ignorePartialMode 路徑(「翻譯剩餘段落」按鈕)走全頁翻譯,batch 0 用標準 BATCH0_UNITS
+    const partialModeActive = partialMode.enabled && !ignorePartialMode;
+    const firstBatchUnits = partialModeActive ? partialMode.maxUnits : SK.BATCH0_UNITS;
+    const jobs = packBatches(texts, units, slotsList, maxUnitsPerBatch, maxCharsPerBatch, firstBatchUnits, SK.BATCH0_CHARS);
+    SK.sendLog('info', 'translate', 'milestone:tu_packed', { t: Date.now() - tu_entry, batches: jobs.length });
+    // v1.8.8 instrumentation: packBatches 詳情(每批 unit 數 / chars)
+    SK.sendLog('info', 'translate', 'packBatches detail', {
+      totalBatches: jobs.length,
+      batchSizes: jobs.map((j, i) => ({ idx: i, units: j.texts.length, chars: j.chars })),
+      partialMode,
+      firstBatchUnits,
+    });
     const failures = [];
     let rpdWarning = false;
     let hadAnyMismatch = false;
@@ -272,7 +306,7 @@
     const t0All = Date.now();
     SK.sendLog('info', 'translate', 'translateUnits start', { batches: jobs.length, total, maxConcurrent });
 
-    await runWithConcurrency(jobs, maxConcurrent, async (job) => {
+    const runBatch = async (job) => {
       if (signal?.aborted) return;
       const batchIdx = jobs.indexOf(job);
       const t0 = Date.now();
@@ -304,7 +338,8 @@
         }
         if (response.rpdExceeded) rpdWarning = true;
         if (response.hadMismatch) hadAnyMismatch = true;
-        translations.forEach((tr, j) => SK.injectTranslation(job.units[j], tr, job.slots[j]));
+        // v1.8.10 A:strip LLM 偷懶殘留的 SEP / «N» 標記
+        translations.forEach((tr, j) => SK.injectTranslation(job.units[j], SK.sanitizeMarkers(tr), job.slots[j]));
         done += job.texts.length;
         if (onProgress) onProgress(done, total, hadAnyMismatch);
       } catch (err) {
@@ -312,7 +347,189 @@
         SK.sendLog('error', 'translate', `batch ${batchIdx + 1}/${jobs.length} FAILED`, { elapsed, start: job.start, error: err.message });
         failures.push({ start: job.start, count: job.texts.length, error: err.message });
       }
-    });
+    };
+
+    // v1.8.0: Streaming 版 batch 0。透過 STREAMING_* onMessage listener 收 SW 推來的
+    // first_chunk / segment / done / error / aborted 訊息。回傳兩個 promise 讓主流程協調:
+    //   firstChunkPromise:第一個 SSE chunk 抵達時 resolve(主流程在此時同步 dispatch batch 1+)
+    //   donePromise:streaming 完整結束(成功/失敗/abort)時 resolve/reject
+    // 1.5 秒沒收到 first_chunk 視為 streaming 失敗,呼叫端 fallback 走 non-streaming runBatch。
+    const FIRST_CHUNK_TIMEOUT_MS = 1500;
+    const runBatch0Streaming = (job) => {
+      const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const t0 = Date.now();
+      SK.sendLog('info', 'translate', `batch 1/${jobs.length} stream start`, { streamId, units: job.texts.length, chars: job.chars });
+
+      let firstChunkResolve, doneResolve, doneReject;
+      const firstChunkPromise = new Promise((r) => { firstChunkResolve = r; });
+      const donePromise = new Promise((res, rej) => { doneResolve = res; doneReject = rej; });
+
+      // v1.8.0 instrumentation:第一個 segment inject 時間(對應使用者首字延遲)
+      let firstSegmentInjectedT = null;
+
+      // v1.8.0: abort 傳播 — 使用者按 Option+S 取消 → 通知 SW 中斷 streaming + 清理 listener
+      const abortHandler = () => {
+        SK.sendLog('info', 'translate', `batch 1/${jobs.length} stream abort triggered`, { streamId });
+        browser.runtime.sendMessage({ type: 'STREAMING_ABORT', payload: { streamId } }).catch(() => {});
+        // 解開 main 流程的 await(SW 端會回傳 STREAMING_ABORTED 但本地 listener 已移除,
+        // 為防卡死直接在這裡 resolve)
+        try { browser.runtime.onMessage.removeListener(onMessage); } catch (_) {}
+        firstChunkResolve(false);
+        doneResolve({ ok: false, aborted: true });
+      };
+      if (signal) {
+        if (signal.aborted) {
+          // 進入 streaming 之前就已 aborted,直接走 abort path
+          abortHandler();
+        } else {
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+      }
+
+      const onMessage = (message) => {
+        if (!message || message.payload?.streamId !== streamId) return;
+        if (message.type === 'STREAMING_FIRST_CHUNK') {
+          firstChunkResolve(true);
+        } else if (message.type === 'STREAMING_SEGMENT') {
+          const idx = message.payload.segmentIdx;
+          // v1.8.10 A:strip LLM 偷懶殘留的 SEP / «N» 標記
+          const tr = SK.sanitizeMarkers(message.payload.translation);
+          if (typeof idx === 'number' && idx >= 0 && idx < job.texts.length && tr) {
+            try {
+              SK.injectTranslation(job.units[idx], tr, job.slots[idx]);
+              done += 1;
+              if (onProgress) onProgress(done, total, hadAnyMismatch);
+              if (firstSegmentInjectedT === null) {
+                firstSegmentInjectedT = Date.now() - t0;
+                SK.sendLog('info', 'translate', `batch 1/${jobs.length} stream first segment injected`, { streamId, idx, t: firstSegmentInjectedT });
+              }
+            } catch (injectErr) {
+              SK.sendLog('warn', 'translate', 'streaming inject failed', { idx, error: injectErr.message });
+            }
+          }
+        } else if (message.type === 'STREAMING_DONE') {
+          const elapsed = Date.now() - t0;
+          const usage = message.payload.usage || {};
+          // v1.8.10 B:hadMismatch=true(LLM 偷懶把 N 段合併成 1 段)時 reject,
+          // 觸發既有 mid-failure catch 重翻 batch 0 走 non-streaming(整批 resolve 後一次 split)。
+          // segment 0 可能已被 streaming 注入合併譯文(A 已 sanitize),retry 會用乾淨版本覆蓋。
+          // v1.8.10 B:hadMismatch=true(LLM 偷懶把 N 段合併成 1 段)時 reject,
+          // 觸發既有 mid-failure catch 重翻 batch 0 走 non-streaming(整批 resolve 後一次 split)。
+          // segment 0 可能已被 streaming 注入合併譯文(A 已 sanitize),retry 會用乾淨版本覆蓋。
+          if (message.payload.hadMismatch) {
+            SK.sendLog('warn', 'translate', `batch 1/${jobs.length} stream DONE with hadMismatch, triggering retry`, { elapsed, totalSegments: message.payload.totalSegments });
+            browser.runtime.onMessage.removeListener(onMessage);
+            firstChunkResolve(true);
+            doneReject(new Error('streaming hadMismatch'));
+            return;
+          }
+          pageUsage.inputTokens += usage.inputTokens || 0;
+          pageUsage.outputTokens += usage.outputTokens || 0;
+          pageUsage.cachedTokens += usage.cachedTokens || 0;
+          pageUsage.billedInputTokens += usage.billedInputTokens || 0;
+          pageUsage.billedCostUSD += usage.billedCostUSD || 0;
+          SK.sendLog('info', 'translate', `batch 1/${jobs.length} stream done`, { elapsed, totalSegments: message.payload.totalSegments, hadMismatch: false });
+          browser.runtime.onMessage.removeListener(onMessage);
+          firstChunkResolve(true);  // 防 first_chunk 漏訊息卡死主流程
+          doneResolve({ ok: true });
+        } else if (message.type === 'STREAMING_ERROR') {
+          const elapsed = Date.now() - t0;
+          SK.sendLog('error', 'translate', `batch 1/${jobs.length} stream FAILED`, { elapsed, error: message.payload.error });
+          browser.runtime.onMessage.removeListener(onMessage);
+          firstChunkResolve(false);
+          doneReject(new Error(message.payload.error || 'streaming failed'));
+        } else if (message.type === 'STREAMING_ABORTED') {
+          SK.sendLog('info', 'translate', `batch 1/${jobs.length} stream aborted`, { streamId });
+          browser.runtime.onMessage.removeListener(onMessage);
+          firstChunkResolve(false);
+          doneResolve({ ok: false, aborted: true });
+        }
+      };
+      browser.runtime.onMessage.addListener(onMessage);
+
+      // 觸發 streaming(SW 內 fire-and-forget,sendMessage 立刻 resolve)
+      browser.runtime.sendMessage({
+        type: 'TRANSLATE_BATCH_STREAM',
+        payload: { texts: job.texts, glossary: glossary || null, modelOverride: modelOverride || null, streamId },
+      }).then((resp) => {
+        if (!resp?.started) {
+          browser.runtime.onMessage.removeListener(onMessage);
+          firstChunkResolve(false);
+          doneReject(new Error(resp?.error || 'streaming failed to start'));
+        }
+      }).catch((err) => {
+        browser.runtime.onMessage.removeListener(onMessage);
+        firstChunkResolve(false);
+        doneReject(err);
+      });
+
+      // first_chunk 1.5 秒 timeout fallback
+      const firstChunkOrTimeout = Promise.race([
+        firstChunkPromise.then((v) => ({ kind: v ? 'first_chunk' : 'failed' })),
+        new Promise((r) => setTimeout(() => r({ kind: 'timeout' }), FIRST_CHUNK_TIMEOUT_MS)),
+      ]);
+
+      return { firstChunkOrTimeout, donePromise, streamId, cleanup: () => { try { browser.runtime.onMessage.removeListener(onMessage); } catch (_) {} } };
+    };
+
+    // v1.8.0: streaming 適用範圍——僅 Gemini 文章翻譯路徑。OpenAI-compat / 其他 engine 仍走 v1.7.x 序列 batch 0 路徑。
+    const useStreaming = engine !== 'openai-compat';
+
+    if (jobs.length > 0) {
+      let batch0NeedsFallback = false;
+      // v1.8.3: partialMode 啟用時,只跑 batch 0,不 dispatch jobs.slice(1)
+      // v1.8.8: ignorePartialMode 路徑(「翻譯剩餘段落」按鈕)要翻完所有 batch
+      const skipBatch1Plus = partialModeActive;
+      SK.sendLog('info', 'translate', 'main flow start', {
+        useStreaming, skipBatch1Plus, jobsCount: jobs.length, t: Date.now() - tu_entry,
+      });
+      if (skipBatch1Plus && jobs.length > 1) {
+        SK.sendLog('info', 'translate', 'partialMode: skip batch 1+', { totalBatches: jobs.length, skipped: jobs.length - 1, batch0Units: jobs[0].texts.length });
+      }
+
+      if (useStreaming) {
+        const stream = runBatch0Streaming(jobs[0]);
+        const r = await stream.firstChunkOrTimeout;
+        SK.sendLog('info', 'translate', 'stream firstChunkOrTimeout result', { kind: r.kind, t: Date.now() - tu_entry });
+        if (r.kind === 'first_chunk') {
+          // streaming 已開始流入 — 同步 dispatch batch 1+ 並行(partialMode 啟用時跳過)
+          const willParallel = jobs.length > 1 && !signal?.aborted && !skipBatch1Plus;
+          SK.sendLog('info', 'translate', 'parallel batches dispatch decision', { willParallel, count: willParallel ? jobs.length - 1 : 0 });
+          const parallelP = willParallel
+            ? runWithConcurrency(jobs.slice(1), maxConcurrent, runBatch)
+            : Promise.resolve();
+          try {
+            await stream.donePromise;
+            SK.sendLog('info', 'translate', 'after await stream.donePromise', { t: Date.now() - tu_entry });
+          } catch (streamErr) {
+            // streaming 中途失敗 — fallback 對 batch 0 重送 non-streaming
+            SK.sendLog('warn', 'translate', 'streaming mid-failure, retrying batch 0 non-streaming', { error: streamErr.message });
+            await runBatch(jobs[0]);
+          }
+          await parallelP;
+          SK.sendLog('info', 'translate', 'after await parallelP', { t: Date.now() - tu_entry, doneSoFar: done });
+        } else {
+          // first_chunk 1.5s 沒到(timeout 或 STREAMING_ERROR 在 first_chunk 前發生)
+          // → 中斷 streaming,fallback 走 v1.7.x 序列 batch 0 + 並行 batch 1+
+          stream.cleanup();
+          if (r.kind === 'timeout') {
+            SK.sendLog('warn', 'translate', 'streaming first_chunk timeout, falling back to non-streaming', { streamId: stream.streamId });
+            browser.runtime.sendMessage({ type: 'STREAMING_ABORT', payload: { streamId: stream.streamId } }).catch(() => {});
+          }
+          batch0NeedsFallback = true;
+        }
+      } else {
+        batch0NeedsFallback = true;
+      }
+
+      if (batch0NeedsFallback) {
+        // v1.7.1 行為:序列跑 batch 0 → 並行 batch 1+(partialMode 啟用時跳過 batch 1+)
+        await runBatch(jobs[0]);
+        if (jobs.length > 1 && !signal?.aborted && !skipBatch1Plus) {
+          await runWithConcurrency(jobs.slice(1), maxConcurrent, runBatch);
+        }
+      }
+    }
 
     SK.sendLog('info', 'translate', 'translateUnits complete', { elapsed: Date.now() - t0All, done, total, failures: failures.length });
 
@@ -347,9 +564,25 @@
     // v1.4.13: options.label 由 preset 傳入，在 loading toast 顯示讓使用者知道目前哪個 preset 在跑。
     let labelPrefix = options.label ? `[${options.label}] ` : '';
 
-    if (STATE.translated) {
+    // v1.8.8 instrumentation: 入口 STATE 狀態
+    SK.sendLog('info', 'translate', 'translatePage entry', {
+      ignorePartialMode: !!options.ignorePartialMode,
+      stateTranslated: STATE.translated,
+      statePartialModeActive: STATE.partialModeActive,
+      alreadyMarkedCount: document.querySelectorAll('[data-shinkansen-translated]').length,
+    });
+    // v1.8.7: options.ignorePartialMode = true 從「翻譯剩餘段落」按鈕觸發,
+    // 不走 restorePage 早退,直接重翻整頁(前面已翻好的段落會從 cache fast path 命中)
+    if (STATE.translated && !options.ignorePartialMode) {
       restorePage();
       return;
+    }
+    // ignorePartialMode 路徑:STATE.translated=true 進來時,先靜默重置 translated state
+    // 讓後續流程能跑完整翻譯(否則 STATE.translated=true 會讓 translateUnits 內 inject 邏輯異常)
+    if (STATE.translated && options.ignorePartialMode) {
+      SK.sendLog('info', 'translate', 'ignorePartialMode: re-translate without restorePage', { previousPartialMode: STATE.partialModeActive });
+      // 不 clear DOM,只重置 translated flag — 已注入的譯文保留,後續 cache fast path 會原樣覆蓋(冪等)
+      STATE.translated = false;
     }
 
     if (isGoogleDocsEditorPage()) {
@@ -377,11 +610,15 @@
       return;
     }
 
+    // v1.7.x instrumentation: 用 entryTime 量化 translatePage 各階段相對時間
+    const entryTime = Date.now();
+
     // v1.1.9: 合併所有設定讀取為單一 browser.storage.sync.get(null)
     let settings = {};
     try {
       settings = await browser.storage.sync.get(null);
     } catch (_) { /* 讀取失敗用 default */ }
+    SK.sendLog('info', 'translate', 'milestone:storage_loaded', { t: Date.now() - entryTime });
 
     // 頁面層級繁中偵測
     {
@@ -399,6 +636,7 @@
         }
       }
     }
+    SK.sendLog('info', 'translate', 'milestone:zh_check_done', { t: Date.now() - entryTime });
 
     // v1.5.0: 讀顯示模式設定，寫進 STATE.translatedMode 鎖定本次翻譯用的模式。
     // 同一頁中途切模式不會即時生效（避免半翻半改），需重新觸發翻譯。
@@ -418,6 +656,7 @@
     const translateStartTime = Date.now();
     const abortSignal = STATE.abortController.signal;
 
+    const t_collect_start = Date.now();
     let units = SK.collectParagraphs();
 
     // v1.6: 選區翻譯——若有選取文字，只翻譯選區內的段落
@@ -435,6 +674,35 @@
       STATE.abortController = null;
       return;
     }
+    SK.sendLog('info', 'translate', 'milestone:collect_done', { t: Date.now() - entryTime, dt: Date.now() - t_collect_start, segments: units.length });
+
+    // v1.8.6: partialMode 啟用時跳過 prioritizeUnits,走純 DOM 順序。
+    // 為什麼:partialMode 對使用者語意是「翻頁面 DOM 前 N 段」(視覺上連續中文,
+    // 不夾雜),不是「prioritize 認為最重要的 N 段散落各處」。在 Ghost / Substack
+    // 等部落格,prioritizeUnits 會把短內文段(score < 5,例如「I feel nothing
+    // when I see an LLM's output」這種 ~150 字 + 1 個逗號)排到 tier 1 後面,
+    // partialMode truncate 25 段全給 tier 0 → 中間夾雜未翻段落。
+    // Trade-off: Wikipedia / GitHub 等「DOM 前段是 nav / chrome」的網站開
+    // partialMode 會翻到導覽列(回到 v1.7.0 之前行為),但這類網站非 partialMode
+    // 主要使用情境(使用者比較會在文章型部落格 / 新聞站開節省模式)。
+    const pm = settings.partialMode;
+    // v1.8.7: options.ignorePartialMode = true(從「翻譯剩餘段落」按鈕觸發)時忽略 toggle,
+    // 即使使用者 toggle 仍開啟也走完整翻譯。toggle 本身不被改寫,下次翻新頁面仍走節省模式。
+    const pmActive = !options.ignorePartialMode
+      && !!(pm && pm.enabled === true && Number.isFinite(pm.maxUnits) && pm.maxUnits >= 1);
+    STATE.partialModeActive = pmActive;
+
+    if (!pmActive) {
+      // v1.7.1: 把內文核心(main/article 後代、長段落)推到 array 前面,
+      // 配合下方 translateUnits 的「序列 batch 0 + 並行 rest」,
+      // 讓使用者最快看到的譯文是文章開頭而不是 nav / 短連結。
+      // 排序在 truncate 之前,使用者超量時優先丟棄低優先級段落(寧丟 nav 不丟內文)。
+      const t_priority_start = Date.now();
+      units = SK.prioritizeUnits(units);
+      SK.sendLog('info', 'translate', 'milestone:prioritize_done', { t: Date.now() - entryTime, dt: Date.now() - t_priority_start });
+    } else {
+      SK.sendLog('info', 'translate', 'partialMode: skip prioritizeUnits, use DOM order', { totalUnits: units.length });
+    }
 
     // 超大頁面防護
     let maxTotalUnits = SK.DEFAULT_MAX_TOTAL_UNITS;
@@ -449,6 +717,16 @@
       SK.sendLog('warn', 'translate', 'page truncated', { total: units.length, limit: maxTotalUnits, skipped: truncatedCount });
       units = units.slice(0, maxTotalUnits);
     }
+
+    // v1.8.5: partialMode 啟用時 truncate units 到 maxUnits,讓 toast 顯示實際翻譯段數
+    // (25 / 25 而非 25 / 227),且 packBatches 自然只切 1 批。
+    let pmSkippedCount = 0;  // v1.8.7: 用於 success toast「翻譯剩餘段落」按鈕判斷
+    if (pmActive && units.length > pm.maxUnits) {
+      pmSkippedCount = units.length - pm.maxUnits;
+      SK.sendLog('info', 'translate', 'partialMode: truncate units', { total: units.length, kept: pm.maxUnits, skipped: pmSkippedCount });
+      units = units.slice(0, pm.maxUnits);
+    }
+
     const total = units.length;
 
     // ─── 術語表前置流程 ────────────────────────────
@@ -466,11 +744,13 @@
       }
     }
 
+    const t_preser_start = Date.now();
     const preSerialized = units.map(unit => {
       if (unit.kind === 'fragment') return { text: (unit.parent?.innerText || '').trim() };
       return { text: (unit.el?.innerText || '').trim() };
     });
     const preTexts = preSerialized.map(s => s.text);
+    SK.sendLog('info', 'translate', 'milestone:preserialize_done', { t: Date.now() - entryTime, dt: Date.now() - t_preser_start });
 
     // 估算批次數
     let estUnitsPerBatch = SK.DEFAULT_UNITS_PER_BATCH;
@@ -497,6 +777,7 @@
     }
 
     let glossary = null;
+    SK.sendLog('info', 'translate', 'milestone:glossary_decision', { t: Date.now() - entryTime, glossaryEnabled, skip: !glossaryEnabled || batchCount <= skipThreshold, batchCount, skipThreshold, blockingThreshold });
 
     if (glossaryEnabled && batchCount > skipThreshold) {
       const compressedText = SK.extractGlossaryInput(units);
@@ -560,12 +841,15 @@
         STATE._glossaryPromise = null;
       }
 
+      SK.sendLog('info', 'translate', 'milestone:before_translate_units', { t: Date.now() - entryTime });
       const { done, failures, pageUsage, rpdWarning } = await SK.translateUnits(units, {
         glossary,
         signal: abortSignal,
         modelOverride: options.modelOverride || null,
         // v1.5.7: engine='openai-compat' 走自訂 Provider 的 chat.completions endpoint
         engine: options.engine || 'gemini',
+        // v1.8.8: 「翻譯剩餘段落」路徑要繞過 partialMode 的 skip batch 1+ 邏輯
+        ignorePartialMode: !!options.ignorePartialMode,
         onProgress: (d, t, mismatch) => SK.showToast('loading', SK.t('cs_progress', labelPrefix, d, t), {
           progress: d / t,
           mismatch: !!mismatch,
@@ -610,9 +894,15 @@
 
       if (!failures.length) {
         const totalTokens = pageUsage.inputTokens + pageUsage.outputTokens;
-        const successMsg = truncatedCount > 0
-          ? SK.t('cs_complete_truncated', total, truncatedCount)
-          : SK.t('cs_complete', total);
+        // v1.8.7: partialMode + 有剩餘未翻段落 → 訊息對齊「節省模式」語意
+        let successMsg;
+        if (pmActive && pmSkippedCount > 0) {
+          successMsg = SK.t('cs_complete_partial', total, total + pmSkippedCount);
+        } else if (truncatedCount > 0) {
+          successMsg = SK.t('cs_complete_truncated', total, truncatedCount);
+        } else {
+          successMsg = SK.t('cs_complete', total);
+        }
         let detail;
         if (totalTokens > 0) {
           const billedTotalTokens = pageUsage.billedInputTokens + pageUsage.outputTokens;
@@ -644,10 +934,35 @@
           localCacheHitSegments: pageUsage.cacheHits,
           url: location.href,
         });
+        // v1.6.1: 翻譯成功 toast 順帶顯示「有新版可下載」（每日節流）。
+        // v1.6.5: 同時也帶 welcome notice（CWS 剛升級提示，每日節流）。
+        const updateNotice = await SK.maybeBuildUpdateNotice();
+        const welcomeNotice = await SK.maybeBuildWelcomeNotice();
+        // v1.8.7: partialMode 翻完後若有剩餘段落,toast 顯示「翻譯剩餘段落」按鈕。
+        // 點按 → 觸發 ignorePartialMode 路徑(忽略 toggle 一次,但不改 toggle 設定),
+        // 前面已翻好的 N 段從 cache fast path 命中,只後段打 API。toast 常駐直到使用者點按或關閉。
+        const action = (pmActive && pmSkippedCount > 0) ? {
+          label: SK.t('cs_translate_remaining'),
+          onClick: () => {
+            SK.translatePage({
+              ...options,
+              ignorePartialMode: true,
+            });
+          },
+        } : null;
+        // v1.8.8 instrumentation: success toast fire 前的 state
+        SK.sendLog('info', 'translate', 'about to fire success toast', {
+          successMsg, total, pmActive, pmSkippedCount, hasAction: !!action,
+          ignorePartialMode: !!options.ignorePartialMode,
+          done, failures: failures.length,
+        });
         SK.showToast('success', successMsg, {
           progress: 1,
           stopTimer: true,
           detail,
+          updateNotice,
+          welcomeNotice,
+          action,
         });
       }
 
@@ -740,6 +1055,7 @@
     STATE.translatedMode = null;  // v1.5.0
     STATE.stickyTranslate = false;
     STATE.stickySlot = null;    // v1.4.12
+    STATE.partialModeActive = false;  // v1.8.5
     browser.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(() => {});
     // v1.4.11: 清除跨 tab sticky（只影響當前 tab，不影響樹中其他 tab）
     browser.runtime.sendMessage({ type: 'STICKY_CLEAR' }).catch(() => {});
@@ -776,11 +1092,11 @@
     let totalChars = 0;
     const failures = [];
 
-    const jobs = packBatches(texts, units, slotsList, 20, 4000);
+    const jobs = packBatches(texts, units, slotsList, 20, 4000, SK.BATCH0_UNITS, SK.BATCH0_CHARS);
     const t0All = Date.now();
     SK.sendLog('info', 'translate', 'translateUnitsGoogle start', { batches: jobs.length, total });
 
-    await runWithConcurrency(jobs, 5, async (job) => {
+    const runBatch = async (job) => {
       if (signal?.aborted) return;
       const batchIdx = jobs.indexOf(job);
       try {
@@ -807,7 +1123,15 @@
         SK.sendLog('error', 'translate', `google batch ${batchIdx + 1} FAILED`, { error: err.message });
         failures.push({ start: job.start, count: job.texts.length, error: err.message });
       }
-    });
+    };
+
+    // v1.7.1: 與 translateUnits 同樣的「序列 batch 0 + 並行 rest」策略
+    if (jobs.length > 0) {
+      await runBatch(jobs[0]);
+      if (jobs.length > 1 && !signal?.aborted) {
+        await runWithConcurrency(jobs.slice(1), 5, runBatch);
+      }
+    }
 
     SK.sendLog('info', 'translate', `translateUnits${_msgType === 'TRANSLATE_BATCH_BING' ? 'Bing' : 'Google'} complete`, {
       elapsed: Date.now() - t0All, done, total, failures: failures.length, chars: totalChars,
@@ -825,9 +1149,13 @@
     const _msgType = _isBing ? 'TRANSLATE_BATCH_BING' : 'TRANSLATE_BATCH_GOOGLE';
     let labelPrefix = gtOptions.label ? `[${gtOptions.label}] ` : '';
     // 若同一引擎已翻譯 → 還原（toggle）
-    if (STATE.translated && (STATE.translatedBy === 'google' || STATE.translatedBy === 'bing')) {
+    // v1.8.7: ignorePartialMode 豁免,讓「翻譯剩餘段落」按鈕能在已翻譯狀態重觸發
+    if (STATE.translated && (STATE.translatedBy === 'google' || STATE.translatedBy === 'bing') && !gtOptions.ignorePartialMode) {
       restorePage();
       return;
+    }
+    if (STATE.translated && gtOptions.ignorePartialMode) {
+      STATE.translated = false;
     }
 
     // 若正在翻譯中（任何引擎）→ 中止
@@ -898,6 +1226,17 @@
       return;
     }
 
+    // v1.8.6: partialMode 啟用時跳過 prioritizeUnits 走 DOM 順序(同 translatePage Gemini 路徑)
+    // v1.8.7: ignorePartialMode 豁免
+    const pm = settings.partialMode;
+    const pmActive = !gtOptions.ignorePartialMode
+      && !!(pm && pm.enabled === true && Number.isFinite(pm.maxUnits) && pm.maxUnits >= 1);
+    STATE.partialModeActive = pmActive;
+    if (!pmActive) {
+      // v1.7.1: 與 translatePage 同樣的優先級排序(內文核心優先)
+      units = SK.prioritizeUnits(units);
+    }
+
     // 超大頁面防護（沿用相同上限設定）
     let maxTotalUnits = SK.DEFAULT_MAX_TOTAL_UNITS;
     const v = settings.maxTranslateUnits;
@@ -906,6 +1245,10 @@
     if (maxTotalUnits > 0 && units.length > maxTotalUnits) {
       truncatedCount = units.length - maxTotalUnits;
       units = units.slice(0, maxTotalUnits);
+    }
+    // v1.8.5/8.6: partialMode 啟用時 truncate(同 Gemini 路徑)
+    if (pmActive && units.length > pm.maxUnits) {
+      units = units.slice(0, pm.maxUnits);
     }
     const total = units.length;
     if (selectionMode) labelPrefix = `[${SK.t('cs_selection')}] ${labelPrefix}`;

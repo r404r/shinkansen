@@ -305,7 +305,7 @@
       <p class="tagline">你的瀏覽內容不該經過別人的伺服器<br>Shinkansen 由你的電腦直接呼叫 Google Gemini 翻譯，不經過任何第三方</p>
       <div class="btn-row">
         <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝<span class="btn-version">v<!-- cws-version-start -->1.4.22<!-- cws-version-end --> · 已上架</span></a>
-        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下載最新版<span class="btn-version">v1.8.0</span></a>
+        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下載最新版<span class="btn-version">v1.9.0</span></a>
       </div>
       <p class="hero-sub">開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
     </div>
@@ -316,10 +316,12 @@
     <div class="container">
       <h2>近期重大更新</h2>
       <ul class="recent-updates">
-        <li>新增<strong>AI 智慧分句</strong>，YouTube 自動產生字幕經 AI 重新分句，讓中文字幕更自然好讀</li>
+        <li>新增<strong>極速秒翻</strong>，按下翻譯 1 秒看到頁面開始變中文（限 Gemini）</li>
         <li>新增<strong>雙語對照模式</strong>，原文 + 譯文並列顯示</li>
+        <li>新增<strong>自訂 AI 模型</strong>，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等所有模型</li>
+        <li>新增<strong>AI 分句</strong>，YouTube 自動產生字幕經 AI 重新分句，中文字幕更自然好讀</li>
         <li>新增<strong>中國用語黑名單</strong>，明確要求 LLM 不能用視頻 / 軟件 / 數據等中國用語</li>
-        <li>新增<strong>自訂 AI 模型</strong>功能，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等百種模型</li>
+        <li>新增<strong>只翻文章開頭</strong>選項，先翻前 N 段預覽，大幅節省 token</li>
       </ul>
     </div>
   </section>
@@ -367,6 +369,10 @@
       <h2>功能特色</h2>
       <div class="features">
         <div class="feature">
+          <h3>極速秒翻</h3>
+          <p>按下翻譯 1 秒看到頁面開始變中文，不用等整批 API 回完再一次塞回頁面（限 Gemini）</p>
+        </div>
+        <div class="feature">
           <h3>保留網頁排版</h3>
           <p>原地替換文字，字型、字級、顏色、連結全部保留，看起來就像原生中文頁面</p>
         </div>
@@ -383,12 +389,16 @@
           <p>翻譯過的頁面點連結開新分頁、按返回鍵回上一頁都自動翻譯，不用每頁再按一次</p>
         </div>
         <div class="feature">
-          <h3>三翻譯引擎</h3>
-          <p>Gemini + Google Translate + <strong>自訂模型</strong>（OpenAI 相容端點，可接 OpenRouter / Together / DeepSeek / Ollama 本機等百種模型）並存，依場景自由切換<br>三組可自訂快速鍵（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一鍵切換翻譯引擎與模型</p>
-        </div>
-        <div class="feature">
           <h3>固定術語表</h3>
           <p>自訂翻譯對照表，確保專有名詞一律使用你指定的譯名</p>
+        </div>
+        <div class="feature">
+          <h3>中國用語黑名單</h3>
+          <p>可編輯的禁用詞清單（預設 25 條，涵蓋視頻 / 軟件 / 數據 / 網絡 / 質量 / 用戶等常踩雷詞），明確要求 LLM 不可使用</p>
+        </div>
+        <div class="feature">
+          <h3>只翻文章開頭</h3>
+          <p>先翻前幾段預覽再決定是否讀完整篇，大幅節省 token</p>
         </div>
         <div class="feature">
           <h3>翻譯快取</h3>
@@ -397,6 +407,14 @@
         <div class="feature">
           <h3>費用透明</h3>
           <p>每次翻譯即時顯示花費多少錢，設定頁可回查過去每一筆翻譯紀錄的 token 用量與費用，支援圖表與 CSV 匯出</p>
+        </div>
+        <div class="feature">
+          <h3>三翻譯引擎</h3>
+          <p>Gemini + Google Translate + <strong>自訂模型</strong>（OpenAI 相容端點，可接 OpenRouter / Together / DeepSeek / Ollama 本機等百種模型）並存，依場景自由切換</p>
+        </div>
+        <div class="feature">
+          <h3>自訂快速鍵</h3>
+          <p>三組可自訂快速鍵（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一鍵切換翻譯引擎與模型</p>
         </div>
       </div>
     </div>

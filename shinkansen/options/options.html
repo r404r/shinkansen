@@ -319,6 +319,19 @@
     </section>
 
     <section>
+      <h2>節省模式</h2>
+      <label class="switch">
+        <input type="checkbox" id="partialModeEnabled">
+        <span>只翻文章開頭</span>
+      </label>
+      <label>
+        翻譯段落數上限
+        <input type="number" id="partialModeMaxUnits" step="1" min="5" max="50">
+        <small class="muted">啟用後只翻譯頁面前 N 段（按 DOM 順序，不排序）。適合先快速預覽再決定是否繼續讀完整文章，可大幅減少 token 用量。翻譯完成後右下角提示會出現「翻譯剩餘段落」按鈕，點按即可繼續翻完整篇——前面已翻好的段落會從本地快取載入，不重複收費。預設 25 段，範圍 5-50</small>
+      </label>
+    </section>
+
+    <section>
       <h2 data-i18n="opt_section_quota">配額（API 用量限制）</h2>
       <p class="muted">根據你的 Gemini API 付費層級，自動控制請求頻率，避免超出 Google 的使用量限制。你的目前層級與配額可至 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">Gemini API Rate Limit</a> 查詢</p>
       <label>
@@ -487,6 +500,21 @@
       <label class="switch">
         <input type="checkbox" id="glossaryEnabled">
         <span data-i18n="opt_glossary_auto_enable">啟用自動術語擷取</span>
+      </label>
+      <label>
+        術語擷取模型
+        <select id="glossaryModel">
+          <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite（預設，快又便宜）</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash（較慢但語意理解較強）</option>
+          <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro（最強，較貴）</option>
+          <option value="">與主翻譯模型相同</option>
+        </select>
+        <small class="muted">術語擷取是任務簡單的單次請求，Flash Lite 通常已夠用，且比 Flash 快 1.5-3 倍、便宜 5 倍</small>
+      </label>
+      <label>
+        阻塞門檻（批次數）
+        <input type="number" id="glossaryBlockingThreshold" step="1" min="0" max="50">
+        <small class="muted">頁面切批 > 此值才「先等術語表再翻譯」（blocking），≤ 此值則術語表跟翻譯並行（fire-and-forget，不阻塞首字）。預設 10——中等長度頁面省 1.5-7 秒首字延遲，但 batch 0 翻的部分可能跟後段術語不一致。設 0 = 全部走 fire-and-forget（永不阻塞）；設極大值（如 50）= 幾乎都阻塞（舊行為）</small>
       </label>
       <label>
         <span data-i18n="opt_label_glossary_temperature">術語表 Temperature</span>

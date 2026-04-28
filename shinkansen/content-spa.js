@@ -336,6 +336,11 @@
     if (!STATE.translated) return;
     // v1.6: 選區翻譯模式下不 rescan 新內容（避免擴展為全頁翻譯）
     if (STATE.translationScope === 'selection') return;
+    // v1.8.5: 「只翻文章開頭」啟用時,SPA observer 偵測到新內容也不翻 — 使用者明確只想要文章開頭。
+    if (STATE.partialModeActive) {
+      SK.sendLog('info', 'spa', 'partialMode: skip SPA observer rescan');
+      return;
+    }
     if (spaObserverRescanCount >= SK.SPA_OBSERVER_MAX_RESCANS) {
       SK.sendLog('info', 'spa', 'SPA observer: reached max rescans, stopping NEW translations only', { maxRescans: SK.SPA_OBSERVER_MAX_RESCANS });
       return;

@@ -48,6 +48,61 @@
       line-height: 1.4;
     }
     .detail[hidden] { display: none; }
+    /* v1.6.1: 更新提示區塊（成功 toast 偶爾顯示一次，每日節流） */
+    .update-notice {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: #fff8e1;
+      border: 1px solid #f5b800;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #2c2a1f;
+    }
+    .update-notice[hidden] { display: none; }
+    /* v1.6.5: welcome notice — CWS 自動更新後翻譯成功 toast 順帶提示一次 */
+    .welcome-notice {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: #ecfdf3;
+      border: 1px solid #b6efc9;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1d3a26;
+    }
+    .welcome-notice[hidden] { display: none; }
+    .welcome-notice strong { color: #117a3e; }
+    .welcome-notice .wn-msg { flex: 1; }
+    .welcome-notice .wn-dismiss {
+      background: none;
+      border: 0;
+      color: #6e6e73;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .welcome-notice .wn-dismiss:hover { color: #1d1d1f; }
+    .update-notice .un-link {
+      color: #0071e3;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .update-notice .un-link:hover { text-decoration: underline; }
+    .update-notice .un-dismiss {
+      margin-left: auto;
+      background: none;
+      border: 0;
+      color: #6e6e73;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .update-notice .un-dismiss:hover { color: #1d1d1f; }
     .timer {
       font-variant-numeric: tabular-nums;
       color: #86868b;
@@ -95,6 +150,25 @@
       0%, 100% { opacity: 1; }
       50%      { opacity: .4; }
     }
+    /* v1.8.7 / v1.8.8: action button(節省模式翻完後「翻譯剩餘段落」按鈕用)
+       配色對齊 toast 白底深字風格 + 既有進度條品牌藍 #0071e3 */
+    .toast-action {
+      display: inline-block;
+      margin-top: 8px;
+      background: #0071e3;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s ease;
+    }
+    .toast-action:hover { background: #0058b8; }
+    .toast-action:active { background: #004a99; }
+    .toast-action[hidden] { display: none; }
   `;
   const toast = document.createElement('div');
   toast.className = 'toast';
@@ -122,9 +196,52 @@
   const fill = document.createElement('div');
   fill.className = 'bar-fill';
   fill.id = 'fill';
+  // v1.6.1: update notice
+  const updateNotice = document.createElement('div');
+  updateNotice.className = 'update-notice';
+  updateNotice.id = 'update-notice';
+  updateNotice.hidden = true;
+  const updateNoticeIcon = document.createElement('span');
+  updateNoticeIcon.textContent = '\uD83D\uDCE6';
+  const updateNoticeLink = document.createElement('a');
+  updateNoticeLink.className = 'un-link';
+  updateNoticeLink.id = 'un-link';
+  updateNoticeLink.href = '#';
+  updateNoticeLink.target = '_blank';
+  updateNoticeLink.rel = 'noopener';
+  const updateNoticeDismissBtn = document.createElement('button');
+  updateNoticeDismissBtn.className = 'un-dismiss';
+  updateNoticeDismissBtn.id = 'un-dismiss';
+  updateNoticeDismissBtn.type = 'button';
+  updateNoticeDismissBtn.title = SK.t('cs_close');
+  updateNoticeDismissBtn.textContent = '\u00d7';
+  updateNotice.append(updateNoticeIcon, updateNoticeLink, updateNoticeDismissBtn);
+  // v1.6.5: welcome notice
+  const welcomeNotice = document.createElement('div');
+  welcomeNotice.className = 'welcome-notice';
+  welcomeNotice.id = 'welcome-notice';
+  welcomeNotice.hidden = true;
+  const welcomeNoticeIcon = document.createElement('span');
+  welcomeNoticeIcon.textContent = '\uD83C\uDF89';
+  const welcomeNoticeMsg = document.createElement('span');
+  welcomeNoticeMsg.className = 'wn-msg';
+  welcomeNoticeMsg.id = 'wn-msg';
+  const welcomeNoticeDismissBtn = document.createElement('button');
+  welcomeNoticeDismissBtn.className = 'wn-dismiss';
+  welcomeNoticeDismissBtn.id = 'wn-dismiss';
+  welcomeNoticeDismissBtn.type = 'button';
+  welcomeNoticeDismissBtn.title = SK.t('cs_close');
+  welcomeNoticeDismissBtn.textContent = '\u00d7';
+  welcomeNotice.append(welcomeNoticeIcon, welcomeNoticeMsg, welcomeNoticeDismissBtn);
+  // v1.8.7: action button
+  const toastAction = document.createElement('button');
+  toastAction.className = 'toast-action';
+  toastAction.id = 'toast-action';
+  toastAction.type = 'button';
+  toastAction.hidden = true;
   row.append(msg, timer, close);
   bar.appendChild(fill);
-  toast.append(row, detail, bar);
+  toast.append(row, detail, updateNotice, welcomeNotice, toastAction, bar);
   shadow.append(style, toast);
   document.documentElement.appendChild(toastHost);
 
@@ -175,7 +292,38 @@
   const toastEl = shadow.getElementById('toast');
   const toastMsgEl = shadow.getElementById('msg');
   const toastDetailEl = shadow.getElementById('detail');
-  // v1.6.1/v1.6.5: update/welcome notice rendering removed (user doesn't want update notification)
+  // v1.8.7: action button(opts.action = { label, onClick })
+  const toastActionEl = shadow.getElementById('toast-action');
+  let toastActionHandler = null;
+  toastActionEl.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (typeof toastActionHandler === 'function') {
+      try { toastActionHandler(); } catch (err) { /* swallow */ }
+    }
+  });
+  // v1.6.1: 更新提示元素 — showToast 用 opts.updateNotice 觸發；點擊「下載」連結
+  // 與「×」都會送 UPDATE_NOTICE_DISMISSED 訊息標記今天已顯示，達成每日節流。
+  const updateNoticeEl = shadow.getElementById('update-notice');
+  const updateNoticeLinkEl = shadow.getElementById('un-link');
+  const updateNoticeDismiss = shadow.getElementById('un-dismiss');
+  function dismissUpdateNotice() {
+    updateNoticeEl.hidden = true;
+    try { browser.runtime.sendMessage({ type: 'UPDATE_NOTICE_DISMISSED' }).catch(() => {}); }
+    catch { /* runtime context invalidated when extension reload */ }
+  }
+  updateNoticeLinkEl.addEventListener('click', dismissUpdateNotice);
+  updateNoticeDismiss.addEventListener('click', (e) => { e.preventDefault(); dismissUpdateNotice(); });
+
+  // v1.6.5: welcome notice element + 「×」標記今日已顯示（每日節流）
+  const welcomeNoticeEl = shadow.getElementById('welcome-notice');
+  const welcomeNoticeMsgEl = shadow.getElementById('wn-msg');
+  const welcomeNoticeDismiss = shadow.getElementById('wn-dismiss');
+  function dismissWelcomeNotice() {
+    welcomeNoticeEl.hidden = true;
+    try { browser.runtime.sendMessage({ type: 'WELCOME_NOTICE_TOAST_SHOWN' }).catch(() => {}); }
+    catch { /* runtime context invalidated when extension reload */ }
+  }
+  welcomeNoticeDismiss.addEventListener('click', (e) => { e.preventDefault(); dismissWelcomeNotice(); });
   const toastTimerEl = shadow.getElementById('timer');
   const toastFillEl = shadow.getElementById('fill');
   shadow.getElementById('close').addEventListener('click', () => SK.hideToast());
@@ -242,7 +390,37 @@
       toastDetailEl.hidden = true;
     }
 
-    // v1.6.1/v1.6.5: update/welcome notice rendering removed (user doesn't want update notification)
+    // v1.8.7: action button — opts.action = { label, onClick }
+    if (opts.action && opts.action.label) {
+      toastActionEl.textContent = opts.action.label;
+      toastActionEl.hidden = false;
+      toastActionHandler = opts.action.onClick;
+    } else {
+      toastActionEl.hidden = true;
+      toastActionEl.textContent = '';
+      toastActionHandler = null;
+    }
+
+    // v1.6.1: 更新提示——僅在 success toast 且呼叫端有判斷今日尚未顯示時傳入
+    if (opts.updateNotice && opts.updateNotice.version && opts.updateNotice.releaseUrl) {
+      updateNoticeLinkEl.textContent = `v${opts.updateNotice.version} 可下載 — 點此前往`;
+      updateNoticeLinkEl.href = opts.updateNotice.releaseUrl;
+      updateNoticeEl.hidden = false;
+    } else {
+      updateNoticeEl.hidden = true;
+    }
+
+    // v1.6.5: welcome notice（CWS 剛升級提示，每日節流由呼叫端判斷）
+    // DOM API: no innerHTML — use createElement + textContent
+    if (opts.welcomeNotice && opts.welcomeNotice.version) {
+      welcomeNoticeMsgEl.textContent = '';
+      const strong = document.createElement('strong');
+      strong.textContent = `已升級至 v${opts.welcomeNotice.version}`;
+      welcomeNoticeMsgEl.append(strong, ' — 點工具列圖示看新功能');
+      welcomeNoticeEl.hidden = false;
+    } else {
+      welcomeNoticeEl.hidden = true;
+    }
 
     if (opts.progress != null) {
       toastFillEl.style.width = Math.round(opts.progress * 100) + '%';
@@ -275,7 +453,8 @@
       }, opts.autoHideMs);
     }
 
-    if (kind === 'success' && !opts.autoHideMs) {
+    // v1.8.7: 有 action button 時不 auto-hide,讓使用者有時間決定點按或關閉
+    if (kind === 'success' && !opts.autoHideMs && !opts.action) {
       if (toastAutoHide) {
         toastHideHandle = setTimeout(() => {
           toastHideHandle = null;
@@ -297,6 +476,10 @@
   SK.hideToast = function hideToast() {
     toastEl.className = 'toast pos-' + currentToastPosition;
     toastDetailEl.hidden = true;
+    // v1.8.7: 清 action button
+    toastActionEl.hidden = true;
+    toastActionEl.textContent = '';
+    toastActionHandler = null;
     clearInterval(toastTickHandle);
     toastTickHandle = null;
     if (toastHideHandle) {

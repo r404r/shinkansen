@@ -325,6 +325,22 @@ if (window.__shinkansen_loaded) {
   SK.BRACKET_ALIASES_OPEN = ['\u2770'];  // ❰
   SK.BRACKET_ALIASES_CLOSE = ['\u2771']; // ❱
 
+  // v1.8.10: 防禦式清理 LLM 沒照規則回時殘留的多段協定標記。
+  // 規格參見 lib/system-instruction.js DELIMITER 與 «N» 序號 prefix:
+  //   - <<<SHINKANSEN_SEP>>>:多段譯文之間的分隔符
+  //   - «N»(N 為數字):每段譯文開頭的序號標記
+  // 正常情況下 lib/gemini.js parser 已 split + 移除標記;但 LLM 偷懶把 N 段合併
+  // 成 1 段回傳時(hadMismatch=true 路徑),分隔符與內段序號會殘留進譯文 string。
+  // 寫入 captionMap / DOM 之前先清理,避免使用者看到刺眼的英文標記。
+  // 跟 hadMismatch retry(B 路徑)是分層防禦——這條當最後一道防線。
+  SK.sanitizeMarkers = function sanitizeMarkers(text) {
+    if (text == null) return text;
+    return String(text)
+      .replace(/\s*<<<SHINKANSEN_SEP>>>\s*/g, ' ')
+      .replace(/«\d+»\s*/g, '')
+      .trim();
+  };
+
   // ─── 翻譯流程常數 ─────────────────────────────────────
   // 注意：content script 無法 import ES module，以下兩個值鏡像 lib/constants.js，
   // 修改時必須同步更新 lib/constants.js（lib/gemini.js 與 lib/storage.js 的單一來源）。
@@ -332,6 +348,13 @@ if (window.__shinkansen_loaded) {
   SK.DEFAULT_CHARS_PER_BATCH = 3500;
   SK.DEFAULT_MAX_CONCURRENT = 10;
   SK.DEFAULT_MAX_TOTAL_UNITS = 1000;
+  // v1.7.2: batch 0 專用較小 limit;batch 1+ 仍用 DEFAULT_*_PER_BATCH 維持並行吞吐。
+  // v1.8.0: streaming 路徑下 batch 0 size 不影響首字延遲(實測 10/20/30u 的 first_slot_close
+  // 都在 1.0-1.2 秒,差距 < 100ms)。擴大到 25 unit / 3700 chars 涵蓋更多文章開頭——
+  // 使用者首字看到的譯文範圍從「H1 + 副標 + 開頭幾段」變成「H1 + 副標 + 整段內文前 25 段」。
+  // 完整實測見 reports/streaming-probe-2026-04-28.md §2-§5。
+  SK.BATCH0_UNITS = 25;
+  SK.BATCH0_CHARS = 3700;
 
   // SPA 動態載入常數
   SK.SPA_OBSERVER_DEBOUNCE_MS = 1000;
@@ -340,8 +363,11 @@ if (window.__shinkansen_loaded) {
   SK.SPA_NAV_SETTLE_MS = 800;
 
   // 術語表常數
+  // v1.7.3: blockingThreshold 從 5 提高到 10——中等長度頁面(6-10 批)走 fire-and-forget
+  // 不阻塞首字,省下 EXTRACT_GLOSSARY 1.5-7.4 秒等待。長頁(>10 批)仍 blocking。
+  // 必須跟 lib/storage.js DEFAULT_SETTINGS.glossary.blockingThreshold 同步。
   SK.GLOSSARY_SKIP_THRESHOLD_DEFAULT = 1;
-  SK.GLOSSARY_BLOCKING_THRESHOLD_DEFAULT = 5;
+  SK.GLOSSARY_BLOCKING_THRESHOLD_DEFAULT = 10;
   SK.GLOSSARY_TIMEOUT_DEFAULT = 60000;
 
   // Rescan 常數
