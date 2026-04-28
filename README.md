@@ -237,6 +237,12 @@ v1.5.7 起，除了 Gemini 與 Google Translate 兩條既有引擎，你還可�
 - **API Key 不上雲**：`customProvider.apiKey` 只存在你的瀏覽器本機，不跨裝置同步、也不在匯出 JSON 範圍內
 - **不走 rate limiter**：OpenRouter 等 provider 自己處理配額；429 退避重試已內建
 
+### 思考強度控制（v1.6.18 起）
+
+部分模型支援「思考模式」（reasoning / thinking），讓模型在回覆前先做推理。Shinkansen-Nozomi 提供統一的 5 級控制（auto / off / low / medium / high），自動適配不同 provider 的 API 差異（OpenRouter unified reasoning / DeepSeek extra_body.thinking / Claude thinking.type / OpenAI reasoning_effort / Grok / Qwen enable_thinking）。預設 `auto`（不送參數，讓 provider 自選）。
+
+進階使用者可在「Extra Body JSON」欄位填入自定義 JSON，deep merge 到請求 body，覆蓋自動 mapping 或加入 provider 專屬參數。
+
 ### 限制
 
 - 目前只能設定**一組**自訂模型
@@ -287,7 +293,7 @@ LLM 在翻譯長文時，前後文的人名、地名翻譯容易出現不一致�
 
 ## 目前版本
 
-v1.7.0 — 完整功能清單與規格詳見 [SPEC.md](SPEC.md)。
+v1.8.0 — 完整功能清單與規格詳見 [SPEC.md](SPEC.md)。
 
 ## 授權
 

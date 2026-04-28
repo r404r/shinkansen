@@ -2,12 +2,12 @@
 
 > 一款專注於網頁翻譯的瀏覽器擴充功能，支援 Chrome 與 Firefox，作為 Immersive Translation 的輕量相容品。
 
-- 文件版本：v1.3
+- 文件版本：v1.4
 - 建立日期：2026-04-08
-- 最後更新：2026-04-26（v1.7.0）
+- 最後更新：2026-04-28（v1.8.0）
 - 目標平台：Chrome & Firefox（Manifest V3）
 - 作業系統：macOS 26
-- 目前 Extension 版本：1.7.0
+- 目前 Extension 版本：1.8.0
 
 ---
 
@@ -31,7 +31,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 
 ## 2. 功能範圍
 
-### 2.1 已實作（v1.7.0 為止）
+### 2.1 已實作（v1.8.0 為止）
 
 詳細版本歷史見 [`CHANGELOG.md`](CHANGELOG.md)。
 
@@ -48,7 +48,13 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 自動術語擷取 | ✅ | Gemini 預翻前擷取專有名詞；長度三級策略；術語快取（`gloss_` prefix） |
 | 固定術語表 | ✅ | 全域 + 網域兩層；設定頁編輯；優先覆蓋 LLM 自動術語 |
 | 翻譯快取 | ✅ | `chrome.storage.local`；SHA-1 key；版本變更自動清空 |
-| 自訂 OpenAI-compat 模型 | ✅ | v1.5.7 新增；OpenRouter / DeepSeek / Ollama 等百種 provider；`lib/openai-compat.js` adapter |
+| 自訂 OpenAI-compat 模型 | ✅ | v1.5.7 新增；OpenRouter / DeepSeek / Ollama 等百種 provider；v1.6.18 思考強度控制（auto/off/low/medium/high） |
+| YouTube ASR 智慧分句 | ✅ | v1.6.20 新增；自動字幕 AI 重組分句（heuristic / progressive / llm 三模式）；overlay 旁路原生 caption-segment |
+| per-model 計價覆蓋 | ✅ | v1.6.14 新增；使用者可在 Gemini 分頁針對各模型個別覆蓋內建計價表 |
+| 段落偵測效能優化 | ✅ | v1.6.9：textContent 取代 innerText；leaf div+span :not(:has(*)) 補抓 |
+| 分頁隱藏省電 | ✅ | v1.6.10：document.hidden 時暫停 Content Guard sweep + URL 輪詢 |
+| Toast master switch | ✅ | v1.6.8：showProgressToast 可完全關閉翻譯進度通知 |
+| 延續翻譯開關 | ✅ | v1.7 Nozomi 新增；stickyTranslateEnabled 可關閉跨導航自動續翻 |
 | 中國用語黑名單 | ✅ | v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；zh-CN 模式自動跳過；`lib/forbidden-terms.js` 偵測層 |
 | Firefox 快捷鍵編輯 | ✅ | v1.7 新增；設定頁點擊徽章即時編輯，`browser.commands.update()` API；Chrome 無此 API，維持跳轉 |
 | 設定頁 | ✅ | 7 Tab：一般設定 / Gemini / 自訂模型 / 術語表 / 禁用詞清單 / YouTube 字幕 / 用量紀錄 / Debug；匯入匯出 |
@@ -95,7 +101,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateCon
 - `systemInstruction`：系統提示詞（見 3.3）
 - `safetySettings`：安全過濾等級（預設 BLOCK_NONE 四大類別全開）
 
-> **Thinking 功能**：`gemini.js` 固定送 `thinkingConfig: { thinkingBudget: 0 }`（永遠關閉），不開放使用者設定。原因是思考 token 會吃掉 `maxOutputTokens` 額度，導致譯文被截斷。
+> **Thinking 功能**：Gemini 引擎固定送 `thinkingConfig: { thinkingBudget: 0 }`（永遠關閉），原因是思考 token 會吃掉 `maxOutputTokens` 額度。自訂 OpenAI-compat 模型則開放使用者控制思考強度（v1.6.18 起，詳見 §3.8）。
 
 ### 3.3 預設 System Prompt
 
@@ -193,6 +199,8 @@ v1.5.7 新增。除了 Gemini 與 Google Translate 兩條既有引擎，使用�
 **Message protocol**：content → background 送 `TRANSLATE_BATCH_CUSTOM` 訊息（與 `TRANSLATE_BATCH` / `TRANSLATE_BATCH_GOOGLE` 對稱），由 `handleTranslateCustom` 處理。
 
 **設定 UI**：獨立的「自訂 Provider」分頁（位於「術語表」與「禁用詞清單」之間）。preset 引擎下拉新增第三個選項 `「自訂 Provider（OpenAI-compatible）」`；選此引擎時 preset card 隱藏 model 下拉（model 由「自訂 Provider」分頁的設定決定，不靠 preset 欄位）。
+
+**思考強度控制**（v1.6.18 起）：`customProvider.thinkingLevel` 支援 `auto` / `off` / `low` / `medium` / `high` 五級。`lib/openai-compat-thinking.js` 根據 provider 自動映射到對應 API 參數（OpenRouter unified reasoning / DeepSeek extra_body.thinking / Claude thinking.type / OpenAI reasoning_effort / Grok / Qwen enable_thinking）。`auto` 時不送參數，讓 provider 自選預設。`customProvider.extraBodyJson` 可填自定義 JSON deep merge 到 request body。
 
 **未來擴充空間**：當前設計「一組」自訂 provider；若未來需要「多組 named provider 讓 preset 各綁不同組」，可把 `customProvider` 改為 `customProviders: { [name]: {...} }` Map 結構，preset 加 `customProviderName` 欄位指定。
 
@@ -341,6 +349,7 @@ shinkansen/
 │   ├── session-storage.js     # 跨平台 session storage 抽象（v1.5）
 │   ├── gemini.js              # Gemini API 呼叫、分批、重試
 │   ├── openai-compat.js       # OpenAI-compatible adapter（v1.5.7）
+│   ├── openai-compat-thinking.js  # 思考強度統一控制（v1.6.18，6 provider 適配）
 │   ├── system-instruction.js  # 共用 batch 構建 helper（v1.5.7，從 gemini.js 抽出）
 │   ├── forbidden-terms.js     # 中國用語黑名單偵測層（v1.5.6）
 │   ├── google-translate.js    # Google Translate 免費端點
@@ -432,7 +441,12 @@ scripts/
   "maxTranslateUnits": 1000,
   "toastOpacity": 0.7,
   "toastAutoHide": true,
+  "showProgressToast": true,
   "skipTraditionalChinesePage": true,
+  "stickyTranslateEnabled": true,
+  "popupButtonSlot": 2,
+  "autoTranslateSlot": 2,
+  "modelPricingOverrides": {},
   "displayMode": "single",
   "translationMarkStyle": "tint",
   "ytSubtitle": {
@@ -443,16 +457,21 @@ scripts/
     "lookaheadS": 10,
     "debugToast": false,
     "onTheFly": false,
+    "asrMode": "progressive",
+    "applyFixedGlossary": false,
+    "applyForbiddenTerms": false,
     "model": "",
     "pricing": null
   },
   "forbiddenTerms": "（見 §3.7 / DEFAULT_FORBIDDEN_TERMS，25 條預設）",
   "customProvider": {
-    "baseUrl": "",
-    "model": "",
-    "systemPrompt": "",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "model": "deepseek/deepseek-v4-pro",
+    "systemPrompt": "（預設與 Gemini 相同）",
     "temperature": 0.7,
-    "inputPerMTok": 0,
+    "thinkingLevel": "auto",
+    "extraBodyJson": "",
+    "inputPerMTok": 0.435,
     "outputPerMTok": 0
   }
 }
