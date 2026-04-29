@@ -402,6 +402,18 @@ export function pickAutoTranslateSlot(raw) {
   return [1, 2, 3].includes(n) ? n : 2;
 }
 
+// v1.8.12: 判斷使用者目前的 translatePresets 是否真的會用到 Gemini engine。
+// 用途:popup 的「⚠ 尚未設定 API Key」提示只有在會用到 Gemini 時才該顯示;
+// 若使用者三組 preset 都改成 Google MT / 自訂模型,popup 不該再嘮叨他沒填 Gemini Key。
+// 行為:
+//   - 任一 slot engine === 'gemini' → true
+//   - presets 為空 / 不是 array → 視為 true(保守,跟 fallback DEFAULT_SETTINGS 一致,
+//     DEFAULT_SETTINGS.translatePresets 三組裡有兩組是 gemini)
+export function presetsRequireGemini(presets) {
+  if (!Array.isArray(presets) || presets.length === 0) return true;
+  return presets.some(p => p && p.engine === 'gemini');
+}
+
 export async function setSettings(patch) {
   // 若 patch 含 apiKey，抽出來寫 local；其餘寫 sync
   // v1.5.7: customProvider.apiKey 同樣抽出來寫 local（key: customProviderApiKey）

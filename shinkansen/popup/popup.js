@@ -7,7 +7,7 @@ import { t, initLocale, applyLocale } from '../lib/i18n.js';
 // import { RELEASE_HIGHLIGHTS } from '../lib/release-highlights.js';
 // import { shouldShowWelcomeNotice } from '../lib/welcome-notice.js';
 // import { isWorthNotifying } from '../lib/update-check.js';
-import { pickPopupSlot } from '../lib/storage.js';
+import { pickPopupSlot, presetsRequireGemini } from '../lib/storage.js';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -104,7 +104,7 @@ async function init() {
   // (user doesn't want update notification)
 
   // v0.62 起：autoTranslate 仍走 sync（跨裝置同步），apiKey 改走 local（不同步）
-  const { autoTranslate = false, displayMode = 'single' } = await browser.storage.sync.get(['autoTranslate', 'displayMode']);
+  const { autoTranslate = false, displayMode = 'single', translatePresets = [] } = await browser.storage.sync.get(['autoTranslate', 'displayMode', 'translatePresets']);
   const { apiKey = '' } = await browser.storage.local.get(['apiKey']);
   $('auto').checked = autoTranslate;
 
@@ -132,7 +132,9 @@ async function init() {
     }
   } catch { /* 非 YouTube 頁面，保持 hidden */ }
 
-  if (!apiKey) {
+  // v1.8.12: 只有當 translatePresets 中有任一 slot 用 Gemini engine 時,才提醒未設 API Key。
+  // 使用者若三組 preset 都改成 Google MT / 自訂模型 / Bing,popup 不再嘮叨他沒填 Gemini Key。
+  if (!apiKey && presetsRequireGemini(translatePresets)) {
     statusEl.textContent = t('popup_status_no_api_key');
     statusEl.style.color = '#ff3b30';
   }

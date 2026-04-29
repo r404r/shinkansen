@@ -26,9 +26,41 @@
   // 回傳的 text 可直接送 Google MT；結果還原時用
   // SK.restoreGoogleTranslateMarkers(tr) 把【N】換回⟦N⟧再走現有 deserialization。
 
+  // v1.8.13: paired marker 數量上限。Google Translate 非官方端點對同段內
+  // 「【N】xxx【/N】」配對標記超過 5 個時會 hallucinate(把標記當 list 結構
+  // 亂吐 garbage tokens,典型症狀:譯文殘留「[/5】[/5]【6】【6】」「/Proad】」
+  // 這類 garbage)。實 fetch 驗:3-5 對都 OK、6 對開始壞、8 對完全爛。
+  // 觸發場景:Medium 作者 byline「socials: <a>YouTube</a> | <a>TikTok</a> |
+  // ...」這類大量短 <a> 列表。超過閾值時改走「不加 paired marker、純取文字」
+  // 退化路徑,該段失去 <a> 連結保留(anchor text 變純文字)但譯文不會壞掉。
+  // Atomic 標記(【*N】)不受影響——probe 顯示連 8 個 atomic 都不會亂。
+  const GT_MAX_PAIRED_SLOTS = 5;
+
+  function countPairedInlineForGT(topLevelNodes) {
+    let count = 0;
+    function walk(nodeList) {
+      for (const child of nodeList) {
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+        if (SK.HARD_EXCLUDE_TAGS.has(child.tagName)) continue;
+        if (SK.isAtomicPreserve(child)) continue;
+        if (SK.GT_INLINE_TAGS.has(child.tagName)) {
+          count++;
+          if (count > GT_MAX_PAIRED_SLOTS) return;
+        }
+        walk(child.childNodes);
+        if (count > GT_MAX_PAIRED_SLOTS) return;
+      }
+    }
+    walk(topLevelNodes);
+    return count;
+  }
+
   function serializeNodeIterableForGoogle(topLevelNodes) {
     const slots = [];
     let out = '';
+    // v1.8.13: paired marker 過閾值 → 降級為純文字模式(slots 仍可含
+    // atomic,但不再產生 paired【N】/【/N】標記)。
+    const degrade = countPairedInlineForGT(topLevelNodes) > GT_MAX_PAIRED_SLOTS;
     function walk(nodeList) {
       for (const child of nodeList) {
         if (child.nodeType === Node.TEXT_NODE) {
@@ -47,7 +79,8 @@
           // 包含 <a>（連結）與 <b>/<i>/<small> 等語意格式標籤。
           // 刻意排除 <span>：SPAN 是最常見的爆炸來源（Wikipedia lede 有 10+ 個
           // span.class，會讓 Google MT 位置錯亂）。<abbr> 也排除（樣式用途為主）。
-          if (SK.GT_INLINE_TAGS.has(child.tagName)) {
+          // v1.8.13: degrade 模式下 GT_INLINE_TAGS 也走純文字路徑(不加標記)。
+          if (!degrade && SK.GT_INLINE_TAGS.has(child.tagName)) {
             const idx = slots.length;
             slots.push(child.cloneNode(false));
             out += '【' + idx + '】';

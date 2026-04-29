@@ -7,7 +7,7 @@
 
 ## v1.9.0
 
-**v1.9.0** — 合併 upstream v1.7.1–v1.8.11，大幅提升翻譯體驗。
+**v1.9.0** — 合併 upstream v1.7.1–v1.8.13，大幅提升翻譯體驗。
 
   - **Gemini Streaming（v1.8.0）**：batch 0 使用 SSE 串流，按下翻譯 ~1 秒即見頁面開始變中文
   - **翻譯優先排序（v1.7.1）**：可視區域內容優先翻譯，長頁面秒感大幅提升
@@ -15,6 +15,8 @@
   - **SEP 殘留防禦（v1.8.10）**：翻譯結果中的分隔符號殘留自動清除
   - **YouTube 字幕串流（v1.8.9）**：非 ASR 字幕支援串流翻譯
   - **Glossary 動態閾值（v1.7.3）**：依文本量自動調整術語表大小
+  - **Google MT paired marker 降級（v1.8.13）**：多鏈接段落（Medium byline 等）自動降級為純文字，避免 Google MT hallucinate
+  - **popup API Key 警告 gate（v1.8.12）**：全選 Bing/Google/自訂模型時不再提醒 Gemini API Key
   - 保留所有 Nozomi 獨有功能：Bing 翻譯、選區翻譯、多語言 UI、Firefox 雙平台
 
 ---
@@ -101,6 +103,10 @@
 ---
 
 ## v1.8.x
+
+**v1.8.13** — 修 Google MT 翻譯大量 inline 連結段落時譯文殘留「【1/Proad】 /Proad1】 /Proad1】 ...」這類 garbage 標記的 bug(典型觸發場景:Medium 作者 byline「socials: YouTube | TikTok | Substack | ...」這類大量短 `<a>` 列表)。根因:以實 fetch `translate.googleapis.com/translate_a/single` 驗證,Google Translate 非官方端點對同段內 `【N】xxx【/N】` 配對標記超過 5 對時會 hallucinate 把標記當 list 結構亂吐 garbage tokens(3-5 對 OK、6 對開始壞、8 對完全爛、Atomic `【*N】` 不受影響連 8 個都正常)。修法:`shinkansen/content-serialize.js` `serializeNodeIterableForGoogle` 加 `GT_MAX_PAIRED_SLOTS=5` 閾值 + `countPairedInlineForGT` helper,paired-eligible inline 元素數 > 5 時降級——同段內 `GT_INLINE_TAGS` 元素改走「不加 paired 標記、純取文字」路徑(slots 仍可含 atomic),該段失去 `<a>` 連結保留(anchor text 變純文字)但譯文不會壞。新 1 條 regression spec(`test/regression/google-translate-many-markers-degrade.spec.js`,2 test:8 個 `<a>` 應降級 + 5 個 `<a>` 維持原 v1.4.2 行為的回歸保護);SANITY 把 `degrade` 寫死成 `false` → test #1 fail(received=8 markers expected=0)test #2 仍 pass,還原後 5/5 含 v1.4.1/4.2/4.3 既有 3 條全綠。Full suite 339/339 pass。
+
+**v1.8.12** — popup「⚠ 尚未設定 API Key」警告 gate 在「translatePresets 中至少一組是 Gemini」之後。使用者反映他完全沒用 Gemini(三組 preset 都改成 Google MT / 自訂模型),但 popup 一直在提醒沒填 Gemini API Key。修法:`shinkansen/lib/storage.js` 加 `presetsRequireGemini(presets)` helper(any-slot some-match;空 / undefined / 非 array → 保守回 true 跟 DEFAULT_SETTINGS 對齊),`shinkansen/popup/popup.js` 把原本 `if (!apiKey)` 改成 `if (!apiKey && presetsRequireGemini(translatePresets))`。範圍外不動的:`background.js` 三處「尚未設定 Gemini API Key」error throw 維持原狀(只在使用者主動觸發 Gemini 翻譯時才跑出來,行為正確);options 設定頁 Gemini 分頁 API Key 欄位也維持(使用者主動點進去看不算嘮叨)。新 1 條 regression(`test/unit/presets-require-gemini.spec.js`,7 條斷言;SANITY 把 `some` 改 `every` → 預設組合 + 含 gemini mixed 兩條 fail,還原後 7/7 pass)。
 
 **v1.8.11** — 文案與文件大整理(無功能變更)。**(A)近期重大更新 6 條同步**:`shinkansen/lib/release-highlights.js` / `README.md` / `docs/index.html` 三處重排順序與用字統一(極速秒翻 / 雙語對照 / 自訂 AI 模型 / AI 分句 / 中國用語黑名單 / 只翻文章開頭);「AI 智慧分句」→「AI 分句」、「百種模型」→「所有模型」、「按下翻譯後 1 秒就看到」→「按下翻譯 1 秒看到」。**(B)options.html**:「只翻文章開頭」說明拿掉「實際翻譯段數可能因 token 上限略少」尾巴(避免使用者困惑)。**(C)docs/index.html 功能特色重排**:加入「極速秒翻」(第一順位)、「中國用語黑名單」、「只翻文章開頭」三張卡;「三翻譯引擎」搬到最後;原「三翻譯引擎」內的快速鍵說明獨立成「自訂快速鍵」卡。**(D)README.md 功能特色**:移除「漸進式翻譯」改為「極速秒翻」(第一順位);加「YouTube AI 分句」(在 YouTube 字幕翻譯下方);「自訂 AI 模型」從「三翻譯引擎」拆開;新增「只翻文章開頭」條目 + 下方詳細說明段落。**(E)CHANGELOG.md 使用者功能變更摘要**:補完 v1.7.0 → v1.8.10 共 12 條使用者可感知的變更(極速秒翻 / 翻譯剩餘段落按鈕 / 只翻文章開頭 / 翻譯優先級排序 / YouTube 人工字幕 streaming / ASR overlay padding / AI 智慧分句 / 修 LLM 合併段落殘留標記 等)。**(F)測試流程說明.md 對齊現狀**:測試總數 229 → ~356 條(86 regression + 23 unit + 7 jest-unit + 1 version-check);regression spec 數 73 → 86;速查表補 24 條 regression(streaming 系列 / partial-mode / dual / fragment / priority / youtube)+ 7 條 unit(auto-translate-slot / gemini-thinking-config / google-translate-batch / model-pricing-override / openai-compat-thinking-mapping / parse-user-num / streaming-batch-incremental)。**(G)清掉廢棄檔**:刪除 untracked 的 `ziSkBLbG`(176K 隨機檔名 zip,內容是 v1.4.x 時期 shinkansen 子目錄打包,無引用)。
 
