@@ -141,8 +141,9 @@
     const style = document.createElement('style');
     style.textContent = [
       ':host {',
-      '  font-family: "PingFang TC", "Microsoft JhengHei", "微軟正黑體",',
-      '               "Heiti TC", "Noto Sans CJK TC", sans-serif;',
+      '  font-family: "PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN",',
+      '               "Microsoft YaHei", "Microsoft JhengHei",',
+      '               "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", sans-serif;',
       '}',
       '.container {',
       '  position: absolute; left: 0; right: 0; bottom: 22%;',

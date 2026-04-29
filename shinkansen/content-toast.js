@@ -19,7 +19,7 @@
       color: #1d1d1f;
       border-radius: 12px;
       box-shadow: 0 8px 28px rgba(0,0,0,.18);
-      font: 13px -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+      font: 13px -apple-system, "PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", sans-serif;
       display: none;
       flex-direction: column;
       gap: 8px;

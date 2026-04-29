@@ -687,8 +687,9 @@
       _style.textContent = `
           :host {
             font-family: var(--sk-cue-font-family,
-              "PingFang TC", "Microsoft JhengHei", "微軟正黑體",
-              "Heiti TC", "Noto Sans CJK TC", sans-serif);
+              "PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN",
+              "Microsoft YaHei", "Microsoft JhengHei",
+              "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", sans-serif);
           }
           .window {
             position: absolute;
@@ -972,7 +973,7 @@
       const ff = getComputedStyle(win).fontFamily;
       if (ff) return ff;
     }
-    return '"PingFang TC", "Microsoft JhengHei", "微軟正黑體", "Heiti TC", "Noto Sans CJK TC", sans-serif';
+    return '"PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", sans-serif';
   }
 
   // displayCues 找當前命中的 cue。資料量典型 < 200,linear scan 足夠。
