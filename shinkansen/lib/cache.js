@@ -46,12 +46,32 @@ function flushTouches() {
   browser.storage.local.set(updates).catch(() => {}); // fire-and-forget
 }
 
+// v1.8.14: hashText LRU memo
+// SHA-1 對單段不貴,但 batch 20 段 → 40 次 digest;1000 段一頁 → 2000 次。
+// SubtleCrypto 是 async API 會 yield 多次,影響 streaming first-chunk 延遲。
+// 同一段原文常在 getBatch + setBatch 被 hash 兩次,memo 命中率高。
+const _hashCache = new Map();
+const _HASH_CACHE_MAX = 500;
+
 async function hashText(text) {
+  const cached = _hashCache.get(text);
+  if (cached !== undefined) {
+    // LRU: 命中時搬到尾端(最新)
+    _hashCache.delete(text);
+    _hashCache.set(text, cached);
+    return cached;
+  }
   const buf = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest('SHA-1', buf);
-  return Array.from(new Uint8Array(digest))
+  const hex = Array.from(new Uint8Array(digest))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
+  _hashCache.set(text, hex);
+  if (_hashCache.size > _HASH_CACHE_MAX) {
+    // Map.keys() 第一個 = 最舊
+    _hashCache.delete(_hashCache.keys().next().value);
+  }
+  return hex;
 }
 
 /**
@@ -95,9 +115,12 @@ function extractTimestamp(stored) {
 /**
  * LRU 淘汰：刪除最舊的快取條目，騰出至少 targetBytes 空間。
  * 只淘汰 tc_ 和 gloss_ 前綴的快取條目，不動其他 storage 資料。
+ *
+ * v1.8.14: preFetchedAll 可由呼叫端傳入既已 get(null) 的 entries,避免
+ * proactiveEvictionCheck 內「getCacheUsageBytes 一次 + evictOldest 又一次」雙掃。
  */
-async function evictOldest(targetBytes) {
-  const all = await browser.storage.local.get(null);
+async function evictOldest(targetBytes, preFetchedAll = null) {
+  const all = preFetchedAll || await browser.storage.local.get(null);
   const cacheEntries = [];
   for (const [key, value] of Object.entries(all)) {
     if (key.startsWith(KEY_PREFIX) || key.startsWith(GLOSSARY_PREFIX)) {
@@ -127,9 +150,19 @@ async function evictOldest(targetBytes) {
 }
 
 /**
- * 計算目前快取佔用的大致 bytes。
+ * 計算目前 storage.local 用量(bytes)。
+ *
+ * v1.8.14: 優先用 Chrome 原生 storage.local.getBytesInUse(null),不需把整份 storage
+ * 拉進記憶體。回傳的是「整個 local 用量」(包含 cache 以外的設定 / RPD / log 等),
+ * 但 cache 占大宗(9.5MB / 10MB),拿來判斷 quota 接近時夠用。
+ *
+ * Fallback:若 getBytesInUse 不支援(極舊瀏覽器)走 get(null) 加總。
  */
 async function getCacheUsageBytes() {
+  if (typeof browser.storage.local.getBytesInUse === 'function') {
+    return browser.storage.local.getBytesInUse(null);
+  }
+  // Fallback(舊瀏覽器):走原本的全表 get + 加總
   const all = await browser.storage.local.get(null);
   let bytes = 0;
   for (const [key, value] of Object.entries(all)) {

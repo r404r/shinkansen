@@ -19,7 +19,7 @@
 //   youtube    — YouTube 字幕翻譯流程
 
 import { browser } from './compat.js';
-import { getSettings } from './storage.js';
+import { getSettingsCached } from './storage.js';
 
 const MAX_LOGS = 1000;
 
@@ -85,7 +85,8 @@ export function debugLog(level, category, message, data) {
   persistLog(entry);
 
   // 有開 debugLog 才印 console（非同步讀設定，不阻塞 buffer 寫入）
-  getSettings().then(settings => {
+  // v1.8.14: 改用 getSettingsCached 避免每筆 log 都打 storage IPC
+  getSettingsCached().then(settings => {
     if (settings.debugLog) {
       const tag = `[Shinkansen][${category}]`;
       if (level === 'error') console.error(tag, message, data);

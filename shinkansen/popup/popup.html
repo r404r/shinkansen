@@ -35,6 +35,18 @@
       <input type="checkbox" id="yt-subtitle-toggle">
     </div>
 
+    <!-- commit 5a:只在 Drive 影片 viewer 顯示(drive.google.com/file/) -->
+    <div class="row" id="drive-subtitle-row" hidden>
+      <label for="drive-subtitle-toggle" data-i18n="popup_drive_subtitle">Drive 影片字幕翻譯</label>
+      <input type="checkbox" id="drive-subtitle-toggle">
+    </div>
+
+    <!-- commit 5c:雙語對照 toggle(YouTube 影片 + Drive 影片頁顯示,共用 ytSubtitle.bilingualMode) -->
+    <div class="row" id="bilingual-row" hidden>
+      <label for="bilingual-toggle" data-i18n="popup_bilingual">字幕雙語對照</label>
+      <input type="checkbox" id="bilingual-toggle">
+    </div>
+
     <div class="row">
       <label for="glossary-toggle" data-i18n="popup_glossary">術語表一致化</label>
       <input type="checkbox" id="glossary-toggle">

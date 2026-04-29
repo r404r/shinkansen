@@ -17,6 +17,65 @@
 
 ## 條目
 
+### ~~v1.8.15+ — YouTube 人工字幕翻譯 race condition~~ — 已補測試(v1.8.16)→ `test/regression/youtube-auto-activate-no-toggle-stop.spec.js`
+根因不是 yt-navigate-finish double-fire,而是兩條獨立自動鬧鐘(content.js:1599 auto-subtitle on load setTimeout 800ms + content-youtube.js:2334 yt-navigate-finish SPA restart setTimeout 500ms)在 reload 後都會 fire,後到那條進 translateYouTubeSubtitles 看 active=true 走「再按一次還原」分支誤觸 toggle stop。修法:translateYouTubeSubtitles 加 `{ source: 'manual' | 'auto' }` 參數,auto 路徑遇 active 直接 no-op,manual 維持 toggle 還原語義。Caller stack 在 dedicated debug 從 image 5 的 `stop:caller` log 直指 content.js:1599 → translateYouTubeSubtitles → stopYouTubeTranslation。SANITY 通過:註解掉 source='auto' 分支 → test #1 fail / #2 pass;還原 → 兩條 pass。
+
+### v1.8.16 — 「翻譯中…」status 與螢幕中文字幕共存 guard
+- **症狀**:無 user 回報 bug,屬一併修進來的打擾優化:reload 後字幕翻譯啟動瞬間或 seek 到未翻視窗時,player 上方原本就有中文字幕,還會疊一個「翻譯中…」黑底文字 indicator 蓋住內容
+- **修在**:`shinkansen/content-youtube.js` 加 `_hasVisibleChineseCaption()` helper(ASR 路徑查 `_findActiveCue` 命中且含 CJK / 非 ASR 路徑查 `.ytp-caption-segment` 含 CJK),3 處 `showCaptionStatus('翻譯中…')` 各包 `if (!_hasVisibleChineseCaption())` guard
+- **為什麼還沒寫 spec**:guard 邏輯極簡(三處同樣的 inline if),要寫 spec 須暴露 helper 給 SK 命名空間動 production code,或寫整合測 onVideoSeeked / shinkansen-yt-captions handler 等較重的 caller path,測試 ROI 低於修法本身的可讀性。caller side 三處對稱可由 grep 直接 review。
+- **建議 spec 位置**:`test/regression/youtube-translating-status-skip-if-chinese.spec.js`
+- **建議 fixture 結構**:塞 `<span class="ytp-caption-segment">你好</span>` 進 .ytp-caption-window-container → 觸發任一 caller path(seek 到未翻視窗最直接)→ 驗 `#__sk-yt-caption-status` 不存在;清掉中文 segment 走同 path → 驗 indicator 出現
+
+### v1.8.15 — Drive 影片 ASR 字幕翻譯整段 e2e spec
+- **症狀**:N/A,新功能整段 pipeline 沒 regression spec 涵蓋
+- **修在**:`shinkansen/content-drive.js`(新檔,top frame entry)+ `shinkansen/content-drive-iframe.js`(新檔,iframe entry)+ `shinkansen/background.js`(新 handlers DRIVE_TIMEDTEXT_URL / TRANSLATE_DRIVE_ASR_SUBTITLE_BATCH / TRANSLATE_DRIVE_BATCH_GOOGLE)+ `shinkansen/content-youtube.js`(SK.ASR helper export + bilingualMode replaceSegmentEl gate)+ `shinkansen/popup/*`(Drive toggle + bilingual toggle)
+- **為什麼還沒寫 spec**:整段 pipeline 涉及多個 cross-origin 元件(youtube.googleapis.com/embed iframe + drive.google.com timedtext + YouTube IFrame Player API postMessage),fixture 要模擬 cross-origin embed 不直觀;單元層的 SK.ASR helper / popup toggle 行為已被 YouTube ASR 13 + non-ASR 8 既有 spec 涵蓋(因為共用同一份 helper / 同一個 storage key);Drive 專屬路徑(content-drive.js / content-drive-iframe.js)的 e2e 留下次 dedicated 一輪寫
+- **建議 spec 位置**:`test/regression/drive-asr-pipeline.spec.js`(整條 timedtext URL → background fetch → relay → parseJson3 → throttled batch → entries push → overlay render)+ `test/regression/drive-bilingual-toggle.spec.js`(toggle 切換 storage onChanged → loadModule/unloadModule postMessage)+ `test/regression/youtube-bilingual-segment-write.spec.js`(replaceSegmentEl 雙語 + 非 ASR 寫「英文+譯文兩行」innerHTML)
+
+### v1.8.15 — Drive 影片自動開 CC 不 work(留 v1.8.16 修)
+- **症狀**:Drive 影片載入後字幕沒自動載入,使用者必須手動按 player CC 按鈕一次才會觸發 timedtext fetch,字幕翻譯 pipeline 才啟動
+- **修在 commit 5c.7 嘗試但失敗**(commit 5c.8 已 revert):onReady postMessage `setOption('captions', 'track', {languageCode:'en'})` 對 cross-origin embed timing 不可靠
+- **建議重做方向**:listen onApiChange event(captions module ready 時 fire)再送 setOption;或 multiple setTimeout 嘗試 + listen 是否 fire timedtext request 確認生效
+
+### v1.8.15 — Drive overlay 控制列顯示時不動態上抬(留 v1.8.16 修)
+- **症狀**:player 控制列顯示時,iframe 內原生英文 CC 從 bottom 30px 上抬到 ~82px,但我們的 Drive overlay 維持固定 bottom 22%,可能跟原生 CC 重疊或被進度條疊到
+- **修在 commit 5c.7 嘗試但失敗**(commit 5c.8 已 revert):iframe.mouseenter/mouseleave 對 cross-origin iframe 不可靠 fire,當 chrome show/hide 信號失準
+- **建議重做方向**:用 IFrame Player API postMessage `addEventListener('onPlaybackQualityChange')` 之類間接信號;或 listen YT player 的 onStateChange + 外部 hover state 組合判斷;或乾脆放棄動態上抬,固定 bottom 22% 接受邊界 case 略有重疊
+
+
+
+### v1.8.14 — streaming 期間 SW keep-alive
+- **症狀**:MV3 SW 預設 5 分鐘 idle 收回。長頁翻譯中切去其他 tab 5 分鐘,inFlightStreams Map(module-level state)消失 → 取消按鈕無響應 + abort 訊號到不了 fetch
+- **修在**:`shinkansen/background.js` 加 `_streamKeepAliveTimer`,在 inFlightStreams 第一個 stream start 時 setInterval 每 20 秒呼叫 chrome.runtime.getPlatformInfo(極輕量)重置 SW idle timer;最後一個 stream end 時 clearInterval
+- **為什麼還沒寫 spec**:SW idle timeout 是 Chrome 內部行為,Playwright 環境的 SW 生命週期跟真實 Chrome 不一致(測試環境通常不會主動 unload),fixture 無法 deterministic 模擬「5 分鐘後 SW 被回收」這個觸發點
+- **建議 spec**:可以驗 helper 行為(start 後 setInterval 啟動、stream 都結束後 clearInterval),但測這個等同測實作細節而非行為。建議走人工驗收:在實機開長頁翻譯 → 切到別的 tab 5 分鐘 → 回來按取消應仍有反應
+
+### v1.8.14 — Content Guard 改 IntersectionObserver subset
+- **症狀**:長文(Wikipedia 千段條目)的 guard sweep 每秒對 STATE.translatedHTML 整份(N 條)做字串相等比對 + 部分 getBoundingClientRect 強制 layout,跟使用者捲動搶 main thread
+- **修在**:`shinkansen/content-spa.js` 加 `guardIntersectionObserver` + `guardVisibleSet`,在 startSpaObserver 時 observe 所有 STATE.translatedHTML / translationCache 元素;runContentGuard 改成優先走 visibleSet 子集
+- **為什麼還沒寫 spec**:IO 行為依賴 Chrome 真實 layout + viewport 變化的時序,Playwright fixture 要 deterministic 觸發 IntersectionObserver callback 不直觀;且既有 `guard-content-overwrite.spec.js` 已涵蓋 guard 核心行為,IO subset 是純性能優化(行為通則一致)
+- **建議 spec**:若要補,走真實 viewport 模擬:scrollIntoView 一個被 SPA 覆寫的元素 → 等 IO callback fire → 確認 sweep 修復該元素;捲走後該元素的修復不再被觸發
+
+### v1.8.14 — options.save() in-flight guard
+- **症狀**:save() 是 read-modify-write(sync.get → 組整桶 → sync.set)沒 lock。並發按下兩次儲存(快速連按 / 跨 Tab / 打字+按鈕同時觸發)會丟資料
+- **修在**:`shinkansen/options/options.js` save() 開頭加 `_saveInFlight` flag wrap
+- **為什麼還沒寫 spec**:save() 跟 DOM 強耦合(讀 30+ 個欄位 + storage IPC),抽成可 unit-test 的純函式 ROI 低;guard pattern 極簡(三行 try/finally),修法本身是 defensive,實務觸發條件罕見
+- **建議 spec**:若要補,可走 Playwright UI 測 — 開設定頁→改一個欄位→快速連按儲存按鈕→驗證只有一輪 storage.sync.set 被執行
+
+### v1.8.14 — options 用量搜尋 debounce + Debug fetchLogs 空 short-circuit
+- **症狀**:用量紀錄到 1-2K 筆時每打一字整表 re-render 卡;Debug 分頁 polling 即使沒新 log 也整表 re-render(空操作浪費)
+- **修在**:`shinkansen/options/options.js` `usage-search input` 加 150ms debounce + `fetchLogs` 在 `res.logs.length===0` 時 return 不 render
+- **為什麼還沒寫 spec**:debounce 是時序敏感行為,Playwright 跑 deterministic 測會抖;fetchLogs 邏輯改動很小(early return),且 options.js 不是 ES module 形式不容易單元測。修法明顯且風險極低,效益主要靠人工觀察(設定頁紀錄上千筆時搜尋體感是否流暢)
+- **建議 spec**:若未來要補,可走 Playwright UI 測 — 開設定頁→塞 1K 筆紀錄→快速打字測 input event 與 render 次數的比值
+
+### v1.8.13 — GMT 字幕 IndexedDB source 分類錯誤(非真漏帳)
+- **症狀**:用 Google MT 翻 YouTube 字幕,IndexedDB 雖然有寫紀錄(`background.js:1374` `upsertGoogleUsage`),但 source='google' 而非 source='youtube-subtitle'。使用者用量分頁看 YouTube 字幕用量時,GMT 那段不會出現在 YouTube 分類裡,被歸到「網頁翻譯」(URL 是 YouTube 影片網址)
+- **修在**:`shinkansen/content-youtube.js:1996` `_logWindowUsage` guard 把 GMT 的 `inputTokens=0` 擋掉 → `LOG_USAGE` 不送 → `upsertYouTubeUsage` 不被呼叫
+- **為什麼還沒修**:雙寫風險——若放寬 guard 讓 GMT 能進 LOG_USAGE,會跟 background 端的 upsertGoogleUsage 雙寫(同一批兩處記帳)。乾淨修法是讓 background `handleTranslateGoogle` 在 cacheSuffix='_gt_yt' 時不寫 IndexedDB,改由 content side LOG_USAGE 負責。需要雙改 + 新 spec 涵蓋整條路徑;費用幾乎 $0,實際使用者看不出差異,ROI 低先擱置
+- **建議 spec 位置**:`test/regression/youtube-gmt-usage-classification.spec.js`
+- **建議 fixture**:mock browser.runtime.sendMessage 對 TRANSLATE_SUBTITLE_BATCH_GOOGLE 回 `{ ok: true, result: ['你好'], usage: { engine: 'google', chars: 5, cacheHits: 0 } }`,呼叫 `_logWindowUsage(1, usage)`,驗證 LOG_USAGE 訊息有送出且 source='youtube-subtitle'
+
 ### ~~v1.8.0 — streaming abort / mid-failure / first_chunk timeout 三個 e2e edge case~~ — 已補測試(2026-04-28)
 - abort 跨批傳播 → `test/regression/streaming-batch-0-abort.spec.js`(monkey-patch onMessage listener 收集器,先 fire FIRST_CHUNK 解放 batch 1+ 並行,maxConcurrentBatches=1 讓 abort 後 worker 下次迴圈 check signal.aborted 退出。SANITY:abortHandler 改 no-op → STREAMING_ABORT count=0 fail。)
 - mid-failure → `test/regression/streaming-batch-0-mid-failure.spec.js`(FIRST_CHUNK + 3 個 SEGMENT 後 STREAMING_ERROR,驗證 batch 0「整批 25 texts retry」+ batch 1 已並行不重送。SANITY:catch 區塊 no-op → batch 0 retry 不送、payloadSizes 變 1 fail。)

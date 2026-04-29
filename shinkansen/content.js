@@ -181,8 +181,12 @@
   function packBatches(texts, units, slotsList, maxUnits, maxChars, firstMaxUnits = null, firstMaxChars = null) {
     const jobs = [];
     let cur = null;
+    // v1.8.14: flush 時寫入 idx,呼叫端用 job.idx 取代 jobs.indexOf(job)(O(N²) → O(1))
     const flush = () => {
-      if (cur && cur.texts.length > 0) jobs.push(cur);
+      if (cur && cur.texts.length > 0) {
+        cur.idx = jobs.length;
+        jobs.push(cur);
+      }
       cur = null;
     };
     // 「正在切第一批」= jobs 還沒 push 任何 batch + (firstMaxUnits / firstMaxChars 有值)
@@ -193,6 +197,7 @@
       if (len > limC()) {
         flush();
         jobs.push({
+          idx: jobs.length, // v1.8.14
           start: i,
           texts: [texts[i]],
           units: [units[i]],
@@ -308,7 +313,7 @@
 
     const runBatch = async (job) => {
       if (signal?.aborted) return;
-      const batchIdx = jobs.indexOf(job);
+      const batchIdx = job.idx; // v1.8.14: 取代 jobs.indexOf(job)
       const t0 = Date.now();
       SK.sendLog('info', 'translate', `batch ${batchIdx + 1}/${jobs.length} start`, { units: job.texts.length, chars: job.chars });
       try {
@@ -855,14 +860,7 @@
 
       if (abortSignal.aborted) {
         SK.sendLog('info', 'translate', 'translation aborted', { done, total });
-        if (STATE.originalHTML.size > 0) {
-          STATE.originalHTML.forEach((originalSnapshot, el) => {
-            SK.restoreChildSnapshot(el, originalSnapshot);
-            el.removeAttribute('data-shinkansen-translated');
-          });
-          STATE.originalHTML.clear();
-        }
-        STATE.translated = false;
+        restoreOriginalHTMLAndReset();
         SK.showToast('success', SK.t('cs_cancelled'), { progress: 1, stopTimer: true, autoHideMs: 2000 });
         return;
       }
@@ -1015,6 +1013,21 @@
     }
   };
 
+  // v1.8.14: abort 路徑共用的「還原 originalHTML + clear + translated=false」。
+  // Gemini abort(L840)+ Google abort(L1219)兩處原本各自寫一份。
+  // SPA reset(content-spa.js:resetForSpaNavigation)語意不同(頁面已變不需還原
+  // 舊頁 innerHTML),不抽進這條 helper。
+  function restoreOriginalHTMLAndReset() {
+    if (STATE.originalHTML.size > 0) {
+      STATE.originalHTML.forEach((originalSnapshot, el) => {
+        SK.restoreChildSnapshot(el, originalSnapshot);
+        el.removeAttribute('data-shinkansen-translated');
+      });
+      STATE.originalHTML.clear();
+    }
+    STATE.translated = false;
+  }
+
   // ─── restorePage ─────────────────────────────────────
 
   function restorePage() {
@@ -1029,20 +1042,17 @@
     // `if (hasAttribute('data-shinkansen-dual-source')) return;` 命中所有段落，
     // 全部早期 return，使用者「按 Opt+A 翻譯 → 再按還原 → 再按只看到原文」。
     // single 模式維持原本反向覆寫 originalHTML 邏輯。
+    // v1.8.14: dual 與 single 共用 originalHTML 還原迴圈(原本兩分支字字相同)。
+    // dual 額外多一步:先移除 wrapper(同時清 data-shinkansen-dual-source attribute);
+    // 之後共用 forEach 還原 dual fallback 元素 + single 全部元素。
     if (STATE.translatedMode === 'dual') {
       SK.removeDualWrappers?.();
-      // dual 也可能有少數 fallback 元素走了 single 路徑（fragment unit 不支援 dual），
-      // 一併還原。
-      STATE.originalHTML.forEach((snapshot, el) => {
-        SK.restoreChildSnapshot(el, snapshot);
-        el.removeAttribute('data-shinkansen-translated');
-      });
-    } else {
-      STATE.originalHTML.forEach((snapshot, el) => {
-        SK.restoreChildSnapshot(el, snapshot);
-        el.removeAttribute('data-shinkansen-translated');
-      });
     }
+    // dual fallback 元素 + single 全部元素共用同一還原迴圈
+    STATE.originalHTML.forEach((snapshot, el) => {
+      SK.restoreChildSnapshot(el, snapshot);
+      el.removeAttribute('data-shinkansen-translated');
+    });
     STATE.originalHTML.clear();
     STATE.translatedHTML.clear();
     STATE.translationCache?.clear?.();  // v1.5.0
@@ -1095,7 +1105,7 @@
 
     const runBatch = async (job) => {
       if (signal?.aborted) return;
-      const batchIdx = jobs.indexOf(job);
+      const batchIdx = job.idx; // v1.8.14: 取代 jobs.indexOf(job)
       try {
         const response = await sendMessageWithTimeout({
           type: _msgType,
@@ -1264,14 +1274,7 @@
       });
 
       if (abortSignal.aborted) {
-        if (STATE.originalHTML.size > 0) {
-          STATE.originalHTML.forEach((originalSnapshot, el) => {
-            SK.restoreChildSnapshot(el, originalSnapshot);
-            el.removeAttribute('data-shinkansen-translated');
-          });
-          STATE.originalHTML.clear();
-        }
-        STATE.translated = false;
+        restoreOriginalHTMLAndReset();
         SK.showToast('success', SK.t('cs_cancelled'), { progress: 1, stopTimer: true, autoHideMs: 2000 });
         return;
       }
@@ -1647,8 +1650,10 @@
         if (ytAutoOn) {
           SK.sendLog('info', 'system', 'YouTube auto-subtitle enabled, activating on load');
           // 稍微延遲，等 content script 完成初始化、XHR 攔截器就位
+          // v1.8.16: source: 'auto' 防 reload 後跟 yt-navigate-finish 路徑 race
+          //          (兩條鬧鐘都 fire,後到那條看 active 別誤觸 toggle stop)
           setTimeout(() => {
-            SK.translateYouTubeSubtitles?.().catch(err => {
+            SK.translateYouTubeSubtitles?.({ source: 'auto' }).catch(err => {
               SK.sendLog('warn', 'system', 'YouTube auto-subtitle failed', { error: err.message });
             });
           }, 800);

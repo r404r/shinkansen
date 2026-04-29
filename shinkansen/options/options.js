@@ -4,7 +4,7 @@
 import { browser } from '../lib/compat.js';
 import { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_GLOSSARY_PROMPT, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_FORBIDDEN_TERMS, getDefaultPromptsForLocale } from '../lib/storage.js';
 import { TIER_LIMITS } from '../lib/tier-limits.js';
-import { formatTokens, formatUSD, parseUserNum } from '../lib/format.js';
+import { formatTokens, formatUSD, parseUserNum, buildUsageCsvFilename } from '../lib/format.js';
 import { t, setLocale, initLocale, applyLocale, getLocale } from '../lib/i18n.js';
 import { isWorthNotifying } from '../lib/update-check.js'; // v1.6.5
 
@@ -240,30 +240,18 @@ async function load() {
   refreshPresetKeyBindings();
 
   // v1.6.6: 工具列「翻譯本頁」按鈕的 preset slot dropdown
-  // v1.6.14: slot 2 顯示「主要預設」、slot 1/3 顯示「預設 2/3」(順延編號:原預設 1 → 預設 2,原預設 2 → 主要預設,原預設 3 維持)
-  const slotTitle = (slot) => slot === 2 ? '主要預設' : `預設 ${slot === 1 ? 2 : 3}`;
+  // v1.6.13: 自動翻譯網站使用的 preset slot
+  // v1.6.14: slot 2 顯示「主要預設」、slot 1/3 顯示「預設 2/3」
+  // 兩個下拉選單的 option text 由 refreshSlotDropdownLabels() 統一處理,
+  // 此處只負責設 value
+  refreshSlotDropdownLabels();
   const popupSlotSel = $('popup-button-slot');
   if (popupSlotSel) {
-    for (const slot of [1, 2, 3]) {
-      const p = presets.find(x => x.slot === slot) || DEFAULTS.translatePresets.find(x => x.slot === slot);
-      const label = (p.label && p.label.trim()) || slotTitle(slot);
-      const opt = popupSlotSel.querySelector(`option[value="${slot}"]`);
-      if (opt) opt.textContent = `${slotTitle(slot)}：${label}`;
-    }
     const slotVal = Number(s.popupButtonSlot);
     popupSlotSel.value = ([1, 2, 3].includes(slotVal) ? slotVal : 2).toString();
   }
-
-  // v1.6.13: 自動翻譯網站使用的 preset slot
   const autoSlotSel = $('auto-translate-slot');
   if (autoSlotSel) {
-    for (const p of presets) {
-      const slot = Number(p.slot);
-      if (!slot) continue;
-      const label = (p.label && p.label.trim()) || slotTitle(slot);
-      const opt = autoSlotSel.querySelector(`option[value="${slot}"]`);
-      if (opt) opt.textContent = `${slotTitle(slot)}：${label}`;
-    }
     const autoSlotVal = Number(s.autoTranslateSlot);
     autoSlotSel.value = ([1, 2, 3].includes(autoSlotVal) ? autoSlotVal : 2).toString();
   }
@@ -300,6 +288,26 @@ function updatePresetModelVisibility(slot) {
   const engine = $(`preset-engine-${slot}`).value;
   const row = $(`preset-model-row-${slot}`);
   if (row) row.hidden = (engine === 'google' || engine === 'openai-compat' || engine === 'bing');
+}
+
+// 「工具列翻譯本頁按鈕」「自動翻譯網站」兩個下拉選單的 option text
+// 跟著「翻譯快速鍵」preset 標籤即時聯動。直接從 DOM input 讀目前值,
+// 不需重新讀 storage,使用者打字當下就能看到變化。
+function _slotTitle(slot) {
+  return slot === 2 ? '主要預設' : `預設 ${slot === 1 ? 2 : 3}`;
+}
+function refreshSlotDropdownLabels() {
+  const popupSlotSel = $('popup-button-slot');
+  const autoSlotSel = $('auto-translate-slot');
+  for (const slot of [1, 2, 3]) {
+    const labelInput = $(`preset-label-${slot}`);
+    const label = (labelInput?.value || '').trim() || _slotTitle(slot);
+    const text = `${_slotTitle(slot)}：${label}`;
+    const popupOpt = popupSlotSel?.querySelector(`option[value="${slot}"]`);
+    if (popupOpt) popupOpt.textContent = text;
+    const autoOpt = autoSlotSel?.querySelector(`option[value="${slot}"]`);
+    if (autoOpt) autoOpt.textContent = text;
+  }
 }
 
 // v1.5.8: YouTube 字幕分頁 — 依引擎切換 section 可見性。
@@ -554,7 +562,23 @@ if (_isFirefoxExt && typeof browser.commands?.update === 'function') {
   }
 }
 
+// v1.8.14: 並發 save 防護
+// 之前 save() 是 read-modify-write(sync.get → 組整桶 → sync.set),沒任何 lock。
+// 兩個 Tab 的儲存按鈕共用同一個 save(),快速連按 / 跨 Tab 同時改 / 打字+按鈕同時觸發
+// → 後一筆 set 可能蓋掉前一筆 get 之間的 in-flight 變更。
+let _saveInFlight = false;
+
 async function save() {
+  if (_saveInFlight) return;
+  _saveInFlight = true;
+  try {
+    return await _saveImpl();
+  } finally {
+    _saveInFlight = false;
+  }
+}
+
+async function _saveImpl() {
   // v0.62 起：apiKey 單獨寫到 browser.storage.local，不進 sync
   const apiKeyValue = $('apiKey').value.trim();
   await browser.storage.local.set({ apiKey: apiKeyValue });
@@ -842,6 +866,11 @@ $('gemini-reset-all')?.addEventListener('click', () => {
 // v1.4.13: preset engine 下拉切換時隱藏/顯示 model row
 for (const slot of [1, 2, 3]) {
   $(`preset-engine-${slot}`).addEventListener('change', () => updatePresetModelVisibility(slot));
+}
+
+// preset 標籤輸入時即時刷新「工具列翻譯本頁按鈕」「自動翻譯網站」兩個下拉選單的顯示文字
+for (const slot of [1, 2, 3]) {
+  $(`preset-label-${slot}`)?.addEventListener('input', refreshSlotDropdownLabels);
 }
 
 // v1.5.8: 字幕引擎下拉切換時更新 section 可見性 + 重算 cost hint
@@ -1936,7 +1965,12 @@ $('usage-to-now')?.addEventListener('click', () => {
   loadUsageData();
 });
 // v1.2.60: 搜尋框即時過濾
-$('usage-search')?.addEventListener('input', applyUsageSearch);
+// v1.8.14: 加 150ms debounce — 紀錄到 1-2K 筆時每打一字整表 re-render 會卡
+let _usageSearchTimer = null;
+$('usage-search')?.addEventListener('input', () => {
+  clearTimeout(_usageSearchTimer);
+  _usageSearchTimer = setTimeout(applyUsageSearch, 150);
+});
 $('usage-model-filter')?.addEventListener('change', applyUsageSearch);
 
 // 粒度切換
@@ -1965,10 +1999,8 @@ $('usage-export-csv').addEventListener('click', async () => {
   const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const fromStr = ($('usage-from-date')?.value || '').replace(/-/g, '');
-  const toStr = ($('usage-to-date')?.value || '').replace(/-/g, '');
   a.href = url;
-  a.download = `shinkansen-usage-${fromStr}-${toStr}.csv`;
+  a.download = buildUsageCsvFilename(from, to);
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -2013,12 +2045,15 @@ async function fetchLogs() {
       payload: { afterSeq: logLatestSeq },
     });
     if (!res?.ok) return;
-    if (res.logs && res.logs.length > 0) {
-      allLogs = allLogs.concat(res.logs);
-      // 前端也限制 buffer 上限，避免記憶體無限成長
-      if (allLogs.length > 2000) {
-        allLogs = allLogs.slice(allLogs.length - 2000);
-      }
+    // v1.8.14: 沒新 log 直接 return,不重 render(原本即使空也整表 innerHTML 一遍)
+    if (!res.logs || res.logs.length === 0) {
+      if (res.latestSeq) logLatestSeq = res.latestSeq;
+      return;
+    }
+    allLogs = allLogs.concat(res.logs);
+    // 前端也限制 buffer 上限，避免記憶體無限成長
+    if (allLogs.length > 2000) {
+      allLogs = allLogs.slice(allLogs.length - 2000);
     }
     if (res.latestSeq) logLatestSeq = res.latestSeq;
     renderLogTable();

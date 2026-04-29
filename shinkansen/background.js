@@ -6,7 +6,7 @@ import { translateBatch, extractGlossary, translateBatchStream } from './lib/gem
 import { translateBatch as translateBatchCustom } from './lib/openai-compat.js'; // v1.5.7
 import { translateGoogleBatch } from './lib/google-translate.js';
 import { translateBingBatch } from './lib/bing-translate.js'; // Nozomi: Bing Translate
-import { getSettings, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
+import { getSettings, getSettingsCached, cleanupLegacySyncKeys, DEFAULT_SUBTITLE_SYSTEM_PROMPT, DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT } from './lib/storage.js';
 import { debugLog, getLogs, clearLogs, getPersistedLogs, clearPersistedLogs } from './lib/logger.js';
 import * as cache from './lib/cache.js';
 import { RateLimiter } from './lib/rate-limiter.js';
@@ -19,6 +19,9 @@ import { detectForbiddenTermLeaks } from './lib/forbidden-terms.js'; // v1.5.6
 // import { maybeWriteWelcomeNotice } from './lib/welcome-notice.js'; // v1.6.5: disabled — user doesn't want update notification
 
 debugLog('info', 'system', 'service worker started', { version: browser.runtime.getManifest().version });
+
+// v1.8.14: 一次性清掉 storage.sync 的 legacy keys(避免長期累積踩到 quota)
+cleanupLegacySyncKeys();
 
 // v1.2.11: SUBTITLE_SYSTEM_PROMPT 已移至 lib/storage.js（DEFAULT_SUBTITLE_SYSTEM_PROMPT）
 // TRANSLATE_SUBTITLE_BATCH handler 從 ytSubtitle 設定讀取，不再使用硬碼常數。
@@ -255,6 +258,30 @@ browser.tabs.onRemoved.addListener(async (tabId) => {
   await persistStickyTabs();
 });
 
+// commit 4a 抽出:YouTube 跟 Drive 影片 ASR 都走 D' 模式(LLM 自由合句 + 時間戳對齊),
+// 邏輯一致只差 cacheTag(避免 YouTube / Drive cache 互打)與 log namespace。
+async function _handleAsrSubtitleBatch(payload, sender, cacheTag, namespace) {
+  const _tReceived = Date.now();
+  const s = await getSettings();
+  const _settingsMs = Date.now() - _tReceived;
+  debugLog('info', namespace, 'asr subtitle batch received', {
+    inputBytes: payload?.texts?.[0]?.length || 0,
+    settingsMs: _settingsMs,
+  });
+  const yt = s.ytSubtitle || {};
+  const geminiOverrides = {
+    // ASR 模式不沿用使用者自訂的 ytSubtitle.systemPrompt(那是逐條翻譯版本,規則不適用 ASR JSON 模式)
+    systemInstruction: DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT,
+    // ASR 合句需要一點推理,但翻譯仍應穩定;沿用 ytSubtitle.temperature
+    temperature: yt.temperature ?? 0.1,
+  };
+  if (yt.model) geminiOverrides.model = yt.model;
+  const pricingOverride = (yt.pricing && yt.pricing.inputPerMTok != null) ? yt.pricing : null;
+  // ASR 路徑不套用固定術語表 / 黑名單(ASR prompt 已內含禁用詞規則,且 JSON 包裝增加術語注入難度)
+  return handleTranslate(payload, sender, geminiOverrides, pricingOverride, cacheTag,
+    false, false);
+}
+
 // ─── 訊息路由（handler map 取代 if-else 鏈） ──────────────────
 const messageHandlers = {
   TRANSLATE_BATCH: {
@@ -379,26 +406,57 @@ const messageHandlers = {
   //   - 字幕 settings 沿用 ytSubtitle(model / temperature / pricing),只覆寫 systemInstruction
   TRANSLATE_ASR_SUBTITLE_BATCH: {
     async: true,
+    handler: (payload, sender) => _handleAsrSubtitleBatch(payload, sender, '_yt_asr', 'youtube'),
+  },
+  // commit 4a:Drive 影片 ASR 字幕走獨立 cache key('_drive_yt_asr')避免污染 YouTube
+  // 既有 cache。LLM prompt / pricing / 設定全部沿用 ytSubtitle(D' 模式跟 YouTube 一致)。
+  TRANSLATE_DRIVE_ASR_SUBTITLE_BATCH: {
+    async: true,
+    handler: (payload, sender) => _handleAsrSubtitleBatch(payload, sender, '_drive_yt_asr', 'drive'),
+  },
+  // Drive 影片 ASR 字幕 URL 偵測——iframe(youtube.googleapis.com/embed)的
+  // content-drive-iframe.js 用 PerformanceObserver 抓到 timedtext URL 後送來。
+  // 為什麼 background fetch 而不直接 iframe fetch:iframe 內 fetch 會被 PerformanceObserver
+  // 重新捕捉造成 loop;且 background 跟 iframe 不同 origin,但 authpayload 自含 auth(已驗
+  // credentials:'omit' 也 200),background 直接 refetch 即可。
+  // 拿到 json3 後 relay 到 top frame(drive.google.com)的 content-script(commit 2 接手處理)。
+  DRIVE_TIMEDTEXT_URL: {
+    async: true,
     handler: async (payload, sender) => {
-      const _tReceived = Date.now();
-      const s = await getSettings();
-      const _settingsMs = Date.now() - _tReceived;
-      debugLog('info', 'youtube', 'asr subtitle batch received', {
-        inputBytes: payload?.texts?.[0]?.length || 0,
-        settingsMs: _settingsMs,
+      const url = payload?.url;
+      if (!url || !sender?.tab?.id) return { ok: false, error: 'invalid payload' };
+      debugLog('info', 'drive', 'timedtext url received from iframe', {
+        tabId: sender.tab.id,
+        frameId: sender.frameId,
+        url: url.slice(0, 200),
       });
-      const yt = s.ytSubtitle || {};
-      const geminiOverrides = {
-        // ASR 模式不沿用使用者自訂的 ytSubtitle.systemPrompt(那是逐條翻譯版本,規則不適用 ASR JSON 模式)
-        systemInstruction: DEFAULT_ASR_SUBTITLE_SYSTEM_PROMPT,
-        // ASR 合句需要一點推理,但翻譯仍應穩定;沿用 ytSubtitle.temperature
-        temperature: yt.temperature ?? 0.1,
-      };
-      if (yt.model) geminiOverrides.model = yt.model;
-      const pricingOverride = (yt.pricing && yt.pricing.inputPerMTok != null) ? yt.pricing : null;
-      // ASR 路徑不套用固定術語表 / 黑名單(ASR prompt 已內含禁用詞規則,且 JSON 包裝增加術語注入難度)
-      return handleTranslate(payload, sender, geminiOverrides, pricingOverride, '_yt_asr',
-        false, false);
+      try {
+        const res = await fetch(url, { credentials: 'omit' });
+        if (!res.ok) {
+          debugLog('warn', 'drive', 'timedtext fetch failed', { status: res.status });
+          return { ok: false, error: `http ${res.status}` };
+        }
+        const json3 = await res.json();
+        debugLog('info', 'drive', 'timedtext fetched', {
+          eventCount: Array.isArray(json3?.events) ? json3.events.length : 0,
+        });
+        try {
+          await browser.tabs.sendMessage(
+            sender.tab.id,
+            { type: 'DRIVE_ASR_CAPTIONS', payload: { url, json3 } },
+            { frameId: 0 },
+          );
+        } catch (e) {
+          // top frame 可能還沒 listener(commit 2 才接),這層先記 log
+          debugLog('info', 'drive', 'top frame relay no listener (expected pre-commit-2)', {
+            error: e?.message || String(e),
+          });
+        }
+        return { ok: true };
+      } catch (e) {
+        debugLog('warn', 'drive', 'timedtext handler error', { error: e?.message || String(e) });
+        return { ok: false, error: e?.message || String(e) };
+      }
     },
   },
   // v1.4.0: Google Translate 網頁翻譯（不需 API Key，不走 rate limiter，快取 key 用 _gt 後綴）
@@ -410,6 +468,12 @@ const messageHandlers = {
   TRANSLATE_BATCH_BING: {
     async: true,
     handler: (payload, sender) => handleTranslateBing(payload, sender, '_bt'),
+  },
+  // commit 5b：Drive 影片字幕走 Google Translate 路徑（獨立 cache key '_gt_drive' 避免跟
+  // 一般網頁 GT 翻譯('_gt')互打）。input texts = raw segments 的 text array，逐段翻。
+  TRANSLATE_DRIVE_BATCH_GOOGLE: {
+    async: true,
+    handler: (payload, sender) => handleTranslateGoogle(payload, sender, '_gt_drive'),
   },
   // v1.5.7: OpenAI-compatible 自訂 Provider 翻譯（chat.completions endpoint）
   // 不走 rate limiter，cache key 加 baseUrl hash + model 分區。
@@ -600,7 +664,9 @@ const messageHandlers = {
   LOG_USAGE: {
     async: true,
     handler: async (payload) => {
-      const settings = await getSettings();
+      // v1.8.14: 改用 getSettingsCached——YouTube 一支影片上百筆 LOG_USAGE,
+      // 每筆原本都重讀整份 settings 只為了取 model 名稱。
+      const settings = await getSettingsCached();
       // v1.5.7: 依 payload.engine 決定 model 該從哪裡取——這樣 Alt+A/S 切不同 preset
       // 寫入紀錄的 model 才會是該批 API 真實使用的模型。
       // - 'openai-compat'：自訂模型，model 從 settings.customProvider.model
@@ -679,6 +745,25 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // v1.8.0: streamId → AbortController 對映,支援使用者中途取消 streaming
 const inFlightStreams = new Map();
+
+// v1.8.14: streaming 期間 SW keep-alive。
+// MV3 service worker 預設 5 分鐘 idle 收回,但長頁翻譯可能跨多分鐘,
+// 收回後 inFlightStreams Map(module-level state)消失 → 取消按鈕無響應 + abort 訊號到不了 fetch。
+// 每 20 秒呼叫一次極輕量的 chrome API 重置 idle timer,直到所有 stream 結束。
+let _streamKeepAliveTimer = null;
+function _startStreamKeepAlive() {
+  if (_streamKeepAliveTimer) return;
+  _streamKeepAliveTimer = setInterval(() => {
+    // getPlatformInfo 是極輕量的 API call,目的純粹是讓 SW 保持活著
+    browser.runtime.getPlatformInfo().catch(() => {});
+  }, 20_000);
+}
+function _stopStreamKeepAliveIfIdle() {
+  if (inFlightStreams.size === 0 && _streamKeepAliveTimer) {
+    clearInterval(_streamKeepAliveTimer);
+    _streamKeepAliveTimer = null;
+  }
+}
 
 // v1.8.0: Streaming 翻譯 handler。
 // v1.8.9: 加 opts 參數,支援字幕路徑(TRANSLATE_SUBTITLE_BATCH_STREAM)復用同一條 streaming pipeline,
@@ -776,6 +861,7 @@ async function handleTranslateStream(payload, sender, streamId, tabId, opts = {}
   if (allHit) {
     // Fast path:跳過 streaming + Gemini call,立即推 FIRST_CHUNK + 各 SEGMENT + DONE
     inFlightStreams.delete(streamId);  // 不需要 abort
+    _stopStreamKeepAliveIfIdle();
     browser.tabs.sendMessage(tabId, { type: 'STREAMING_FIRST_CHUNK', payload: { streamId } }).catch(() => {});
     for (let i = 0; i < cached.length; i++) {
       browser.tabs.sendMessage(tabId, {
@@ -798,6 +884,7 @@ async function handleTranslateStream(payload, sender, streamId, tabId, opts = {}
 
   const ac = new AbortController();
   inFlightStreams.set(streamId, ac);
+  _startStreamKeepAlive();
 
   let firstChunkSent = false;
   const onFirstChunk = () => {
@@ -887,6 +974,7 @@ async function handleTranslateStream(payload, sender, streamId, tabId, opts = {}
     }
   } finally {
     inFlightStreams.delete(streamId);
+    _stopStreamKeepAliveIfIdle();
   }
 }
 

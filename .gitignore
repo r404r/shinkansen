@@ -28,3 +28,6 @@ CLAUDE-TEMPLATE-*.md
 # debug harness 截圖輸出（tools/debug-harness.js）與一次性 probe 腳本
 .playwright-mcp/
 tools/probe-*.js
+
+# Claude Code ScheduleWakeup transient lock（每次 wakeup 重生,不該進 commit）
+.claude/scheduled_tasks.lock

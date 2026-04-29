@@ -34,6 +34,16 @@
     },
     {
       "matches": [
+        "https://youtube.googleapis.com/*"
+      ],
+      "js": [
+        "content-drive-iframe.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
         "<all_urls>"
       ],
       "js": [
@@ -44,6 +54,7 @@
         "content-inject.js",
         "content-spa.js",
         "content-youtube.js",
+        "content-drive.js",
         "content.js"
       ],
       "css": [

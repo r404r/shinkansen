@@ -14,6 +14,13 @@
   let contentGuardInterval = null;
   const GUARD_SWEEP_INTERVAL_MS = 1000;
 
+  // v1.8.14: Guard sweep 改用 IntersectionObserver 維護「viewport 附近」的子集,
+  // sweep 只走子集而非整份 STATE.translatedHTML。長文(Wikipedia 千段)從每秒
+  // 1000 次字串相等比對 + 部分 rect 算降到通常 < 30 個 entry 的子集。
+  let guardIntersectionObserver = null;
+  let guardVisibleSet = null; // Set<Element>,IO callback 維護
+
+
   // ─── 重置翻譯狀態 ────────────────────────────────────
 
   function resetForSpaNavigation() {
@@ -173,8 +180,44 @@
     if (!contentGuardInterval) {
       contentGuardInterval = setInterval(runContentGuard, GUARD_SWEEP_INTERVAL_MS);
     }
+    initGuardIntersectionObserver();
     SK.sendLog('info', 'spa', 'SPA observer started');
   };
+
+  // v1.8.14: 把 STATE.translatedHTML 與 STATE.translationCache 的元素全部 observe,
+  // IO callback 維護 guardVisibleSet,sweep 用該 set 做 subset。
+  function initGuardIntersectionObserver() {
+    if (guardIntersectionObserver) return;
+    if (typeof IntersectionObserver === 'undefined') return; // Safari 舊版 fallback
+    guardVisibleSet = new Set();
+    guardIntersectionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) guardVisibleSet.add(entry.target);
+        else guardVisibleSet.delete(entry.target);
+      }
+    }, { rootMargin: '500px' }); // 與舊 rect.bottom < -500 / top > innerHeight + 500 對齊
+
+    if (STATE.translatedHTML) {
+      for (const el of STATE.translatedHTML.keys()) {
+        if (el.isConnected) guardIntersectionObserver.observe(el);
+      }
+    }
+    if (STATE.translationCache) {
+      for (const el of STATE.translationCache.keys()) {
+        if (el && el.isConnected) guardIntersectionObserver.observe(el);
+      }
+    }
+  }
+  SK.initGuardIntersectionObserver = initGuardIntersectionObserver;
+
+  function teardownGuardIntersectionObserver() {
+    if (guardIntersectionObserver) {
+      guardIntersectionObserver.disconnect();
+      guardIntersectionObserver = null;
+    }
+    guardVisibleSet = null;
+  }
+
 
   function stopSpaObserver() {
     if (spaObserverDebounceTimer) {
@@ -189,6 +232,7 @@
       spaObserver.disconnect();
       spaObserver = null;
     }
+    teardownGuardIntersectionObserver();
     spaObserverRescanCount = 0;
     spaObserverSeenTexts.clear();
   }
@@ -209,14 +253,23 @@
       return;
     }
     let restored = 0;
-    for (const [el, translatedSnapshot] of STATE.translatedHTML) {
+    // v1.8.14: 優先走 IO subset(viewport 附近的 entry),沒 IO 時 fallback 全表
+    const candidates = guardVisibleSet
+      ? guardVisibleSet
+      : STATE.translatedHTML.keys();
+    for (const el of candidates) {
+      const translatedSnapshot = STATE.translatedHTML.get(el);
+      if (translatedSnapshot == null) continue; // IO subset 可能含已被 restorePage 清掉的元素
       if (!el.isConnected) continue;
       if (SK.childSnapshotEquals(el, translatedSnapshot)) continue;
       // v1.5.5: 編輯模式下使用者正在改譯文，快照偏離是預期的，
       // guard 不能覆蓋——否則每秒一次 sweep 會把使用者剛打的字蓋回去。
       if (el.getAttribute('contenteditable') === 'true') continue;
-      const rect = el.getBoundingClientRect();
-      if (rect.bottom < -500 || rect.top > window.innerHeight + 500) continue;
+      // IO subset 已過濾 viewport,fallback 路徑才需 rect 防護
+      if (!guardVisibleSet) {
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom < -500 || rect.top > window.innerHeight + 500) continue;
+      }
       SK.restoreChildSnapshot(el, translatedSnapshot);
       restored++;
     }
