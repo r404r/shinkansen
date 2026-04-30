@@ -5,6 +5,24 @@
 
 ---
 
+## v1.9.0.4
+
+**v1.9.0.4** — 修 v1.9.0.3 build 漏複製 `content-drive.js` / `content-drive-iframe.js` 導致**所有快捷鍵全部失效**(Firefox 實機驗證 reproduce)。
+
+**根因**:合併 upstream Drive ASR 改動帶入 `shinkansen/content-drive.js` + `shinkansen/content-drive-iframe.js` 兩個新 content script,`manifest.json` 跟 `manifest.firefox.json` 都註冊了引用,但 `scripts/build.js` 的 `contentScripts` 複製清單漏更新,build 出去的 manifest 引用了 build 目錄裡不存在的檔案。Firefox 加載時整條 `<all_urls>` content_scripts 入口校驗失敗 → **所有** content script(含 `content.js` 的 `runtime.onMessage` listener)全部不注入。使用者按 `Alt+A/S/D` 或自訂快捷鍵 → background.js `commands.onCommand` listener 仍正常 fire → `tabs.sendMessage` 找不到 listener → 既有 `.catch(() => {})`(line 1638)靜默吞掉錯誤 → 使用者看到「按了沒反應」。Chrome 同樣受影響(同一份漏複製清單)。
+
+**驗證**:Firefox 普通網頁 console 輸 `window.__shinkansen_loaded` 回 `undefined`(預期 `true`),鐵證 content script 沒注入。
+
+**修法**(`scripts/build.js`,2 步):
+1. `contentScripts` 陣列補上 `content-drive.js` + `content-drive-iframe.js`(順序與 manifest 對齊)
+2. build 結束前加 SANITY:掃 manifest.json 所有 `content_scripts[].js` + `background` 引用的檔案,跟 build 輸出對比,缺一個就 fail loudly 並提示修法。下次再加 content script 漏掉立刻在 build 階段爆,不會等到使用者實機才發現。
+
+**SANITY**:模擬移除 `content-drive.js` 後重 build → SANITY 校驗確實阻斷 build 並提示 `manifest 引用的檔案在 build 輸出中缺失:- content-drive.js`;還原後 `npm run build:firefox` / `build:chrome` 兩邊都綠。
+
+**影響檔案**:`scripts/build.js`(+36 行),不動 source code 行為。
+
+---
+
 ## v1.9.0
 
 **v1.9.0** — 合併 upstream v1.7.1–v1.8.13，大幅提升翻譯體驗。
