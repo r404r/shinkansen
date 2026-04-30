@@ -65,6 +65,11 @@ await build({
 });
 
 // ─── 2. 複製 content scripts（IIFE，無需打包） ─────────
+// 順序與 manifest.json content_scripts[].js 對齊（雖然複製順序不影響執行）。
+// 缺漏會導致 Firefox 整條 content_scripts 入口校驗失敗、所有 content script 全部
+// 不注入 → 快捷鍵 onCommand 仍 fire 但 tabs.sendMessage 找不到 listener,
+// 被 background.js 既有 .catch(()=>{}) 靜默吞掉,使用者看到「按了沒反應」。
+// 步驟 5 的 SANITY 校驗會掃 manifest 確認無漏。
 const contentScripts = [
   'content-ns.js',
   'content-toast.js',
@@ -73,8 +78,10 @@ const contentScripts = [
   'content-inject.js',
   'content-spa.js',
   'content-youtube.js',
+  'content-drive.js',
   'content.js',
   'content-youtube-main.js',
+  'content-drive-iframe.js',
 ];
 
 for (const file of contentScripts) {
@@ -145,6 +152,35 @@ if (target === 'firefox') {
   }
 } else {
   cpSync(resolve(SRC, 'manifest.json'), resolve(OUT, 'manifest.json'));
+}
+
+// ─── 5. SANITY: manifest 引用的所有 content script / background 檔案都要存在 ───
+// 為什麼:合併 upstream 帶入 content-drive.js / content-drive-iframe.js 時
+// 漏更新本檔 contentScripts 陣列,build 出去的 manifest 引用了 build 目錄裡
+// 不存在的檔案。Firefox 整條 content_scripts 入口校驗失敗 → 全部 content
+// script 不注入 → 快捷鍵 onCommand fire 但無 listener 可收 → 靜默失敗。
+// 早期偵測:build 結束前掃 manifest 確認所有引用的 .js 都複製到了。
+{
+  const manifestPath = resolve(OUT, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const referenced = new Set();
+  for (const entry of manifest.content_scripts || []) {
+    for (const js of entry.js || []) referenced.add(js);
+  }
+  // background 入口(Chrome: service_worker / Firefox: scripts[])
+  if (manifest.background?.service_worker) referenced.add(manifest.background.service_worker);
+  for (const s of manifest.background?.scripts || []) referenced.add(s);
+
+  const missing = [];
+  for (const file of referenced) {
+    if (!existsSync(resolve(OUT, file))) missing.push(file);
+  }
+  if (missing.length > 0) {
+    console.error(`✗ manifest 引用的檔案在 build 輸出中缺失:`);
+    for (const f of missing) console.error(`    - ${f}`);
+    console.error(`  修法:把缺失檔案加進 scripts/build.js 的 contentScripts 陣列。`);
+    process.exit(1);
+  }
 }
 
 console.log(`✓ Build complete → build/${target}/`);
