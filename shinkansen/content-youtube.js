@@ -1475,6 +1475,16 @@
   //
   // 跟非 ASR 路徑共用 TRANSLATE_SUBTITLE_BATCH 訊息(因為翻譯單位已經是「英文整句」,
   // 跟人工字幕一樣的形態,不用 ASR 專用的 JSON timestamp prompt)。
+  // Nozomi: 依 YT.config.engine 路由到對應的 handler(原版寫死 Gemini handler,
+  // 導致使用者選 Google/Bing 引擎時 ASR 字幕仍打 Gemini API)。
+  function _resolveSubtitleMsgType() {
+    const engine = SK.YT?.config?.engine;
+    if (engine === 'google')        return 'TRANSLATE_SUBTITLE_BATCH_GOOGLE';
+    if (engine === 'bing')          return 'TRANSLATE_SUBTITLE_BATCH_BING';
+    if (engine === 'openai-compat') return 'TRANSLATE_SUBTITLE_BATCH_CUSTOM';
+    return 'TRANSLATE_SUBTITLE_BATCH';
+  }
+
   async function _runAsrHeuristicWindow(windowSegs, windowStartMs) {
     const YT = SK.YT;
     if (!YT.active) return;
@@ -1517,9 +1527,10 @@
     const _t0 = Date.now();
     const _batchApiMs = new Array(batches.length).fill(0);
 
+    const _msgType = _resolveSubtitleMsgType();
     const _runBatch = (batchUnits, b) =>
       SK.safeSendMessage({
-        type: 'TRANSLATE_SUBTITLE_BATCH',
+        type: _msgType,
         payload: { texts: batchUnits.map(u => u.text), glossary: null },
       }).then(res => {
         const elapsed = Date.now() - _t0;
@@ -1632,7 +1643,10 @@
       //   - 'heuristic'   = F:啟發式合句 + 既有 TRANSLATE_SUBTITLE_BATCH(逐句翻)。延遲低、精度中。
       //   - 'llm'         = D':LLM 自由合句 + timestamp mode(_runAsrWindow)。延遲高、精度最高。
       //   - 'progressive' = E:先 heuristic 顯示(秒出),同時 fire-and-forget LLM 跑覆蓋。
+      // Nozomi: LLM 合句路徑(_runAsrWindow)需要 Gemini 的 JSON output 能力,Bing/Google MT
+      //         無法做 timestamp-aligned 合句。非 Gemini 引擎自動跳過 LLM 階段,只跑 heuristic。
       const asrMode = config.asrMode || 'progressive';  // 預設 progressive(混合模式)
+      const llmCapable = !config.engine || config.engine === 'gemini';
 
       if (asrMode === 'heuristic' || asrMode === 'progressive') {
         try {
@@ -1642,7 +1656,7 @@
         }
       }
 
-      if (asrMode === 'llm' || asrMode === 'progressive') {
+      if ((asrMode === 'llm' || asrMode === 'progressive') && llmCapable) {
         if (asrMode === 'progressive') {
           // fire-and-forget:LLM 結果回來後寫入 captionMap 會覆蓋 heuristic 版本
           // (兩條路徑都用同一組 windowSegs.normText 當 key,LLM 路徑的 entry.s/e 區間 ⊆ heuristic 合句區間)
@@ -1655,6 +1669,14 @@
           } catch (err) {
             SK.sendLog('error', 'youtube', 'asr window translation failed', { error: err.message });
           }
+        }
+      } else if (asrMode === 'llm' && !llmCapable) {
+        // 'llm' 模式 + 非 Gemini 引擎 → fallback 到 heuristic(若沒已跑過)
+        SK.sendLog('info', 'youtube', 'asr llm mode skipped: non-Gemini engine, falling back to heuristic', { engine: config.engine });
+        try {
+          await _runAsrHeuristicWindow(windowSegs, windowStartMs);
+        } catch (err) {
+          SK.sendLog('error', 'youtube', 'asr heuristic fallback failed', { error: err.message });
         }
       }
     } else if (windowSegs.length > 0) {
@@ -1723,11 +1745,8 @@
         // v1.4.0: 依 config.engine 路由到對應的翻譯 handler
         // v1.5.8: 加 'openai-compat' 第三引擎，走自訂模型 / customProvider 共用設定
         // Nozomi: 加 'bing' 第四引擎(Microsoft Translator),共用 _bt_yt cache namespace
-        const _subtitleMsgType =
-          config.engine === 'google'        ? 'TRANSLATE_SUBTITLE_BATCH_GOOGLE' :
-          config.engine === 'bing'          ? 'TRANSLATE_SUBTITLE_BATCH_BING'   :
-          config.engine === 'openai-compat' ? 'TRANSLATE_SUBTITLE_BATCH_CUSTOM' :
-                                              'TRANSLATE_SUBTITLE_BATCH';
+        // Nozomi: 改用 _resolveSubtitleMsgType() 與 ASR 路徑同源,避免兩處引擎路由表漂移
+        const _subtitleMsgType = _resolveSubtitleMsgType();
 
         const _injectBatchResult = (batchUnits, results, b, elapsed) => {
           for (let j = 0; j < batchUnits.length; j++) {
@@ -2295,7 +2314,8 @@
 
     try {
       const res = await SK.safeSendMessage({
-        type: 'TRANSLATE_SUBTITLE_BATCH',
+        // Nozomi: on-the-fly fallback 也走 engine 路由(原版寫死 Gemini handler)
+        type: _resolveSubtitleMsgType(),
         payload: { texts, glossary: null },
       });
       if (!res?.ok) throw new Error(res?.error || SK.t('yt_translate_fail'));
