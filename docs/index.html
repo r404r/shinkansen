@@ -4,19 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shinkansen Nozomi（のぞみ）｜Firefox / Chrome 网页翻译扩展</title>
-  <meta name="description" content="Shinkansen Nozomi 是 Shinkansen 的 fork：新增 Firefox 双平台支持、Bing 第四翻译引擎、三语界面（zh-TW / zh-CN / ja）、划词翻译、Sticky 自动翻译。浏览数据不经过第三方服务器">
+  <meta name="description" content="Shinkansen Nozomi 是 Shinkansen 的 fork：新增 Firefox 双平台支持、Bing 第四翻译引擎、三语界面（zh-TW / zh-CN / ja）、划区翻译、Sticky 自动翻译。浏览数据不经过第三方服务器">
 
   <!-- Open Graph / Social Preview -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="Shinkansen Nozomi — Firefox / Chrome 网页翻译扩展">
-  <meta property="og:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划词翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
+  <meta property="og:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划区翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
   <meta property="og:image" content="https://r404r.github.io/shinkansen/og-image.png">
   <meta property="og:url" content="https://r404r.github.io/shinkansen/">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Shinkansen Nozomi — Firefox / Chrome 网页翻译扩展">
-  <meta name="twitter:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划词翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
+  <meta name="twitter:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划区翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
   <meta name="twitter:image" content="https://r404r.github.io/shinkansen/og-image.png">
 
   <link rel="icon" type="image/png" href="icon-128.png">
@@ -303,7 +303,7 @@
     <div class="container">
       <img src="icon-128.png" alt="Shinkansen Nozomi" class="hero-icon">
       <h1>Shinkansen Nozomi<span class="hero-sep">｜</span><span class="hero-subtitle">Firefox / Chrome 网页翻译扩展</span></h1>
-      <p class="tagline">Shinkansen 的 fork：追加 Firefox 双平台、Bing 第四引擎、三语界面、划词翻译、Sticky 自动翻译<br>翻译请求由你的电脑直连 AI / 翻译 API，不经过任何第三方服务器</p>
+      <p class="tagline">Shinkansen 的 fork：追加 Firefox 双平台、Bing 第四引擎、三语界面、划区翻译、Sticky 自动翻译<br>翻译请求由你的电脑直连 AI / 翻译 API，不经过任何第三方服务器</p>
       <div class="btn-row">
         <a href="https://addons.mozilla.org/en-US/firefox/addon/shinkansen-nozomi/" class="btn-download">从 Firefox Add-ons 安装<span class="btn-version">已上架 AMO · 推荐</span></a>
         <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下载（含 Chrome）<span class="btn-version">最新版 · 手动安装</span></a>
@@ -320,7 +320,7 @@
         <li><strong>Firefox 双平台支持</strong>：上架 Firefox AMO，与 Chrome 共用同一份代码编译出两个平台版本</li>
         <li><strong>Bing Translate 第四翻译引擎</strong>：在 Gemini / Google Translate / 自定义模型之外多一个免费选项</li>
         <li><strong>三语用户界面</strong>：弹窗、设置页、提示文字全面支持 zh-TW / zh-CN / ja，跟随浏览器语言自动切换</li>
-        <li><strong>划词翻译</strong>：选中页面上任意文字即可即时翻译，无需整页翻</li>
+        <li><strong>划区翻译</strong>：选中页面上任意文字即可即时翻译，无需整页翻</li>
         <li><strong>Sticky 自动翻译</strong>：把指定域名记住，下次访问自动触发翻译，不用每页再按一次</li>
         <li><strong>统一 CJK 字体栈</strong>：zh-TW / zh-CN / ja / en 显示字体统一处理，避免日文网页被中文字体错误渲染</li>
       </ul>
@@ -331,7 +331,7 @@
   <!-- Privacy — 项目核心动机，放在最显眼的位置 -->
   <div class="container">
     <div class="privacy-hero">
-      <h2>为什么做 Shinkansen Nozomi？</h2>
+      <h2>为什么做 Shinkansen？<span style="font-size:0.65em;font-weight:400;color:#666;margin-left:10px;">— 来自原作者</span></h2>
       <p>既有的沉浸式网页翻译工具会把你浏览的每一页内容传到第三方服务器——无论你读了什么文章、看了什么邮件，全部都可能被看光</p>
       <p>Shinkansen Nozomi 继承上游的隐私优先理念：</p>
       <div class="privacy-points">
@@ -371,6 +371,30 @@
       <h2>功能特色</h2>
       <div class="features">
         <div class="feature">
+          <h3>四翻译引擎 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>Gemini + Google Translate + <strong>Bing Translate</strong> + <strong>自定义模型</strong>（OpenAI 兼容端点，可接 OpenRouter / Together / DeepSeek / Ollama 本机等百种模型）并存，按场景自由切换</p>
+        </div>
+        <div class="feature">
+          <h3>自定义快捷键 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>三组可自定义快捷键（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一键切换翻译引擎与模型</p>
+        </div>
+        <div class="feature">
+          <h3>Firefox 双平台 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>上架 Firefox AMO，Chrome / Firefox 同一份代码编译出两个平台版本，符合 Mozilla AMO 审核（零 innerHTML）</p>
+        </div>
+        <div class="feature">
+          <h3>三语用户界面 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>弹窗、设置页、提示文字全面支持台湾繁体（zh-TW）/ 简体中文（zh-CN）/ 日文（ja），跟随浏览器语言自动切换</p>
+        </div>
+        <div class="feature">
+          <h3>划区翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>选中页面上任意文字即可即时翻译，弹出小卡片显示译文，无需整页翻</p>
+        </div>
+        <div class="feature">
+          <h3>Sticky 自动翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>把指定域名记住，下次访问自动触发翻译；YouTube 字幕跨页延续、SPA 路由切换也跟着自动翻</p>
+        </div>
+        <div class="feature">
           <h3>极速秒翻</h3>
           <p>按下翻译 1 秒就看到页面开始变中文，不用等整批 API 返回再一次塞回页面（限 Gemini）</p>
         </div>
@@ -409,30 +433,6 @@
         <div class="feature">
           <h3>费用透明</h3>
           <p>每次翻译实时显示花费多少钱，设置页可回查过去每一笔翻译记录的 token 用量与费用，支持图表与 CSV 导出</p>
-        </div>
-        <div class="feature">
-          <h3>四翻译引擎 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
-          <p>Gemini + Google Translate + <strong>Bing Translate</strong> + <strong>自定义模型</strong>（OpenAI 兼容端点，可接 OpenRouter / Together / DeepSeek / Ollama 本机等百种模型）并存，按场景自由切换</p>
-        </div>
-        <div class="feature">
-          <h3>自定义快捷键</h3>
-          <p>三组可自定义快捷键（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一键切换翻译引擎与模型</p>
-        </div>
-        <div class="feature">
-          <h3>Firefox 双平台 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
-          <p>上架 Firefox AMO，Chrome / Firefox 同一份代码编译出两个平台版本，符合 Mozilla AMO 审核（零 innerHTML）</p>
-        </div>
-        <div class="feature">
-          <h3>三语用户界面 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
-          <p>弹窗、设置页、提示文字全面支持台湾繁体（zh-TW）/ 简体中文（zh-CN）/ 日文（ja），跟随浏览器语言自动切换</p>
-        </div>
-        <div class="feature">
-          <h3>划词翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
-          <p>选中页面上任意文字即可即时翻译，弹出小卡片显示译文，无需整页翻</p>
-        </div>
-        <div class="feature">
-          <h3>Sticky 自动翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
-          <p>把指定域名记住，下次访问自动触发翻译；YouTube 字幕跨页延续、SPA 路由切换也跟着自动翻</p>
         </div>
       </div>
     </div>
