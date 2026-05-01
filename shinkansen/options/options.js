@@ -181,7 +181,7 @@ async function load() {
     const stored = cp.systemPrompt || '';
     const isStockDefault = stored === '' || stored === DEFAULT_SYSTEM_PROMPT;
     $('cp-systemPrompt').value = isStockDefault
-      ? getDefaultPromptsForLocale(getLocale()).systemInstruction
+      ? getDefaultPromptsForLocale(getLocale()).systemPrompt
       : stored;
   }
   $('cp-temperature').value = (typeof cp.temperature === 'number') ? cp.temperature : 0.7;
@@ -851,7 +851,7 @@ $('yt-reset-prompt').addEventListener('click', () => {
 // v1.5.8: 自訂模型「重置為預設 Prompt」按鈕——把 textarea 重設為 Gemini 同款 DEFAULT_SYSTEM_PROMPT
 // Nozomi: 改為依當前 UI 語言給對應預設提示詞(zh-TW/zh-CN/ja),不再寫死 zh-TW
 $('cp-reset-prompt')?.addEventListener('click', () => {
-  $('cp-systemPrompt').value = getDefaultPromptsForLocale(getLocale()).systemInstruction;
+  $('cp-systemPrompt').value = getDefaultPromptsForLocale(getLocale()).systemPrompt;
   markDirty();
 });
 
