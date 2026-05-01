@@ -549,7 +549,13 @@ if (_isFirefoxExt && typeof browser.commands?.update === 'function') {
         keyEl.removeAttribute('data-unset');
         // commands.update() 已即時生效且持久化，不需 markDirty()
       } catch (err) {
-        // 無效的快捷鍵組合
+        // 無效的快捷鍵組合(常見原因: > 2 個 modifier 鍵 / 與本擴充其他 command 重複 /
+        // 被瀏覽器或 OS 保留 / Firefox 不支援的鍵碼)
+        console.error('[Shinkansen] commands.update failed', {
+          name: SLOT_TO_COMMAND_ID[slot],
+          shortcut,
+          error: err?.message || String(err),
+        });
         keyEl.textContent = t('opt_shortcut_invalid');
         _invalidTimer = setTimeout(() => {
           _invalidTimer = null;
