@@ -85,14 +85,13 @@ test('README.md 同步檢查 (目前版本段)', async () => {
   ).toContain(`v${EXPECTED_VERSION} — 完整功能清單`);
 });
 
-// ── 5. docs/index.html GitHub 下載按鈕（副標版本號）──
-// Nozomi 使用 /releases/latest URL（不帶具體版本號），只驗證副標 v 版本號
-test('docs/index.html 同步檢查 (GitHub 下載按鈕版本號)', async () => {
+// ── 5. docs/index.html GitHub 下載按鈕 ──
+// Nozomi 使用 /releases/latest URL,副標不寫死版本號（避免 release 漂移）
+// 只驗證下載按鈕的 releases/latest URL 仍存在
+test('docs/index.html 同步檢查 (GitHub 下載按鈕指向 releases/latest)', async () => {
   const html = readRepoFile('docs/index.html');
-  const subtitleFragment = `>v${EXPECTED_VERSION}<`;
   expect(
     html,
-    `[DRIFT] docs/index.html 缺「v${EXPECTED_VERSION}」副標。\n` +
-    `提醒:bump 時必須更新 docs/index.html GitHub 下載按鈕內 <span class="btn-version"> 的版本號。`,
-  ).toContain(subtitleFragment);
+    `[DRIFT] docs/index.html GitHub 下載按鈕應指向 r404r/shinkansen/releases/latest`,
+  ).toContain('https://github.com/r404r/shinkansen/releases/latest');
 });

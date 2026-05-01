@@ -71,6 +71,18 @@ Go to the [Chrome Web Store listing](https://chromewebstore.google.com/detail/sh
 4. Default model is `gemini-3-flash-preview`, Service Tier `DEFAULT`
 5. Other parameters (temperature, paragraphs per batch, character budget, etc.) can be tweaked as needed
 
+## Interface language
+
+Shinkansen-Nozomi supports three UI languages; both the translation target language and prompt context switch together:
+
+| Language                      | Translation target            | Prompt context                                       |
+| ----------------------------- | ----------------------------- | ---------------------------------------------------- |
+| Traditional Chinese (default) | Taiwan Traditional Chinese    | Taiwan-style terms, Taiwan-canonical translations    |
+| Simplified Chinese            | Mainland Simplified Chinese   | Mainland-style terms, Mainland-canonical translations|
+| Japanese                      | Japanese                      | Natural Japanese expressions, Japanese-canonical names|
+
+Switch via: Settings → General → Interface language.
+
 ## Usage
 
 - **Manual translation**: click the toolbar icon → "Translate this page"
@@ -116,6 +128,17 @@ Since v1.4.0, Google Translate is supported as a second translation engine:
 - **Zero cost, no Gemini quota usage**: but the unofficial endpoint has no SLA — if Google changes things, Shinkansen may need a patch
 
 When to use it: bulk browsing of English forums, news, product pages, etc. — content where "good enough" is good enough — use Google MT to save API budget. Switch to Gemini for precision (literature, academic articles, careful proper-noun handling).
+
+## Bing Translate engine (Microsoft Translator)
+
+Nozomi-only feature. Uses Microsoft Translator API (the same backend that powers Edge's built-in translation), free with no API key required:
+
+- **Available in mainland China**: both the token endpoint (`edge.microsoft.com`) and the translation endpoint (`api.cognitive.microsofttranslator.com`) are reachable from mainland China (verified 2026-04-28)
+- **No API key needed**: a JWT bearer token is fetched automatically via Microsoft Edge's public auth endpoint
+- **High stability**: standard REST API (not web reverse-engineering), unaffected by Bing web UI changes
+- **Quality comparable to Google Translate**
+
+Setup: in Settings → Translation shortcuts, change any preset's engine to "Bing Translate".
 
 ## Google Docs translation
 

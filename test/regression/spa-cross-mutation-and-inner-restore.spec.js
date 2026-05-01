@@ -100,7 +100,8 @@ test('mutation-driven inner restore: STATE.key 自身 childList 變動立即回�
 
       // 模擬 framework 把譯後 element 內部子節點砍掉再 rebuild 成原文(典型 YouTube
       // yt-attributed-string hover 觸發,host span 自身 childList 大量 mutation)
-      const savedHTMLSnapshot = STATE.translatedHTML.get(target);
+      // Nozomi 把 STATE.translatedHTML 改存 Node[] snapshot,record 譯文 textContent 作 reference
+      const expectedTranslatedText = target.textContent;
       target.innerHTML = 'The quick brown fox jumps over the lazy dog near the riverbank on a sunny afternoon';
 
       // 模擬 mutation callback 餵入 mutations(類型對齊真實 MutationRecord)
@@ -114,7 +115,7 @@ test('mutation-driven inner restore: STATE.key 自身 childList 變動立即回�
 
       return {
         textAfterRestore: target.textContent,
-        innerHTMLEqualsSaved: target.innerHTML === savedHTMLSnapshot,
+        textRestoredCorrectly: target.textContent === expectedTranslatedText,
       };
     })()
   `);
@@ -123,7 +124,7 @@ test('mutation-driven inner restore: STATE.key 自身 childList 變動立即回�
     result.textAfterRestore,
     `inner restore 失敗:target 應被 restore 為中文,實際=${JSON.stringify(result.textAfterRestore)}`,
   ).toContain('棕色狐狸');
-  expect(result.innerHTMLEqualsSaved).toBe(true);
+  expect(result.textRestoredCorrectly, 'restore 後 textContent 應與譯文一致').toBe(true);
 
   await page.close();
 });
@@ -153,18 +154,19 @@ test('mutation-driven inner restore cooldown:同 element 200ms 內第二次 muta
       const SK = window.__SK;
       const STATE = SK.STATE;
       const target = document.querySelector(${JSON.stringify(TARGET_SELECTOR)});
-      const savedHTML = STATE.translatedHTML.get(target);
+      // Nozomi STATE.translatedHTML 存 Node[] snapshot,改用譯文 textContent 作 reference
+      const expectedTranslatedText = target.textContent;
       const fakeMutation = { type: 'childList', target, removedNodes: [], addedNodes: [] };
 
       // 第一次破壞 + restore — 應該成功回寫
       target.innerHTML = 'broken-1';
       SK._restoreOnInnerMutation([fakeMutation]);
-      const firstRestoreOk = target.innerHTML === savedHTML;
+      const firstRestoreOk = target.textContent === expectedTranslatedText;
 
       // 立即(同步,絕對在 200ms 內)第二次破壞 + restore — 應被 cooldown 擋下,不回寫
       target.innerHTML = 'broken-2';
       SK._restoreOnInnerMutation([fakeMutation]);
-      const secondBlockedByCooldown = target.innerHTML === 'broken-2';
+      const secondBlockedByCooldown = target.textContent === 'broken-2';
 
       return { firstRestoreOk, secondBlockedByCooldown };
     })()
