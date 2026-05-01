@@ -154,9 +154,17 @@ async function translateChunk(texts, settings, glossary, fixedGlossary, forbidde
     : texts;
   const joined = markedTexts.join(DELIMITER);
 
+  // Nozomi: 空 systemPrompt 時依 settings.uiLocale 套用對應語言的 short fallback
+  // (原版寫死 zh-TW,簡中 / 日文使用者會被勒令翻成繁中)
+  const _shortFallbacks = {
+    'zh-TW': '你是專業的英文 → 繁體中文（台灣慣用語）翻譯助理，僅輸出譯文不加任何說明。',
+    'zh-CN': '你是专业的英文 → 简体中文（中国大陆惯用语）翻译助理，仅输出译文不加任何说明。',
+    'ja':    'あなたは英語から日本語への専門的な翻訳アシスタントです。訳文のみを出力し、説明は加えないでください。',
+  };
+  const _locale = settings?.uiLocale || 'zh-TW';
   const baseSystem = (typeof systemPrompt === 'string' && systemPrompt.trim())
     ? systemPrompt
-    : '你是專業的英文 → 繁體中文（台灣慣用語）翻譯助理，僅輸出譯文不加任何說明。';
+    : (_shortFallbacks[_locale] || _shortFallbacks['zh-TW']);
   const effectiveSystem = buildEffectiveSystemInstruction(baseSystem, texts, joined, glossary, fixedGlossary, forbiddenTerms);
 
   // v1.6.18: 依 baseUrl + model 偵測 provider,組對應 thinking 控制 payload。

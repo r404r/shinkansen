@@ -174,7 +174,16 @@ async function load() {
   const cp = { ...DEFAULTS.customProvider, ...(s.customProvider || {}) };
   $('cp-baseUrl').value = cp.baseUrl || '';
   $('cp-model').value = cp.model || '';
-  $('cp-systemPrompt').value = cp.systemPrompt || '';
+  // Nozomi: 若 storage 內存的是 stock zh-TW DEFAULT_SYSTEM_PROMPT(代表使用者沒自訂過,
+  // 來自 DEFAULT_SETTINGS.customProvider 的 hardcode),swap 成當前 UI 語言的預設提示詞。
+  // 自訂過內容的使用者(string ≠ stock default)維持原值不動。
+  {
+    const stored = cp.systemPrompt || '';
+    const isStockDefault = stored === '' || stored === DEFAULT_SYSTEM_PROMPT;
+    $('cp-systemPrompt').value = isStockDefault
+      ? getDefaultPromptsForLocale(getLocale()).systemInstruction
+      : stored;
+  }
   $('cp-temperature').value = (typeof cp.temperature === 'number') ? cp.temperature : 0.7;
   $('cp-inputPerMTok').value = cp.inputPerMTok != null ? cp.inputPerMTok : '';
   $('cp-outputPerMTok').value = cp.outputPerMTok != null ? cp.outputPerMTok : '';
@@ -840,8 +849,9 @@ $('yt-reset-prompt').addEventListener('click', () => {
   markDirty(); // 值已變更，標記為未儲存
 });
 // v1.5.8: 自訂模型「重置為預設 Prompt」按鈕——把 textarea 重設為 Gemini 同款 DEFAULT_SYSTEM_PROMPT
+// Nozomi: 改為依當前 UI 語言給對應預設提示詞(zh-TW/zh-CN/ja),不再寫死 zh-TW
 $('cp-reset-prompt')?.addEventListener('click', () => {
-  $('cp-systemPrompt').value = DEFAULT_SYSTEM_PROMPT;
+  $('cp-systemPrompt').value = getDefaultPromptsForLocale(getLocale()).systemInstruction;
   markDirty();
 });
 
