@@ -308,7 +308,7 @@
   const updateNoticeDismiss = shadow.getElementById('un-dismiss');
   function dismissUpdateNotice() {
     updateNoticeEl.hidden = true;
-    try { browser.runtime.sendMessage({ type: 'UPDATE_NOTICE_DISMISSED' }).catch(() => {}); }
+    try { SK.safeSendMessage({ type: 'UPDATE_NOTICE_DISMISSED' }).catch(() => {}); }
     catch { /* runtime context invalidated when extension reload */ }
   }
   updateNoticeLinkEl.addEventListener('click', dismissUpdateNotice);
@@ -320,7 +320,7 @@
   const welcomeNoticeDismiss = shadow.getElementById('wn-dismiss');
   function dismissWelcomeNotice() {
     welcomeNoticeEl.hidden = true;
-    try { browser.runtime.sendMessage({ type: 'WELCOME_NOTICE_TOAST_SHOWN' }).catch(() => {}); }
+    try { SK.safeSendMessage({ type: 'WELCOME_NOTICE_TOAST_SHOWN' }).catch(() => {}); }
     catch { /* runtime context invalidated when extension reload */ }
   }
   welcomeNoticeDismiss.addEventListener('click', (e) => { e.preventDefault(); dismissWelcomeNotice(); });

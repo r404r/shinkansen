@@ -108,11 +108,9 @@ async function load() {
   if (s.rpmOverride) $('rpm').value = s.rpmOverride;
   if (s.tpmOverride) $('tpm').value = s.tpmOverride;
   if (s.rpdOverride) $('rpd').value = s.rpdOverride;
-  // v1.6.19: 統一用 ?? 不用 || ——使用者輸入 0(safety margin / batch size)是合法
+  // v1.6.19: 統一用 ?? 不用 || ——使用者輸入 0(batch size 等)是合法
   // 設定意圖,|| 會把 0 當 falsy 默默改回預設值,造成 UI 「我設了 0 卻看到 10%」。
-  const marginPct = Math.round((s.safetyMargin ?? 0.1) * 100);
-  $('safetyMargin').value = marginPct;
-  $('safetyMarginLabel').textContent = marginPct;
+  // v1.8.19: 安全邊際從 UI 移除,程式碼內部維持 storage default 0.1 即可
   $('maxConcurrentBatches').value = s.maxConcurrentBatches ?? 10;
   $('maxUnitsPerBatch').value = s.maxUnitsPerBatch ?? 20;
   $('maxCharsPerBatch').value = s.maxCharsPerBatch ?? 3500;
@@ -271,9 +269,12 @@ async function load() {
 // v1.6.1/v1.6.3: update banner event handlers removed (user doesn't want update notification)
 
 // v1.5.0: 雙語視覺標記預覽更新
+// v1.8.31: 並排 light / dark 兩個預覽 box,各自有獨立 wrapper id
 function updateDualDemoMark(mark) {
-  const wrapper = document.getElementById('dual-demo-wrapper');
-  if (wrapper) wrapper.setAttribute('data-sk-mark', mark);
+  ['dual-demo-wrapper-light', 'dual-demo-wrapper-dark'].forEach(id => {
+    const wrapper = document.getElementById(id);
+    if (wrapper) wrapper.setAttribute('data-sk-mark', mark);
+  });
 }
 
 function getSelectedMarkStyle() {
@@ -423,11 +424,14 @@ function updateYtPromptCostHint() {
 }
 
 // v1.4.13: 從 chrome.commands.getAll() 讀取實際綁定鍵位顯示在每張 card 右上角
+// v1.8.19: command id 主要預設(slot 2)從 translate-preset-2 改為 translate-preset-0
+//          (字典序保證 chrome://extensions/shortcuts 顯示順序「主要 → 預設 2 → 預設 3」)
 async function refreshPresetKeyBindings() {
+  const SLOT_TO_COMMAND_ID = { 1: 'translate-preset-1', 2: 'translate-preset-0', 3: 'translate-preset-3' };
   try {
     const cmds = await browser.commands.getAll();
     for (const slot of [1, 2, 3]) {
-      const cmd = cmds.find(c => c.name === `translate-preset-${slot}`);
+      const cmd = cmds.find(c => c.name === SLOT_TO_COMMAND_ID[slot]);
       const keyEl = $(`preset-key-${slot}`);
       if (!keyEl) continue;
       if (cmd?.shortcut) {
@@ -591,10 +595,11 @@ async function _saveImpl() {
     geminiConfig: {
       model: existingModel,
       serviceTier: $('serviceTier').value,
-      temperature: Number($('temperature').value),
-      topP: Number($('topP').value),
-      topK: Number($('topK').value),
-      maxOutputTokens: Number($('maxOutputTokens').value),
+      // v1.8.20: 改用 parseUserNum——空字串/非法字元走 default,避免 NaN 寫進 storage 後送 API 拒絕。
+      temperature: parseUserNum($('temperature').value, DEFAULTS.geminiConfig.temperature),
+      topP: parseUserNum($('topP').value, DEFAULTS.geminiConfig.topP),
+      topK: parseUserNum($('topK').value, DEFAULTS.geminiConfig.topK),
+      maxOutputTokens: parseUserNum($('maxOutputTokens').value, DEFAULTS.geminiConfig.maxOutputTokens),
       systemInstruction: $('systemInstruction').value,
     },
     // v1.6.16: 後備路徑單價 UI 已移除,從 storage 拉現存值寫回(沿用 v1.6.15 對 geminiConfig.model 的同 pattern)
@@ -606,7 +611,7 @@ async function _saveImpl() {
     tier: $('tier').value,
     // v1.6.19: 改用 parseUserNum——空字串/非法字元走 default,合法數字(含 0)保留。
     // 沿用 `|| default` 會把使用者明確打的 0 一律當 falsy 改回預設,造成 UI 不一致。
-    safetyMargin: Number($('safetyMargin').value) / 100,
+    // v1.8.19: safetyMargin 從 UI 移除,save() 不再寫,維持 storage 既有值(0.1)
     maxRetries: parseUserNum($('maxRetries').value, 3),
     maxConcurrentBatches: parseUserNum($('maxConcurrentBatches').value, 10),
     maxUnitsPerBatch: parseUserNum($('maxUnitsPerBatch').value, 20),
@@ -627,15 +632,17 @@ async function _saveImpl() {
       // v1.7.2: 術語擷取獨立模型;空字串 = 與主翻譯模型相同(舊行為)
       model: $('glossaryModel').value,
       prompt: $('glossaryPrompt').value,
-      temperature: Number($('glossaryTemperature').value) || 0.1,
+      // v1.8.20: 改 parseUserNum,避免使用者打 0 (合法 temperature) 被 falsy 改回 0.1
+      temperature: parseUserNum($('glossaryTemperature').value, DEFAULTS.glossary.temperature ?? 0.1),
       skipThreshold: DEFAULTS.glossary.skipThreshold,
       // v1.7.3: blockingThreshold 使用者可調(0 = 永遠 fire-and-forget,大值 = 幾乎都 blocking)
       blockingThreshold: parseUserNum($('glossaryBlockingThreshold').value, DEFAULTS.glossary.blockingThreshold),
-      timeoutMs: Number($('glossaryTimeout').value) || 60000,
+      timeoutMs: parseUserNum($('glossaryTimeout').value, 60000),
       maxTerms: DEFAULTS.glossary.maxTerms,
     },
     // v1.0.17: Toast 透明度 / v1.0.31: Toast 位置
-    toastOpacity: Number($('toastOpacity').value) / 100,
+    // v1.8.20: 空字串 → 0/100 = 0 → toast 完全透明,改 parseUserNum 走預設
+    toastOpacity: parseUserNum($('toastOpacity').value, (DEFAULTS.toastOpacity ?? 0.95) * 100) / 100,
     toastPosition: $('toastPosition').value,
     // v1.1.3: Toast 自動關閉
     toastAutoHide: $('toastAutoHide').checked,
@@ -659,9 +666,10 @@ async function _saveImpl() {
       debugToast:         $('ytDebugToast').checked,
       onTheFly:           $('ytOnTheFly').checked,          // v1.2.49
       // preserveLineBreaks: 已移除 toggle，永遠 true（content-youtube.js 硬編碼）
-      windowSizeS:  Number($('ytWindowSizeS').value)  || 30,
-      lookaheadS:   Number($('ytLookaheadS').value)   || 10,
-      temperature:  Number($('ytTemperature').value)  ?? 1,
+      // v1.8.20: 改 parseUserNum——避免空字串走預設 + temperature 0 不被當 falsy + NaN ?? 1 = NaN 的陷阱
+      windowSizeS:  parseUserNum($('ytWindowSizeS').value, DEFAULTS.ytSubtitle.windowSizeS ?? 30),
+      lookaheadS:   parseUserNum($('ytLookaheadS').value, DEFAULTS.ytSubtitle.lookaheadS ?? 10),
+      temperature:  parseUserNum($('ytTemperature').value, DEFAULTS.ytSubtitle.temperature ?? 1),
       systemPrompt: $('ytSystemPrompt').value || DEFAULT_SUBTITLE_SYSTEM_PROMPT,
       // v1.2.39: 獨立模型 + 計價
       model: $('ytModel').value || '',
@@ -746,9 +754,10 @@ async function _saveImpl() {
       baseUrl: ($('cp-baseUrl').value || '').trim(),
       model: ($('cp-model').value || '').trim(),
       systemPrompt: $('cp-systemPrompt').value || '',
-      temperature: Number($('cp-temperature').value) || 0.7,
-      inputPerMTok: Number($('cp-inputPerMTok').value) || 0,
-      outputPerMTok: Number($('cp-outputPerMTok').value) || 0,
+      // v1.8.20: temperature 改 parseUserNum 避免 0 被當 falsy;單價 0 是合法值改 parseUserNum 0
+      temperature: parseUserNum($('cp-temperature').value, DEFAULTS.customProvider?.temperature ?? 0.7),
+      inputPerMTok: parseUserNum($('cp-inputPerMTok').value, 0),
+      outputPerMTok: parseUserNum($('cp-outputPerMTok').value, 0),
       thinkingLevel: (() => {
         const v = $('cp-thinking-level')?.value;
         return ['auto', 'off', 'low', 'medium', 'high'].includes(v) ? v : 'auto';
@@ -847,8 +856,7 @@ $('gemini-reset-all')?.addEventListener('click', () => {
   // 配額（先填 tier 觸發 RPM/TPM/RPD readonly 帶值，再清掉 override）
   $('tier').value = D.tier;
   applyTierToInputs(D.tier, D.geminiConfig.model);
-  $('safetyMargin').value = Math.round((D.safetyMargin ?? 0.1) * 100);
-  $('safetyMarginLabel').textContent = $('safetyMargin').value;
+  // v1.8.19: safetyMargin UI 已移除,reset 不再 touch
   $('maxRetries').value = D.maxRetries;
   // 效能
   $('maxConcurrentBatches').value = D.maxConcurrentBatches;
@@ -1008,9 +1016,7 @@ $('test-api-key').addEventListener('click', async () => {
 $('tier').addEventListener('change', () => {
   applyTierToInputs($('tier').value, getSelectedModel());
 });
-$('safetyMargin').addEventListener('input', () => {
-  $('safetyMarginLabel').textContent = $('safetyMargin').value;
-});
+// v1.8.19: safetyMargin slider UI 已移除,程式碼內部維持 storage default 0.1
 $('toastOpacity').addEventListener('input', () => {
   $('toastOpacityLabel').textContent = $('toastOpacity').value;
 });
@@ -1252,20 +1258,26 @@ $('import-input').addEventListener('change', async (e) => {
 //   moz-extension://       → Firefox       → about:addons（Firefox 沒有深連到 shortcut UI）
 //   safari-web-extension:// → Safari       → 隱藏連結（Safari 不支援 about:* / chrome://*）
 const _extUrl = browser.runtime.getURL('');
-const _shortcutsLink = $('open-shortcuts');
+// v1.8.22: 改 querySelectorAll(class) 支援多個 chrome://extensions/shortcuts 連結
+// (例:翻譯快速鍵段落 + YouTube 無邊模式段落各放一個)。
+const _shortcutsLinks = document.querySelectorAll('.open-shortcuts-link');
 if (_extUrl.startsWith('moz-extension://')) {
-  _shortcutsLink?.addEventListener('click', (e) => {
-    e.preventDefault();
-    browser.tabs.create({ url: 'about:addons' });
+  _shortcutsLinks.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      browser.tabs.create({ url: 'about:addons' });
+    });
   });
 } else if (_extUrl.startsWith('chrome-extension://')) {
-  _shortcutsLink?.addEventListener('click', (e) => {
-    e.preventDefault();
-    browser.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  _shortcutsLinks.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      browser.tabs.create({ url: 'chrome://extensions/shortcuts' });
+    });
   });
 } else {
   // Safari 或其他：隱藏連結（無法 tabs.create 到內建設定 URL）
-  if (_shortcutsLink) _shortcutsLink.style.display = 'none';
+  _shortcutsLinks.forEach((link) => { link.style.display = 'none'; });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1661,9 +1673,14 @@ function fmtTime(ts) {
   return `${mm}/${dd} ${hh}:${mi}`;
 }
 
+// v1.8.20: in-flight request token,只渲染最新一筆。日期/粒度切換頻繁時三條
+// Promise.all 後發但先回的會覆蓋先發但後回的,圖表 stale-data race。
+let _loadUsageDataReqId = 0;
+
 // ─── 載入用量資料 ────────────────────────────────────────
 async function loadUsageData() {
   const { from, to } = getUsageDateRange();
+  const reqId = ++_loadUsageDataReqId;
 
   // 同時載入彙總、圖表、明細
   const [statsRes, chartRes, recordsRes] = await Promise.all([
@@ -1671,6 +1688,9 @@ async function loadUsageData() {
     browser.runtime.sendMessage({ type: 'QUERY_USAGE_CHART', payload: { from, to, groupBy: currentGranularity } }),
     browser.runtime.sendMessage({ type: 'QUERY_USAGE', payload: { from, to } }),
   ]);
+
+  // v1.8.20: 期間有更新的 request 已發出 → 放棄這次 stale 結果
+  if (reqId !== _loadUsageDataReqId) return;
 
   // 彙總卡片
   if (statsRes?.ok) {
@@ -1780,6 +1800,16 @@ function renderChart(data) {
             font: { size: 10 },
             maxTicksLimit: 12,
             maxRotation: 0,
+            // 日粒度時 X 軸只顯示「日」,避免 2026-04-30 這種長字串擠成一團;
+            // 月 / 年粒度仍顯示原 period 字串。tooltip title 不受影響(走 default
+            // formatter,顯示完整 period)
+            callback: function(value) {
+              const label = this.getLabelForValue(value);
+              if (currentGranularity === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(label)) {
+                return label.slice(-2); // YYYY-MM-DD → DD
+              }
+              return label;
+            },
           },
           grid: { display: false },
         },
@@ -1826,6 +1856,8 @@ function renderTable(records) {
     // v0.99: 思考 token 以 output 費率計費，加入明細計算
     const billedTokens = (r.billedInputTokens || 0) + (r.outputTokens || 0);
     // v1.5.7: 模型欄顯示 preset label；查不到才回退 model id 短名
+    // v1.8.19: label 放寬到 30 字後 col-model 加 max-width + ellipsis,
+    //          完整 label 由 title attr 補(hover tooltip)
     const shortModel = modelToLabel(r.model);
     const title = r.title || '(無標題)';
     const urlDisplay = shortenUrl(r.url || '');
@@ -2038,7 +2070,12 @@ function stopLogPolling() {
   }
 }
 
+// v1.8.20: in-flight guard——SW 喚醒慢時 setInterval 不等上一輪,兩個 in-flight call
+// 共用同一 logLatestSeq 各自拿回相同 log → concat 兩次 → 表格出現重複行。
+let _fetchLogsInFlight = false;
 async function fetchLogs() {
+  if (_fetchLogsInFlight) return;
+  _fetchLogsInFlight = true;
   try {
     const res = await browser.runtime.sendMessage({
       type: 'GET_LOGS',
@@ -2059,6 +2096,8 @@ async function fetchLogs() {
     renderLogTable();
   } catch {
     // extension context invalidated 等情況，靜默
+  } finally {
+    _fetchLogsInFlight = false;
   }
 }
 

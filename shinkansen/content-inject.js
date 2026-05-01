@@ -9,10 +9,16 @@
 
   /**
    * 保證同一個 element 只快照一次原始子節點。
+   * 同時 snapshot textContent 給 SPA observer 的「detect-replacement」路徑用——
+   * 當框架(YouTube yt-attributed-string)整個 detach 譯後 element 再 add 一個英文
+   * 新 element 時,mutation callback 用 originalText 比對 addedNodes 找回對應段落。
    */
   SK.snapshotOnce = function snapshotOnce(el) {
     if (!STATE.originalHTML.has(el)) {
       STATE.originalHTML.set(el, SK.cloneChildSnapshot(el));
+    }
+    if (!STATE.originalText.has(el)) {
+      STATE.originalText.set(el, (el.textContent || '').trim());
     }
   };
 
@@ -266,6 +272,8 @@
         replaceNodeInPlace(el, frag);
         el.setAttribute('data-shinkansen-translated', '1');
         STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+        SK.refreshAncestorSavedHTML?.(el);
+        SK._guardObserveEl?.(el); // v1.8.20: 把新譯段註冊進 IO subset
         return;
       }
       const cleaned = SK.stripStrayPlaceholderMarkers(translation);
@@ -275,17 +283,23 @@
         replaceNodeInPlace(el, recovered);
         el.setAttribute('data-shinkansen-translated', '1');
         STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+        SK.refreshAncestorSavedHTML?.(el);
+        SK._guardObserveEl?.(el);
         return;
       }
       plainTextFallback(el, cleaned);
       el.setAttribute('data-shinkansen-translated', '1');
       STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+      SK.refreshAncestorSavedHTML?.(el);
+      SK._guardObserveEl?.(el);
       return;
     }
 
     replaceTextInPlace(el, translation);
     el.setAttribute('data-shinkansen-translated', '1');
     STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+    SK.refreshAncestorSavedHTML?.(el);
+    SK._guardObserveEl?.(el);
   };
 
   function injectFragmentTranslation(unit, translation, slots) {
@@ -329,6 +343,12 @@
       if (n.parentNode === el) el.removeChild(n);
     }
     el.insertBefore(newContent, anchor);
+    // v1.8.20: fragment 路徑也要寫 attribute + STATE.translatedHTML——
+    // 否則 dual 模式下 fragment 段落 Content Guard 保護不到、SPA observer 重複偵測 → 重複翻譯。
+    el.setAttribute('data-shinkansen-translated', '1');
+    STATE.translatedHTML.set(el, SK.cloneChildSnapshot(el));
+    SK.refreshAncestorSavedHTML?.(el);
+    SK._guardObserveEl?.(el);
   }
 
   // 暴露 resolveWriteTarget / injectIntoTarget 供 Debug API testInject 使用
@@ -391,6 +411,16 @@
       if (cs.letterSpacing) inner.style.letterSpacing = cs.letterSpacing;
       if (cs.color)         inner.style.color         = cs.color;
     }
+
+    // v1.8.31: inner reset padding/margin。
+    // inner 是 <p>/<div> 等真實 tag,會被站點的 `article p { padding-bottom: ... }`
+    // 之類規則套到——而 padding 算在 inner box 內,wrapper 的 background-color 會
+    // 跟著 inner padding 範圍一起延伸 → 視覺上「底色超出文字一大塊空白」。
+    // 砍掉 inner 的 padding/margin,讓底色只圍著文字本身;段落間距改由 wrapper
+    // 自己的 margin 控制(injectDual 內 mirror 原段落 padding-bottom + margin-bottom
+    // 到 wrapper.style.marginBottom)。
+    inner.style.padding = '0';
+    inner.style.margin = '0';
 
     // 譯文內容：有 slots 走 deserializer 重建 inline 結構，否則純文字 / br fragment
     if (slots && slots.length > 0) {
@@ -464,7 +494,49 @@
     return candidate;
   }
 
-  /** 主入口：把譯文以雙語 wrapper 形式注入 DOM */
+  /**
+   * v1.8.31: 偵測 wrapper 即將注入位置的「實際背景亮度」,回傳 'dark' | 'light'。
+   * 從 original 往上 walk,逐層讀 computed backgroundColor,第一層 alpha > 0.5 的
+   * 色調拿來算 luma。全程透明追到 html 還是透明就 fallback 'light'(HTML 預設白底)。
+   *
+   * Why:dual mode 的 tint 標記寫死 #FFF8E1 米色底,假設「父層文字偏深」;dark mode
+   * 頁面父層文字本來就是淺灰,淺字疊米色塊對比破裂。改用 prefers-color-scheme 會誤判
+   * 「OS dark + 站點 light」混合情境,所以走「實際渲染色」路線最準。
+   */
+  function detectThemeForElement(el) {
+    const win = el.ownerDocument?.defaultView;
+    if (!win) return 'light';
+    let node = el;
+    while (node && node !== el.ownerDocument.documentElement) {
+      const cs = win.getComputedStyle(node);
+      const m = cs.backgroundColor && cs.backgroundColor.match(/rgba?\(([^)]+)\)/);
+      if (m) {
+        const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+        const [r, g, b, a] = [parts[0], parts[1], parts[2], parts.length === 4 ? parts[3] : 1];
+        if (a > 0.5 && [r, g, b].every(n => Number.isFinite(n))) {
+          // ITU-R BT.601 luma
+          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+          return luma < 128 ? 'dark' : 'light';
+        }
+      }
+      node = node.parentElement;
+    }
+    // 全程透明:看 documentElement 自己
+    const rootCs = win.getComputedStyle(el.ownerDocument.documentElement);
+    const m2 = rootCs.backgroundColor && rootCs.backgroundColor.match(/rgba?\(([^)]+)\)/);
+    if (m2) {
+      const parts = m2[1].split(',').map(s => parseFloat(s.trim()));
+      const [r, g, b, a] = [parts[0], parts[1], parts[2], parts.length === 4 ? parts[3] : 1];
+      if (a > 0.5 && [r, g, b].every(n => Number.isFinite(n))) {
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        return luma < 128 ? 'dark' : 'light';
+      }
+    }
+    return 'light';
+  }
+  SK._detectThemeForElement = detectThemeForElement; // 給 spec 測試讀
+
+  /** 主入口:把譯文以雙語 wrapper 形式注入 DOM */
   SK.injectDual = function injectDual(unit, translation, slots) {
     if (!translation) return;
     // Fragment unit 結構特殊（虛擬段落 = 父容器內的「直接文字節點區段」），
@@ -503,6 +575,7 @@
         if (info.wrapper === existingWrapper) {
           STATE.translationCache.delete(oldKey);
           STATE.translationCache.set(original, info);
+          SK._guardObserveEl?.(original); // v1.8.20: swap key 後新 key 要重新進 IO subset
           break;
         }
       }
@@ -516,6 +589,9 @@
       ? SK.currentMarkStyle
       : SK.DEFAULT_MARK_STYLE;
     wrapper.setAttribute('data-sk-mark', mark);
+    // v1.8.31: 依注入位置的實際頁面亮度決定 dark/light 配色,避免 tint 米色底在
+    // dark mode 頁面跟淺灰文字對比破裂。
+    wrapper.setAttribute('data-sk-theme', detectThemeForElement(original));
     wrapper.appendChild(inner);
 
     // v1.5.3: copy 原段落的水平 layout 屬性到 wrapper。
@@ -524,14 +600,42 @@
     // 跟原 <p> 不對齊。typography copy（v1.5.2）只搬字型相關 6 屬性，layout 沒搬。
     // 只 copy 水平方向：保留 wrapper 自有的「上下間距」（margin-top:0.25em CSS rule）
     // 與「不固定 width」（讓 wrapper 隨 parent 撐開），避免動到段間距與整體寬度。
+    //
+    // v1.8.31: 只 copy「非零值」——原段落 padding/margin 是 0px 時不該寫 inline
+    // style 蓋掉 mark CSS(例如 tint mark 的 padding: 4px 8px 會被 inline padding:0
+    // 壓掉)。getComputedStyle 對沒設 padding 的元素回傳 '0px',是 truthy 字串。
     const winLayout = original.ownerDocument?.defaultView;
     const csLayout = winLayout?.getComputedStyle?.(original);
+    const isNonZero = (v) => v && v !== '0px';
     if (csLayout) {
-      if (csLayout.marginLeft)   wrapper.style.marginLeft   = csLayout.marginLeft;
-      if (csLayout.marginRight)  wrapper.style.marginRight  = csLayout.marginRight;
-      if (csLayout.paddingLeft)  wrapper.style.paddingLeft  = csLayout.paddingLeft;
-      if (csLayout.paddingRight) wrapper.style.paddingRight = csLayout.paddingRight;
+      if (isNonZero(csLayout.marginLeft))   wrapper.style.marginLeft   = csLayout.marginLeft;
+      if (isNonZero(csLayout.marginRight))  wrapper.style.marginRight  = csLayout.marginRight;
+      if (isNonZero(csLayout.paddingLeft))  wrapper.style.paddingLeft  = csLayout.paddingLeft;
+      if (isNonZero(csLayout.paddingRight)) wrapper.style.paddingRight = csLayout.paddingRight;
       if (csLayout.maxWidth && csLayout.maxWidth !== 'none') wrapper.style.maxWidth = csLayout.maxWidth;
+
+      // v1.8.31: 處理「譯文塊跟下一段段距」+「padding-bottom 撐空間造成的空白」。
+      //
+      // marginBottom mirror:把原段落「下方該有的段距」搬到 wrapper marginBottom。
+      // 因為 inner 已 reset padding/margin = 0(底色不溢出),原段落「在 inner
+      // 裡」的下方空間消失了,要由 wrapper 自己的 marginBottom 補回去跟下一段
+      // 拉開。
+      //
+      // marginTop 抵消「原段落 paddingBottom」(不含 marginBottom):
+      //   - paddingBottom 是「box 內下緣塞著的空白」,wrapper 在 afterend 會被
+      //     推到這塊空白下方。抵消後 wrapper 上邊界對齊原文字下緣。
+      //   - marginBottom **不抵消**:它的物理意義是「跟下一個 sibling 的距離」,
+      //     可能是 list item 之間 12px 距離(抵消會讓譯文塊侵入兄弟空間 → 重疊),
+      //     也可能是 byline-to-list 60px 距離(理想是抵消,但無法跟前者區分)。
+      //     歷史教訓:v1.8.31 試過抵消 (pb+mb) 整體,Daring Fireball sidebar
+      //     `<a>` 段落走 afterend-block-ancestor 插到 `<li>` 後面,把 12px li
+      //     兄弟距離抵消後譯文塊跟 li 重疊;退回只抵消 pb。
+      //   - byline-to-list 60px 空白沒解(屬於需要動原段落 inline style 才能
+      //     乾淨解的 case,風險評估後暫不做)。
+      const pb = parseFloat(csLayout.paddingBottom) || 0;
+      const mb = parseFloat(csLayout.marginBottom)  || 0;
+      if (pb > 0) wrapper.style.marginTop = `-${pb}px`;
+      if (pb + mb > 0) wrapper.style.marginBottom = `${pb + mb}px`;
     }
 
     let insertMode;
@@ -559,6 +663,7 @@
 
     original.setAttribute('data-shinkansen-dual-source', '1');
     STATE.translationCache.set(original, { wrapper, insertMode });
+    SK._guardObserveEl?.(original); // v1.8.20: dual 路徑也要進 IO subset
   };
 
   /** 還原 dual 模式：移除所有 wrapper、清乾淨 attribute（restorePage 雙語分支用） */
@@ -580,12 +685,28 @@
     // v1.5.3: dashed 從「底部虛線」（block border-bottom 只在最後一行出現、跟連結
     // 底線易混淆）改為「波浪底線」（每行字底下都有，跟連結直線底線視覺區分）。
     // mark value 保留 'dashed' 不改名，避免 storage migration 問題；只改視覺實作。
+    // v1.8.31:
+    //   - dark variant 用 [data-sk-theme="dark"] 切配色(避免 tint 米色底在 dark
+    //     mode 頁面跟淺灰文字對比破裂)
+    //   - tint 加 border-radius + 加大 padding,避免文字貼塊邊
+    //   - box-sizing: border-box 讓 padding 算進寬度內,不溢出原段落視覺寬
+    //   - 標題後的 wrapper 拉大 margin-top(`<h1>` 等大字級 line-height 把 0.25em
+    //     吃光,標題與譯文視覺零間距)
+    // marginTop:標題後拉開 0.5em(原 0.25em 太小,大字級標題 line-height 會把
+    // 它吃光);其他元素維持 0.25em。原段落若有 paddingBottom,injectDual 會在
+    // wrapper 上設 inline marginTop 負值覆蓋這條 CSS 預設。
     style.textContent =
-      `${tag} { display: block; margin-top: 0.25em; }\n` +
-      `${tag}[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 2px 4px; }\n` +
+      `${tag} { display: block; margin-top: 0.25em; box-sizing: border-box; }\n` +
+      `:where(h1, h2, h3, h4, h5, h6) + ${tag} { margin-top: 0.5em; }\n` +
+      // light (default)
+      `${tag}[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 4px 8px; border-radius: 4px; }\n` +
       `${tag}[data-sk-mark="bar"]    { border-left: 2px solid #9CA3AF; padding-left: 8px; }\n` +
       `${tag}[data-sk-mark="dashed"] { text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px; }\n` +
-      `${tag}[data-sk-mark="none"]   {}\n`;
+      `${tag}[data-sk-mark="none"]   {}\n` +
+      // dark
+      `${tag}[data-sk-mark="tint"][data-sk-theme="dark"]   { background-color: rgba(255, 255, 255, 0.08); }\n` +
+      `${tag}[data-sk-mark="bar"][data-sk-theme="dark"]    { border-left-color: #9CA3AF; }\n` +
+      `${tag}[data-sk-mark="dashed"][data-sk-theme="dark"] { text-decoration-color: #9CA3AF; }\n`;
     (document.head || document.documentElement).appendChild(style);
   };
 

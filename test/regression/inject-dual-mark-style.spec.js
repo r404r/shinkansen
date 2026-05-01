@@ -51,6 +51,12 @@ test('dual-mark-style: 4 種 mark 各自 attribute + 對應 CSS 生效', async (
         textDecorationLine: cs.textDecorationLine,
         textDecorationStyle: cs.textDecorationStyle,
         display: cs.display,
+        borderRadius: cs.borderTopLeftRadius,
+        paddingTop: cs.paddingTop,
+        paddingRight: cs.paddingRight,
+        paddingBottom: cs.paddingBottom,
+        paddingLeft: cs.paddingLeft,
+        boxSizing: cs.boxSizing,
       };
     }
     return result;
@@ -67,8 +73,15 @@ test('dual-mark-style: 4 種 mark 各自 attribute + 對應 CSS 生效', async (
     expect(after[k]?.display, `${k} wrapper 應為 display:block`).toBe('block');
   }
 
-  // tint：背景色 #FFF8E1 = rgb(255, 248, 225)
+  // tint:背景色 #FFF8E1 = rgb(255, 248, 225)
   expect(after.tint?.bgColor).toBe('rgb(255, 248, 225)');
+  // v1.8.31: tint padding 4 8 4 8、圓角 4px、border-box(避免文字貼塊邊 + 不溢出)
+  expect(after.tint?.paddingTop).toBe('4px');
+  expect(after.tint?.paddingRight).toBe('8px');
+  expect(after.tint?.paddingBottom).toBe('4px');
+  expect(after.tint?.paddingLeft).toBe('8px');
+  expect(after.tint?.borderRadius).toBe('4px');
+  expect(after.tint?.boxSizing).toBe('border-box');
 
   // bar：左邊細條 solid 2px
   expect(after.bar?.borderLeftStyle).toBe('solid');

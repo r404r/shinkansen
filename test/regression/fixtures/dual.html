@@ -94,5 +94,20 @@
   <div id="layout-container">
     <p id="layout-source">Paragraph with horizontal layout offset.</p>
   </div>
+
+  <!-- v1.8.31: 原段落 padding-bottom 撐高底色的 case。
+       真實案例:Stratechery 等站點對 <p> 設 padding-bottom,inner 是 <p> 會被站點
+       規則套到 → wrapper background 跟著 inner padding 延伸,視覺上「底色超出文字
+       一塊空白」。修法:inner reset padding/margin = 0、wrapper marginBottom mirror
+       原段落的 padding-bottom + margin-bottom,讓底色貼文字、段距保留。 -->
+  <style>
+    #bottom-spacing-source {
+      padding-bottom: 24px;
+      margin-bottom: 16px;
+    }
+  </style>
+  <div id="bottom-spacing-container">
+    <p id="bottom-spacing-source">Paragraph with bottom padding to simulate Stratechery.</p>
+  </div>
 </body>
 </html>

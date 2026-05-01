@@ -36,14 +36,31 @@ function scheduleTouchFlush() {
   touchFlushTimer = setTimeout(flushTouches, TOUCH_FLUSH_DELAY_MS);
 }
 
-function flushTouches() {
+// v1.8.20: 防止 flushTouches 把舊 value 覆蓋掉中間被 setBatch 寫進的新 value。
+// 原本 pendingTouches[k] 存的是 read 當下的 (v, t) 物件,5 秒後直接 set 寫回——
+// 若 setBatch 在這 5s 內寫了新譯文 V',flush 會把舊 V 蓋上去 → 下次重翻取到舊值。
+// 改成 flush 前重讀 storage,逐筆比對 value 一致才更新 timestamp;不一致(已被改)就 skip。
+async function flushTouches() {
   touchFlushTimer = null;
-  const updates = { ...pendingTouches };
-  const keys = Object.keys(updates);
+  const snapshot = { ...pendingTouches };
+  const keys = Object.keys(snapshot);
   if (!keys.length) return;
-  // 清空 pending（先清再寫，避免 flush 期間的新 touch 被漏掉）
   for (const k of keys) delete pendingTouches[k];
-  browser.storage.local.set(updates).catch(() => {}); // fire-and-forget
+  try {
+    const current = await browser.storage.local.get(keys);
+    const updates = {};
+    for (const k of keys) {
+      const cur = current[k];
+      if (cur == null) continue; // 已被淘汰,不重建
+      const curV = extractValue(cur);
+      const wantV = snapshot[k]?.v;
+      if (curV !== wantV) continue; // 已被 setBatch 換新譯文,放棄這次 touch
+      updates[k] = { v: curV, t: Date.now() };
+    }
+    if (Object.keys(updates).length) {
+      browser.storage.local.set(updates).catch(() => {});
+    }
+  } catch (_) { /* fire-and-forget */ }
 }
 
 // v1.8.14: hashText LRU memo
@@ -326,8 +343,9 @@ export async function getGlossary(inputHash) {
   // v0.85: 向下相容 — 舊格式直接是 Array，新格式是 { v: Array, t: number }
   if (Array.isArray(entry)) return entry;
   if (entry && typeof entry === 'object' && Array.isArray(entry.v)) {
-    // 更新時間戳（fire-and-forget）
-    browser.storage.local.set({ [key]: { v: entry.v, t: Date.now() } }).catch(() => {});
+    // v1.8.20: 走 safeStorageSet,讓 quota 滿時觸發 LRU eviction 後重試,
+    // 否則 timestamp 永遠寫不進去 → 活躍 glossary 被當最舊先淘汰。
+    safeStorageSet({ [key]: { v: entry.v, t: Date.now() } }).catch(() => {});
     return entry.v;
   }
   return null;

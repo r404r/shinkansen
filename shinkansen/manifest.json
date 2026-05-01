@@ -18,7 +18,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "alarms"
+    "alarms",
+    "webNavigation"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -86,26 +87,29 @@
     "open_in_tab": true
   },
   "commands": {
+    "translate-preset-0": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "翻譯本頁 - 主要預設"
+    },
     "translate-preset-1": {
       "suggested_key": {
         "default": "Alt+A",
         "mac": "Alt+A"
       },
-      "description": "翻譯預設 2（預設 Gemini Flash Lite）"
-    },
-    "translate-preset-2": {
-      "suggested_key": {
-        "default": "Alt+S",
-        "mac": "Alt+S"
-      },
-      "description": "翻譯主要預設（預設 Gemini Flash）"
+      "description": "翻譯本頁 - 預設 2"
     },
     "translate-preset-3": {
       "suggested_key": {
         "default": "Alt+D",
         "mac": "Alt+D"
       },
-      "description": "翻譯預設 3（預設 Google Translate,維持原 slot 3 編號）"
+      "description": "翻譯本頁 - 預設 3"
+    },
+    "youtube-borderless": {
+      "description": "切換 YouTube 無邊模式"
     }
   }
 }

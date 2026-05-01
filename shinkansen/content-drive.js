@@ -286,7 +286,7 @@
 
     let res;
     try {
-      res = await browser.runtime.sendMessage({
+      res = await SK.safeSendMessage({
         type: 'TRANSLATE_DRIVE_ASR_SUBTITLE_BATCH',
         payload: { texts: [inputJson], glossary: null },
       });
@@ -344,7 +344,7 @@
 
     let res;
     try {
-      res = await browser.runtime.sendMessage({
+      res = await SK.safeSendMessage({
         type: 'TRANSLATE_DRIVE_BATCH_GOOGLE',
         payload: { texts, glossary: null },
       });

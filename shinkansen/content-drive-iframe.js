@@ -29,12 +29,16 @@
   const TIMEDTEXT_RE = /^https:\/\/drive\.google\.com\/u\/\d+\/timedtext.*[?&]kind=asr/;
   const reportedUrls = new Set();
 
+  // v1.8.19: 此檔在 youtube.googleapis.com/* 獨立注入, 不載入 SK 命名空間,
+  // 必須自己處理 context invalidated。同步 try/catch 接 sync throw, runtime.id
+  // guard 接 fast path, .catch 接 async reject。
   function reportTimedtextUrl(url) {
     if (!url || reportedUrls.has(url)) return;
     if (!TIMEDTEXT_RE.test(url)) return;
     reportedUrls.add(url);
+    if (!chrome?.runtime?.id) return;
     try {
-      chrome.runtime.sendMessage({ type: 'DRIVE_TIMEDTEXT_URL', payload: { url } });
+      chrome.runtime.sendMessage({ type: 'DRIVE_TIMEDTEXT_URL', payload: { url } })?.catch?.(() => {});
     } catch (_) {}
   }
 

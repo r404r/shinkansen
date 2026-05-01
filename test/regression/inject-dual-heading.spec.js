@@ -6,6 +6,11 @@
 //
 // SANITY 紀錄（已驗證）：把 buildDualInner 的 H1-H6 分支 copyHeadingStyle 設為
 // false（不繼承字級），inner.style.fontSize 變空字串，spec fail；還原後 pass。
+//
+// v1.8.31 新增「標題後 wrapper margin-top 加大」斷言:
+//   :where(h1..h6) + shinkansen-translation 套 margin-top: 0.5em (= 8px)
+//   原 0.25em(4px)在大字級標題 line-height 會被吃光,標題與譯文視覺零間距。
+//   SANITY:把 ensureDualWrapperStyle 那條 selector 砍掉,marginTop 退回 0.25em(4px),斷言 fail;還原 pass。
 import { test, expect } from '../fixtures/extension.js';
 import { getShinkansenEvaluator } from './helpers/run-inject.js';
 
@@ -29,6 +34,7 @@ test('dual-heading: <h1> 注入後 wrapper inner = <div>，字級從原 heading 
     const wrapper = el.nextElementSibling;
     const inner = wrapper?.firstElementChild;
     if (!inner) return null;
+    const wrapperCs = window.getComputedStyle(wrapper);
     return {
       originalTag: el.tagName,
       originalText: el.textContent,
@@ -38,6 +44,8 @@ test('dual-heading: <h1> 注入後 wrapper inner = <div>，字級從原 heading 
       inlineFontSize:   inner.style.fontSize,
       inlineFontWeight: inner.style.fontWeight,
       inlineLineHeight: inner.style.lineHeight,
+      // v1.8.31: heading 後 wrapper 的 margin-top
+      wrapperMarginTop: wrapperCs.marginTop,
     };
   });
 
@@ -56,6 +64,14 @@ test('dual-heading: <h1> 注入後 wrapper inner = <div>，字級從原 heading 
   // 用 inline style 比較，避免單位差異造成誤判
   expect(after.inlineFontSize).toMatch(/28(\.0+)?px/);
   expect(after.inlineFontWeight).toBe('700');
+
+  // v1.8.31: 標題後 wrapper margin-top: 0.5em
+  // wrapper 自身字級(無設定)= 預設 16px → 0.5em = 8px
+  // 退回 0.25em 會是 4px。容忍小數浮點寫法。
+  // (注意:H1 fixture 沒 inline padding/margin → user-agent margin-bottom 會跟
+  // wrapper marginTop margin collapse,但 getComputedStyle 回傳的是 declared
+  // value,不算 collapse 結果。所以這裡測的是 8px。)
+  expect(after.wrapperMarginTop).toMatch(/^8(\.0+)?px$/);
 
   await page.close();
 });

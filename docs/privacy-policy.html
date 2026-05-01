@@ -90,7 +90,7 @@
   </div>
 
   <h2>1. 關於 Shinkansen</h2>
-  <p>Shinkansen 是一款 Chrome 擴充功能，透過 Google Gemini API 將外語網頁翻譯成台灣繁體中文。本擴充功能需要使用者自行提供 Google Gemini API Key 才能運作。</p>
+  <p>Shinkansen 是一款瀏覽器擴充功能，透過 Google Gemini API 將外語網頁翻譯成台灣繁體中文。本擴充功能需要使用者自行提供 Google Gemini API Key 才能運作。</p>
 
   <h2>2. 我們收集哪些資料</h2>
 
@@ -108,7 +108,7 @@
 
   <section>
     <h3>使用者偏好設定</h3>
-    <p>翻譯相關設定（模型選擇、溫度參數、自動翻譯網站名單、術語表等）儲存在 <code>chrome.storage.sync</code>，僅透過 Chrome 的內建同步機制在您自己的裝置之間同步。</p>
+    <p>翻譯相關設定（模型選擇、溫度參數、自動翻譯網站名單、術語表等）儲存在 <code>storage.sync</code>，僅透過瀏覽器的內建同步機制在您自己的裝置之間同步。</p>
   </section>
 
   <section>
@@ -130,7 +130,7 @@
   <p>Shinkansen 不會追蹤您的瀏覽紀錄或瀏覽行為、不會收集個人識別資訊、不會將資料傳送到開發者或任何第三方伺服器（Google Gemini API 除外）、不會顯示廣告或使用分析追蹤工具、不會販售或分享您的任何資料。</p>
 
   <h2>6. 權限說明</h2>
-  <p>本擴充功能要求以下 Chrome 權限：</p>
+  <p>本擴充功能要求以下瀏覽器權限：</p>
 
   <section>
     <h3><code>&lt;all_urls&gt;</code>（存取所有網站）</h3>
@@ -143,12 +143,17 @@
   </section>
 
   <section>
-    <h3><code>activeTab</code> 與 <code>scripting</code></h3>
-    <p>用於在使用者啟動翻譯時，將翻譯腳本注入當前頁面。</p>
+    <h3><code>activeTab</code></h3>
+    <p>用於在使用者主動啟動翻譯時，於當前作用中分頁啟用翻譯邏輯（內容腳本透過宣告式 <code>content_scripts</code> 注入，無需 <code>scripting</code> 動態權限）。</p>
+  </section>
+
+  <section>
+    <h3><code>alarms</code></h3>
+    <p>用於 service worker 排定閒置喚醒時機（例如維持翻譯串流連線、定期檢查更新），不背景收集資料。</p>
   </section>
 
   <h2>7. 資料安全</h2>
-  <p>您的 API Key 存放在 Chrome 的本地儲存區，受瀏覽器沙盒保護。我們建議您不要將 API Key 分享給他人，並在 Google AI Studio 中為您的 Key 設定適當的用量限制。</p>
+  <p>您的 API Key 存放在瀏覽器的本地儲存區，受瀏覽器沙盒保護。我們建議您不要將 API Key 分享給他人，並在 Google AI Studio 中為您的 Key 設定適當的用量限制。</p>
 
   <h2>8. 兒童隱私</h2>
   <p>Shinkansen 並非針對 13 歲以下兒童設計。我們不會刻意收集兒童的個人資訊。</p>
@@ -161,7 +166,7 @@
   <p>Twitter (X)：<a href="https://x.com/jimmy_su" target="_blank" rel="noopener">@jimmy_su</a></p>
 
   <footer>
-    <p>&copy; 2026 Shinkansen. 本隱私權政策適用於 Shinkansen Chrome 擴充功能。</p>
+    <p>&copy; 2026 Shinkansen. 本隱私權政策適用於 Shinkansen 瀏覽器擴充功能。</p>
   </footer>
 </body>
 </html>

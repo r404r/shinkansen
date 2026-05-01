@@ -64,34 +64,6 @@
       </p>
       <small class="muted" data-i18n="opt_desc_shortcut_edit">點擊快捷鍵可直接修改鍵位（僅 Firefox）。Chrome 請到瀏覽器擴充功能設定修改。</small>
       <div class="preset-cards">
-        <div class="preset-card" data-slot="1">
-          <div class="preset-card-header">
-            <strong data-i18n="opt_preset_1">預設 2</strong>
-            <span class="preset-key" id="preset-key-1">—</span>
-          </div>
-          <label>
-            <span data-i18n="opt_preset_label">標籤</span>
-            <input type="text" id="preset-label-1" maxlength="12" placeholder="Flash Lite">
-          </label>
-          <label>
-            <span data-i18n="opt_label_preset_engine">翻譯引擎</span>
-            <select id="preset-engine-1">
-              <option value="gemini" data-i18n="opt_val_engine_gemini">Gemini（AI 翻譯）</option>
-              <option value="google" data-i18n="opt_val_engine_google">Google Translate（免費機器翻譯）</option>
-              <option value="openai-compat" data-i18n="opt_val_engine_custom">自訂模型</option>
-              <option value="bing" data-i18n="opt_val_engine_bing">Bing Translate（免費，中國大陸可用）</option>
-            </select>
-          </label>
-          <label class="preset-model-label" id="preset-model-row-1">
-            <span data-i18n="opt_label_preset_model">Gemini 模型</span>
-            <select id="preset-model-1">
-              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview（$0.10 / $0.30）</option>
-              <option value="gemini-3-flash-preview">gemini-3-flash-preview（$0.50 / $3.00）</option>
-              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview（$2.00 / $12.00）</option>
-            </select>
-          </label>
-        </div>
-
         <div class="preset-card preset-card-primary" data-slot="2">
           <div class="preset-card-header">
             <strong data-i18n="opt_preset_2">主要預設</strong>
@@ -99,7 +71,7 @@
           </div>
           <label>
             <span data-i18n="opt_preset_label">標籤</span>
-            <input type="text" id="preset-label-2" maxlength="12" placeholder="Flash">
+            <input type="text" id="preset-label-2" maxlength="30" placeholder="Flash">
           </label>
           <label>
             <span data-i18n="opt_label_preset_engine">翻譯引擎</span>
@@ -120,6 +92,34 @@
           </label>
         </div>
 
+        <div class="preset-card" data-slot="1">
+          <div class="preset-card-header">
+            <strong data-i18n="opt_preset_1">預設 2</strong>
+            <span class="preset-key" id="preset-key-1">—</span>
+          </div>
+          <label>
+            <span data-i18n="opt_preset_label">標籤</span>
+            <input type="text" id="preset-label-1" maxlength="30" placeholder="Flash Lite">
+          </label>
+          <label>
+            <span data-i18n="opt_label_preset_engine">翻譯引擎</span>
+            <select id="preset-engine-1">
+              <option value="gemini" data-i18n="opt_val_engine_gemini">Gemini（AI 翻譯）</option>
+              <option value="google" data-i18n="opt_val_engine_google">Google Translate（免費機器翻譯）</option>
+              <option value="openai-compat" data-i18n="opt_val_engine_custom">自訂模型</option>
+              <option value="bing" data-i18n="opt_val_engine_bing">Bing Translate（免費，中國大陸可用）</option>
+            </select>
+          </label>
+          <label class="preset-model-label" id="preset-model-row-1">
+            <span data-i18n="opt_label_preset_model">Gemini 模型</span>
+            <select id="preset-model-1">
+              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview（$0.10 / $0.30）</option>
+              <option value="gemini-3-flash-preview">gemini-3-flash-preview（$0.50 / $3.00）</option>
+              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview（$2.00 / $12.00）</option>
+            </select>
+          </label>
+        </div>
+
         <div class="preset-card" data-slot="3">
           <div class="preset-card-header">
             <strong data-i18n="opt_preset_3">預設 3</strong>
@@ -127,7 +127,7 @@
           </div>
           <label>
             <span data-i18n="opt_preset_label">標籤</span>
-            <input type="text" id="preset-label-3" maxlength="12" placeholder="Google MT">
+            <input type="text" id="preset-label-3" maxlength="30" placeholder="Google MT">
           </label>
           <label>
             <span data-i18n="opt_label_preset_engine">翻譯引擎</span>
@@ -156,8 +156,8 @@
       <label class="popup-button-slot-label">
         對應的翻譯預設
         <select id="popup-button-slot">
-          <option value="1">預設 2</option>
           <option value="2">主要預設</option>
+          <option value="1">預設 2</option>
           <option value="3">預設 3</option>
         </select>
       </label>
@@ -172,8 +172,8 @@
       <label class="popup-button-slot-label">
         自動翻譯使用的預設
         <select id="auto-translate-slot">
-          <option value="1">預設 2</option>
           <option value="2">主要預設</option>
+          <option value="1">預設 2</option>
           <option value="3">預設 3</option>
         </select>
         <small class="muted">進入白名單網域時走哪一組預設（等同自動按下對應的快速鍵）。預設「主要預設」與 v1.6.12 之前的行為一致</small>
@@ -199,13 +199,24 @@
       <h2 data-i18n="opt_section_dual_mark">雙語對照視覺標記</h2>
       <p class="muted" data-i18n="opt_desc_dual_mark">
         當顯示模式設為「雙語對照」時，譯文會以新段落形式 append 在原文之後。
-        以下選項決定譯文段落的視覺標記樣式（顯示模式本身可在 popup 切換）
+        以下選項決定譯文段落的視覺標記樣式（顯示模式本身可在 popup 切換）。
+        v1.8.31 起，Shinkansen 會自動偵測網頁實際背景亮度套用對應配色，亮色與深色頁面各自呈現如下
       </p>
-      <div class="dual-demo">
-        <p class="dual-demo-original">The quick brown fox jumps over the lazy dog.</p>
-        <shinkansen-translation id="dual-demo-wrapper" data-sk-mark="tint">
-          <p class="dual-demo-translation">敏捷的棕狐跨越懶狗</p>
-        </shinkansen-translation>
+      <div class="dual-demo-pair">
+        <div class="dual-demo dual-demo-light">
+          <div class="dual-demo-label">亮色頁面</div>
+          <p class="dual-demo-original">The quick brown fox jumps over the lazy dog.</p>
+          <shinkansen-translation id="dual-demo-wrapper-light" data-sk-mark="tint" data-sk-theme="light">
+            <p class="dual-demo-translation">敏捷的棕狐跨越懶狗</p>
+          </shinkansen-translation>
+        </div>
+        <div class="dual-demo dual-demo-dark">
+          <div class="dual-demo-label">深色頁面</div>
+          <p class="dual-demo-original">The quick brown fox jumps over the lazy dog.</p>
+          <shinkansen-translation id="dual-demo-wrapper-dark" data-sk-mark="tint" data-sk-theme="dark">
+            <p class="dual-demo-translation">敏捷的棕狐跨越懶狗</p>
+          </shinkansen-translation>
+        </div>
       </div>
       <div class="dual-mark-options">
         <label><input type="radio" name="markStyle" value="tint" checked><span data-i18n="opt_val_mark_tint">淡底色</span></label>
@@ -286,7 +297,7 @@
         詳細費率見 <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener">Gemini 官方定價頁</a>
       </p>
       <p class="muted" style="font-size: 13px;">
-        Preset 翻譯的計價優先順序:覆蓋值 → 內建表 → 下方「後備路徑單價」。單位皆為「每 1M tokens 的美金價格」
+        Preset 翻譯的計價優先順序：覆蓋值 → 內建表 → 下方「後備路徑單價」。單位皆為「每 1M tokens 的美金價格」
       </p>
 
       <div class="model-pricing-overrides">
@@ -559,9 +570,33 @@
         <small class="muted">
           OpenAI 相容模型端點的根目錄。系統會自動接 <code>/chat/completions</code>。
           常見：<code>https://openrouter.ai/api/v1</code>、<code>https://api.together.xyz/v1</code>、
-          <code>http://localhost:11434/v1</code>（Ollama）
+          <code>http://localhost:11434/v1</code>(Ollama)
         </small>
       </label>
+      <details class="advanced-details" style="margin-top: 4px; margin-bottom: 12px;">
+        <summary>連本機 Ollama / llama.cpp 收到 403？（展開查看解法）</summary>
+        <div style="margin-top: 8px; font-size: 13px;">
+          <p class="muted" style="margin: 0 0 8px;">
+            Chrome 從擴充功能呼叫本機後端（<code>localhost</code> / <code>127.0.0.1</code>）時，
+            會強制送 <code>Origin: chrome-extension://&lt;id&gt;</code> header。
+            Ollama 與 llama.cpp 預設的 CORS 設定不認得這個 origin → 直接回 403
+          </p>
+          <p class="muted" style="margin: 0 0 6px;"><strong>兩種解法擇一</strong>：</p>
+          <ol class="muted" style="margin: 0 0 0 20px; padding: 0;">
+            <li style="margin-bottom: 6px;">
+              <strong>Ollama</strong>：啟動前設環境變數 <code>OLLAMA_ORIGINS=*</code>
+              （或更嚴格的 <code>chrome-extension://*</code>）。
+              macOS 用 <code>launchctl setenv OLLAMA_ORIGINS "*"</code> 後重啟 Ollama；
+              Windows 在「系統內容 → 環境變數」加 <code>OLLAMA_ORIGINS</code> = <code>*</code>
+            </li>
+            <li>
+              <strong>後端不能改 CORS 設定時</strong>：在系統 hosts 檔加一筆
+              <code>127.0.0.1 ollama.local</code>，Base URL 改成
+              <code>http://ollama.local:11434/v1</code>。Chrome 看到的不是 loopback 地址就不會強制送 Origin
+            </li>
+          </ol>
+        </div>
+      </details>
       <label>
         模型 ID
         <input type="text" id="cp-model" placeholder="例如：anthropic/claude-sonnet-4-5">
@@ -622,10 +657,10 @@
         <summary class="muted" style="font-size: 13px; cursor: pointer; margin-top: 8px;">進階：自訂 request body 額外參數（JSON，覆蓋上方思考強度）</summary>
         <textarea id="cp-extra-body-json" rows="4" placeholder='例：{"reasoning":{"max_tokens":4000},"top_k":40}' style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;"></textarea>
         <small class="muted">
-          內容會深層 merge 進 chat.completions request body，可用來:
-          (1) 強制覆蓋上方「思考強度」自動產生的設定；
-          (2) 加 provider 專屬參數（例如 OpenRouter 的 <code>top_k</code> / <code>min_p</code>、
-          Anthropic 的 <code>metadata</code>)。
+          內容會深層 merge 進 chat.completions request body，可用來：
+          （1）強制覆蓋上方「思考強度」自動產生的設定；
+          （2）加 provider 專屬參數（例如 OpenRouter 的 <code>top_k</code> / <code>min_p</code>、
+          Anthropic 的 <code>metadata</code>）。
           格式錯誤會在 Debug 分頁 log 一條 warn 並忽略，翻譯不會中斷
         </small>
       </details>
@@ -661,7 +696,7 @@
     <section>
       <h2>禁用詞清單</h2>
       <p class="muted">
-        針對 LLM 容易漏網的中國大陸用語自訂禁用對照表。內容會以高顯著性區塊
+        針對 AI 模型容易漏網的禁用辭彙自訂禁用對照表。內容會以高顯著性區塊
         注入 Gemini 的 system prompt 末端，明確要求譯文不可使用左欄詞彙、
         必須改用右欄。修改清單後會自動讓既有翻譯快取分區，不再命中舊譯文
       </p>
@@ -883,7 +918,7 @@
       </label>
     </section>
 
-    <!-- v1.6.23: 簡化為單一 toggle：開啟=混合模式(progressive)、關閉=預設分句(heuristic) -->
+    <!-- v1.6.23: 簡化為單一 toggle：開啟=混合模式（progressive）、關閉=預設分句（heuristic） -->
     <section>
       <h2>自動產生字幕分句模式</h2>
       <p class="muted">
@@ -924,7 +959,7 @@
         <label>
           模型
           <select id="ytModel">
-            <option value="">（與文章翻譯相同）</option>
+            <option value="">（與網頁翻譯主要預設相同）</option>
             <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview（$0.10 / $0.30）— 便宜，字幕品質足夠</option>
             <option value="gemini-3-flash-preview">gemini-3-flash-preview（$0.50 / $3.00）— 推薦</option>
             <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview（$2.00 / $12.00）— 大炮打小鳥，不推薦</option>
@@ -947,11 +982,11 @@
       </section>
     </div><!-- /yt-gemini-only-sections -->
 
-    <!-- v1.5.8: 字幕是否套用全域的固定術語表 / 中國用語黑名單。預設關省 token。 -->
+    <!-- v1.5.8: 字幕是否套用全域的固定術語表 / 地區用語黑名單。預設關省 token。 -->
     <section>
-      <h2>進階：固定術語表 & 禁用詞清單</h2>
+      <h2>進階：固定術語表 & 地區用語黑名單</h2>
       <p class="muted">
-        是否把「術語表」分頁的固定術語表、與「禁用詞清單」分頁的中國用語黑名單也注入到字幕翻譯的 prompt？<br>
+        是否把「術語表」分頁的固定術語表、與「地區用語黑名單」分頁的詞表也注入到字幕翻譯的 prompt？<br>
         <strong>預設關閉以省 token</strong>——字幕本來就走獨立 prompt，且字幕短句 LLM 不太會誤翻黑名單詞，套用收益小、開銷會在高頻字幕場景累積
       </p>
       <label class="checkbox-label">
@@ -960,7 +995,7 @@
       </label>
       <label class="checkbox-label">
         <input type="checkbox" id="ytApplyForbiddenTerms">
-        字幕翻譯也套用「禁用詞清單」
+        字幕翻譯也套用「地區用語黑名單」
       </label>
       <div id="yt-prompt-cost-hint" class="muted" style="margin-top: 12px; padding: 10px 12px; background: #f5f5f7; border-radius: 6px; font-size: 12px; line-height: 1.5;">
         <!-- 動態填入：以目前字幕模型 + 計價估算「打開後一支 30 分鐘影片約多花多少錢」 -->
@@ -983,6 +1018,7 @@
     </section>
 
 
+
     <!-- v1.5.8: 字幕翻譯 Prompt 對 Gemini 與自訂模型都適用（Google MT 才隱藏） -->
     <section id="yt-prompt-section">
       <h2 data-i18n="opt_section_yt_prompt">字幕翻譯 Prompt</h2>
@@ -991,6 +1027,16 @@
         <textarea id="ytSystemPrompt" rows="14" style="font-family: monospace; font-size: 12px;"></textarea>
       </label>
       <button type="button" id="yt-reset-prompt" class="secondary" data-i18n="opt_btn_yt_reset_prompt">重置為預設 Prompt</button>
+    </section>
+
+    <!-- YouTube 無邊模式（隱藏功能，需於 chrome://extensions/shortcuts 自行綁快速鍵） -->
+    <section>
+      <details class="advanced-details">
+        <summary>進階：YouTube 無邊模式</summary>
+        <p class="muted">
+          隱藏 YouTube 介面、讓影片填滿視窗、自動依影片長寬比調整視窗高度。預設未綁定快速鍵，可至 <a href="#" class="open-shortcuts-link" id="open-shortcuts-yt">chrome://extensions/shortcuts</a> 設定「切換 YouTube 無邊模式」
+        </p>
+      </details>
     </section>
 
     <div class="actions">

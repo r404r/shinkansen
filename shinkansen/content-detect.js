@@ -143,6 +143,31 @@
     return total;
   }
 
+  // Case D 用:el 是否有直接 element 子(BR 不算)。
+  // 跟 hasBrChild 對稱:Case B 抓「BR + 純文字」,Case D 抓「inline element + 文字」。
+  function hasDirectNonBrElement(el) {
+    for (const child of el.childNodes) {
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      if (child.tagName === 'BR') continue;
+      return true;
+    }
+    return false;
+  }
+
+  // Case D 用:祖先鏈是否已被某條路徑抽過 fragment。SPAN 嵌套(host > inner-span > a)
+  // 在 YouTube / 通用 web 都很常見,父抽完後子的 walker visit 仍會發生(NodeFilter.FILTER_SKIP
+  // 不阻擋 walker 訪問子節點),不擋祖先會把同一段文字重複抽兩次,deserialize 時佔位符 slot
+  // 對不上譯文。Case A/B/C 因為 CONTAINER_TAGS 限定 DIV/SECTION 等少嵌套 tag 沒踩到,
+  // Case D 把 SPAN 納入後必須補上。
+  function hasAncestorExtracted(el, fragmentExtracted) {
+    let cur = el.parentElement;
+    while (cur && cur !== document.body) {
+      if (fragmentExtracted.has(cur)) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
   // ─── Fragment 抽取 ────────────────────────────────────
 
   function extractInlineFragments(el) {
@@ -304,6 +329,31 @@
                 seen.add(f.startNode);
                 if (stats) stats.inlineMixedFragment = (stats.inlineMixedFragment || 0) + 1;
               }
+            } else if (
+              // Case D:inline-style 容器(SPAN)直接含 text + 至少一個非 BR element 子。
+              // 典型案例:YouTube yt-attributed-string 的 ytAttributedStringHost span,直接子混合
+              //   "7:00" <span><a>...</a></span> "now we can see..." <span><img></span>
+              // Case A 因 !containsBlockDescendant 失敗;Case B 因 !hasBrChild 失敗;
+              // Case C 因 SPAN 不在 CONTAINER_TAGS 失敗 → 過去整段都被 SKIP。
+              // 結構特徵(描述 DOM 不綁站點/class):tag 是 SPAN、有直接 text node、有直接非 BR
+              // element 子、文字長度 >= 20、無 block 子孫、isCandidateText 通過。
+              // hasAncestorExtracted 防 SPAN > SPAN 巢狀重複抽(BLOCK 補抓的 Case A/B/C 用
+              // CONTAINER_TAGS 限定 DIV/SECTION 等不嵌套 tag 沒踩到 dedup;Case D 必須補上)。
+              el.tagName === 'SPAN' &&
+              !seen.has(el) &&
+              !hasAncestorExtracted(el, fragmentExtracted) &&
+              hasDirectText &&
+              hasDirectNonBrElement(el) &&
+              directTextLength(el) >= 20 &&
+              isCandidateText(el)
+            ) {
+              fragmentExtracted.add(el);
+              const frags = extractInlineFragments(el);
+              for (const f of frags) {
+                results.push(f);
+                seen.add(f.startNode);
+                if (stats) stats.inlineMixedSpan = (stats.inlineMixedSpan || 0) + 1;
+              }
             }
           }
           return NodeFilter.FILTER_SKIP;
@@ -319,6 +369,50 @@
         if (!SK.isVisible(el)) {
           if (stats) stats.invisible = (stats.invisible || 0) + 1;
           return NodeFilter.FILTER_REJECT;
+        }
+        // v1.4.17: Block element 有 CONTAINER_TAGS 直屬子容器，且容器內有直屬 <A> 連結時，
+        // 改為只捕捉 <A> 連結本身（而非整個 block）。
+        // 原因：若把整個 block（如 TD）當一個翻譯單元，injectIntoTarget 走 clean-slate 路徑
+        // 會清空 TD 的全部子元素，包含不需翻譯的相鄰容器（如 TD > DIV.smallfont > SPAN.author）。
+        // 典型案例：vBulletin forumdisplay：
+        //   td > div → a[thread_title] + div.smallfont → span(author)
+        // Gemini 翻完 thread title 後 slot 1（作者名）被丟掉 → clean-slate 把整個 TD 清空
+        // → 作者 ID 消失。改為只翻 A 連結，TD 結構完全保留。
+        //
+        // v1.8.33: 順序提到 mediaCardSkip 之前。原本兩條規則同時滿足時 mediaCardSkip
+        // 先命中(line 順序),v1.4.17 永遠跑不到。真實案例:vBulletin 訂閱中 thread:
+        //   td > div > [span(prefix), a#thread_gotonew(textLen=0,含 img 圖示),
+        //                a#thread_title(font-weight:bold)]
+        //   + div.smallfont > span(author)
+        // TD 同時:含 img(thread_gotonew 的 16px 跳到第一筆未讀圖示) + 直屬子有 DIV
+        // → mediaCardSkip 條件成立 → 整個 TD SKIP,A#thread_title 沒被任何葉節點補抓
+        // 邏輯接走(A 是 inline 直接含 text,Case A-D 都不抓)。提前後 v1.4.17 先抓 A
+        // → SKIP + skipBlockWithContainer/blockContainerLink 計數;沒 A 可抓時 fallthrough
+        // 到原 mediaCardSkip 路徑,既有附件 LI 行為不變。
+        if (!fragmentExtracted.has(el)) {
+          const containerKids = Array.from(el.children).filter(c =>
+            SK.CONTAINER_TAGS.has(c.tagName));
+          if (containerKids.length > 0) {
+            let capturedLinks = 0;
+            for (const container of containerKids) {
+              for (const child of Array.from(container.children)) {
+                if (child.tagName !== 'A') continue;
+                if (seen.has(child)) continue;
+                if (child.hasAttribute('data-shinkansen-translated')) continue;
+                if (!SK.isVisible(child)) continue;
+                if (!isCandidateText(child)) continue;
+                results.push({ kind: 'element', el: child });
+                seen.add(child);
+                capturedLinks++;
+                if (stats) stats.blockContainerLink = (stats.blockContainerLink || 0) + 1;
+              }
+            }
+            if (capturedLinks > 0) {
+              fragmentExtracted.add(el);
+              if (stats) stats.skipBlockWithContainer = (stats.skipBlockWithContainer || 0) + 1;
+              return NodeFilter.FILTER_SKIP;
+            }
+          }
         }
         // v1.4.20: block element 同時有功能性媒體（img/picture/video）＋CONTAINER_TAGS 直屬子容器
         // = 媒體卡片模式（附件清單、圖片庫 item）。
@@ -358,39 +452,6 @@
         if (!isCandidateText(el)) {
           if (stats) stats.notCandidateText = (stats.notCandidateText || 0) + 1;
           return NodeFilter.FILTER_REJECT;
-        }
-        // v1.4.17: Block element 有 CONTAINER_TAGS 直屬子容器，且容器內有直屬 <A> 連結時，
-        // 改為只捕捉 <A> 連結本身（而非整個 block）。
-        // 原因：若把整個 block（如 TD）當一個翻譯單元，injectIntoTarget 走 clean-slate 路徑
-        // 會清空 TD 的全部子元素，包含不需翻譯的相鄰容器（如 TD > DIV.smallfont > SPAN.author）。
-        // 典型案例：vBulletin forumdisplay：
-        //   td > div → a[thread_title] + div.smallfont → span(author)
-        // Gemini 翻完 thread title 後 slot 1（作者名）被丟掉 → clean-slate 把整個 TD 清空
-        // → 作者 ID 消失。改為只翻 A 連結，TD 結構完全保留。
-        if (!fragmentExtracted.has(el)) {
-          const containerKids = Array.from(el.children).filter(c =>
-            SK.CONTAINER_TAGS.has(c.tagName));
-          if (containerKids.length > 0) {
-            let capturedLinks = 0;
-            for (const container of containerKids) {
-              for (const child of Array.from(container.children)) {
-                if (child.tagName !== 'A') continue;
-                if (seen.has(child)) continue;
-                if (child.hasAttribute('data-shinkansen-translated')) continue;
-                if (!SK.isVisible(child)) continue;
-                if (!isCandidateText(child)) continue;
-                results.push({ kind: 'element', el: child });
-                seen.add(child);
-                capturedLinks++;
-                if (stats) stats.blockContainerLink = (stats.blockContainerLink || 0) + 1;
-              }
-            }
-            if (capturedLinks > 0) {
-              fragmentExtracted.add(el);
-              if (stats) stats.skipBlockWithContainer = (stats.skipBlockWithContainer || 0) + 1;
-              return NodeFilter.FILTER_SKIP;
-            }
-          }
         }
         if (stats) stats.acceptedByWalker = (stats.acceptedByWalker || 0) + 1;
         return NodeFilter.FILTER_ACCEPT;

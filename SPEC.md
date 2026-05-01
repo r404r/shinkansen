@@ -40,7 +40,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | 網頁翻譯 | ✅ | Option+S（Gemini）/ Option+G（Google Translate）切換；單語覆蓋 / 雙語對照雙模式；漸進分批注入；還原原文；選區翻譯 |
 | 選區翻譯 | ✅ | Nozomi v1.6 新增；有選取文字時按快速鍵只翻譯選區內段落；`Range.intersectsNode` 過濾；不啟動 rescan/sticky；`STATE.translationScope` 控制 |
 | 雙語對照模式 | ✅ | v1.5.0 新增；popup toggle 切換；譯文以 `<shinkansen-translation>` wrapper 形式 append 在原段落後/內；4 種視覺標記 |
-| YouTube 字幕翻譯 | ✅ | XHR 預翻 + on-the-fly 備援；時間視窗批次；seek/rate 補償；字幕框展開置中；SPA 導航自動重啟；ASR(自動字幕)走獨立合句路徑(v1.6.20) |
+| YouTube 字幕翻譯 | ✅ | XHR 預翻 + on-the-fly 備援；時間視窗批次；seek/rate 補償；字幕框展開置中；SPA 導航自動重啟；ASR（自動字幕）走獨立合句路徑（v1.6.20） |
 | SPA 支援 | ✅ | History API 攔截 + URL 輪詢；MutationObserver rescan；Content Guard；stickyTranslate 續翻 |
 | 段落偵測 | ✅ | walker + mixed-content fragment；PRE 條件排除；leaf DIV / grid cell 補抓；nav 放行 |
 | 佔位符序列化 | ✅ | 配對型 ⟦N⟧…⟦/N⟧ + 原子型 ⟦*N⟧；媒體保留；含圖連結重建 |
@@ -113,10 +113,10 @@ POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateCon
 
 - **`<role_definition>`**：定位為「精通英美流行文化與台灣在地文學的首席翻譯專家」，追求出版級台灣當代語感
 - **`<critical_rules>`**：禁止輸出思考過程、忠實保留不雅詞彙（不做道德審查）、專有名詞保留英文原文（地理位置例外，須翻為台灣標準譯名）
-- **`<linguistic_guidelines>`**：台灣道地語感（拒絕翻譯腔）、禁用中國大陸用語（v1.5.6 起改指向末端 `<forbidden_terms_blacklist>` 黑名單區塊）、台灣通行譯名、特殊詞彙首次出現加註原文
+- **`<linguistic_guidelines>`**：台灣道地語感（拒絕翻譯腔）、禁用非台灣慣用譯法（v1.5.6 起改指向末端 `<forbidden_terms_blacklist>` 禁用詞區塊）、台灣通行譯名、特殊詞彙首次出現加註原文
 - **`<formatting_and_typography>`**：全形標點、破折號改寫、中英夾雜半形空格、數字格式（1–99 中文數字、100 以上阿拉伯數字）、年份格式
 
-`lib/system-instruction.js` 的 `buildEffectiveSystemInstruction()`（v1.5.7 從 `lib/gemini.js` 抽出供 OpenAI-compat adapter 共用）會依批次內容動態追加規則。追加順序為：基礎指令 → 多段分隔符（含 `«N»` 序號標記規則） → 段內換行 → 佔位符 → 自動術語對照表 → 使用者固定術語表 → 中國用語黑名單。
+`lib/system-instruction.js` 的 `buildEffectiveSystemInstruction()`（v1.5.7 從 `lib/gemini.js` 抽出供 OpenAI-compat adapter 共用）會依批次內容動態追加規則。追加順序為：基礎指令 → 多段分隔符（含 `«N»` 序號標記規則） → 段內換行 → 佔位符 → 自動術語對照表 → 使用者固定術語表 → 禁用詞清單。
 
 使用者另可在「術語表」分頁編輯「禁用詞清單」，內容會以 `<forbidden_terms_blacklist>` 區塊注入 systemInstruction 末端，詳見 §3.7。
 
@@ -164,15 +164,15 @@ Tier 對照表在 `lib/tier-limits.js`，涵蓋 Free / Tier 1 / Tier 2 各模型
 - 術語表 temperature 獨立設定（預設 0.1，要穩定不要有創意）
 - 預設停用（`glossary.enabled` 預設 `false`），使用者可在設定頁或 Popup 開啟
 
-### 3.7 中國用語黑名單
+### 3.7 禁用詞清單
 
-v1.5.6 新增。針對 LLM 容易漏網的中國大陸用語建立可由使用者編輯的禁用對照表，作為純 prompt 注入機制——遵循硬規則 §7（中文排版偏好交給 system prompt 處理），content 端不做事後 regex replace。
+v1.5.6 新增。針對 AI 模型容易漏網的非台灣慣用譯法建立可由使用者編輯的禁用對照表，作為純 prompt 注入機制——遵循硬規則 §7（中文排版偏好交給 system prompt 處理），content 端不做事後 regex replace。
 
-**預設清單**：25 條，定義在 `lib/storage.js` 的 `DEFAULT_FORBIDDEN_TERMS`，涵蓋常見的視頻/軟件/數據/網絡/質量/用戶/默認/創建/實現/運行/發布/屏幕/界面/文檔/操作系統等對映。v1.5.6 同步修正了 v0.83 起 `DEFAULT_SYSTEM_PROMPT` 內錯誤的「進程→線程」對映（兩者都是中國大陸用語：process 在台灣應為「行程」、thread 應為「執行緒」），改在黑名單分開列出兩條正確對映。
+**預設清單**：25 條，定義在 `lib/storage.js` 的 `DEFAULT_FORBIDDEN_TERMS`，涵蓋常見的視頻/軟件/數據/網絡/質量/用戶/默認/創建/實現/運行/發布/屏幕/界面/文檔/操作系統等對映。v1.5.6 同步修正了 v0.83 起 `DEFAULT_SYSTEM_PROMPT` 內錯誤的「進程→線程」對映（兩者都是非台灣譯法：process 在台灣應為「行程」、thread 應為「執行緒」），改在禁用詞清單分開列出兩條正確對映。
 
-**注入位置**：`lib/gemini.js` 的 `buildEffectiveSystemInstruction()` 在所有其他規則（含 `fixedGlossary`）之後、systemInstruction 的最末端，以 `<forbidden_terms_blacklist>` XML tag 包起來注入。文字明確指示 LLM「即使原文是英文（如 video / software / data），譯文也只能使用右欄」、「優先級高於任何 stylistic 考量」，並交代「若該詞為文章本身討論的主題請使用引號保留原詞」的合理 escape hatch。
+**注入位置**：`lib/gemini.js` 的 `buildEffectiveSystemInstruction()` 在所有其他規則（含 `fixedGlossary`）之後、systemInstruction 的最末端，以 `<forbidden_terms_blacklist>` XML tag 包起來注入。文字明確指示模型「即使原文是英文（如 video / software / data），譯文也只能使用右欄」、「優先級高於任何 stylistic 考量」，並交代「若該詞為文章本身討論的主題請使用引號保留原詞」的合理 escape hatch。
 
-**Debug 偵測層**：實作於 `lib/forbidden-terms.js` 的 `detectForbiddenTermLeaks()`。`background.js` 的 `handleTranslate` 在 `translateBatch` 成功 resolve 後、回傳給 content script 之前，逐段掃描譯文是否含有黑名單詞，命中時用 `debugLog('warn', 'forbidden-term-leak', ...)` 寫一筆診斷訊息（含 forbidden / replacement / sourceSnippet / translationSnippet），方便使用者從 Debug 分頁追查 LLM 漏網案例。**純記錄、不修改譯文**。
+**Debug 偵測層**：實作於 `lib/forbidden-terms.js` 的 `detectForbiddenTermLeaks()`。`background.js` 的 `handleTranslate` 在 `translateBatch` 成功 resolve 後、回傳給 content script 之前，逐段掃描譯文是否含有禁用詞，命中時用 `debugLog('warn', 'forbidden-term-leak', ...)` 寫一筆診斷訊息（含 forbidden / replacement / sourceSnippet / translationSnippet），方便使用者從 Debug 分頁追查模型漏網案例。**純記錄、不修改譯文**。
 
 **快取分區**：`lib/cache.js` 的 `hashForbiddenTerms()` 對清單做穩定 hash（先依 `forbidden` 欄位排序再 JSON.stringify 後 SHA-1 取前 12 字元），加進 cache key 後綴 `_b<hash>`。空清單時不附加後綴，向下相容 v1.5.5 之前的快取。完整 cache key 格式見 §9.1。
 
@@ -186,7 +186,7 @@ v1.5.7 新增。除了 Gemini 與 Google Translate 兩條既有引擎，使用�
 
 **Adapter**：`lib/openai-compat.js` 提供與 `lib/gemini.js` 介面對齊的 `translateBatch(texts, settings, glossary, fixedGlossary, forbiddenTerms)`，內部走 `POST <baseUrl>/chat/completions` + Bearer Authorization。`baseUrl` 已含 `/chat/completions` 時不重複附加。回應走 OpenAI 標準的 `choices[0].message.content` + `usage.prompt_tokens / completion_tokens / prompt_tokens_details.cached_tokens` 抽取。
 
-**共用模組** `lib/system-instruction.js`（v1.5.7 從 `lib/gemini.js` 抽出）：`DELIMITER` / `packChunks` / `buildEffectiveSystemInstruction` 三個 helper 由 Gemini 與 OpenAI-compat 兩條 adapter 共用，確保「黑名單 + 固定術語表 + 自動 glossary + 多段分隔符 / 段內換行 / 佔位符」等規則只實作一次、未來新規則只改一處。
+**共用模組** `lib/system-instruction.js`（v1.5.7 從 `lib/gemini.js` 抽出）：`DELIMITER` / `packChunks` / `buildEffectiveSystemInstruction` 三個 helper 由 Gemini 與 OpenAI-compat 兩條 adapter 共用，確保「禁用詞清單 + 固定術語表 + 自動 glossary + 多段分隔符 / 段內換行 / 佔位符」等規則只實作一次、未來新規則只改一處。
 
 **systemPrompt 行為**：使用者可在「自訂 Provider」分頁填獨立 `systemPrompt`，作為 `buildEffectiveSystemInstruction` 的 base（不繼承 Gemini 分頁的 `geminiConfig.systemInstruction`）。但 `fixedGlossary` 與 `forbiddenTerms` 仍由共用注入機制處理，自訂 Provider 自動享有兩者 — 改一處（術語表 / 禁用詞清單分頁）兩邊同步生效。
 
@@ -221,7 +221,7 @@ v1.5.7 新增。除了 Gemini 與 Google Translate 兩條既有引擎，使用�
 
 | 原元素類型 | wrapper 位置 | wrapper 內部 tag |
 |----------|-------------|----------------|
-| 一般 block (`<p>` / `<div>` / `<blockquote>` / `<pre>` 等) | `original.insertAdjacentElement('afterend', wrapper)` | 同原 tag |
+| 一般 block （`<p>` / `<div>` / `<blockquote>` / `<pre>` 等） | `original.insertAdjacentElement('afterend', wrapper)` | 同原 tag |
 | `<h1>`–`<h6>` | 同上 | `<div>`，inline style 從原 heading 繼承 `font-size` / `font-weight` / `line-height`（避免 SEO/AT 重複標題） |
 | `<li>` | `originalLi.appendChild(wrapper)`（避免 `<ol>` 編號錯位） | `<div>` |
 | `<td>` / `<th>` | `originalCell.appendChild(wrapper)`（避免 table 對齊跑掉） | `<div>` |
@@ -513,7 +513,7 @@ scripts/
 
 - **base tag**：`'_yt'` = 字幕模式 / `'_gt'` = Google Translate 網頁 / `'_gt_yt'` = Google Translate 字幕 / `'_oc'` = 自訂 OpenAI-compat（v1.5.7）/ `''` = 一般 Gemini 網頁翻譯（含 preset 快速鍵）
 - **`_g<hash>`**：有術語表時加（自動擷取 + 使用者固定術語的合併 hash，前 12 字元 SHA-1）
-- **`_b<hash>`**（v1.5.6 新增）：使用者啟用中國用語黑名單時加（依 `forbidden` 排序後 JSON.stringify 的前 12 字元 SHA-1）。空清單時不附加，向下相容 v1.5.5 之前的快取
+- **`_b<hash>`**（v1.5.6 新增）：使用者啟用禁用詞清單時加（依 `forbidden` 排序後 JSON.stringify 的前 12 字元 SHA-1）。空清單時不附加，向下相容 v1.5.5 之前的快取
 - **`_m<model>`**（v1.4.12 起）：把 model 字串納入 key（替換非安全字元為 `_`），避免不同 preset 切換時共用快取
 - **`_m<baseUrlHash6>_<safeModel>`**（v1.5.7，自訂 Provider 路徑）：baseUrl SHA-1 前 6 字元 + safe model — 避免不同 provider（OpenRouter vs Together vs 自架 Ollama）的同 model name 共用快取
 
@@ -631,8 +631,8 @@ v1.4.12 起提供三組 preset 快捷鍵：
 | type | payload | 回應 |
 |------|---------|------|
 | `TRANSLATE_BATCH` | `{ texts, slots, … }` | `{ ok, result, usage }` |
-| `TRANSLATE_SUBTITLE_BATCH` | `{ texts, glossary }` | `{ ok, result, usage }` — YouTube 字幕逐條翻譯(人工字幕路徑) |
-| `TRANSLATE_ASR_SUBTITLE_BATCH` | `{ texts: [json], glossary }` | `{ ok, result: [json], usage }` — v1.6.20:ASR 字幕專用,texts 是單一 [{s,e,t}] JSON 字串,LLM 自由合句後回 [{s,e,t}] JSON 字串 |
+| `TRANSLATE_SUBTITLE_BATCH` | `{ texts, glossary }` | `{ ok, result, usage }` — YouTube 字幕逐條翻譯（人工字幕路徑） |
+| `TRANSLATE_ASR_SUBTITLE_BATCH` | `{ texts: [json], glossary }` | `{ ok, result: [json], usage }` — v1.6.20:ASR 字幕專用，texts 是單一 [{s,e,t}] JSON 字串，LLM 自由合句後回 [{s,e,t}] JSON 字串 |
 | `EXTRACT_GLOSSARY` | `{ input }` | `{ ok, terms, _diag }` |
 | `LOG` | `{ level, category, message, data }` | — |
 | `LOG_USAGE` | `{ inputTokens, outputTokens, … }` | `{ ok }` |

@@ -22,7 +22,8 @@ body {
   box-shadow: 0 4px 20px rgba(0,0,0,.06);
 }
 
-h1 { margin: 0 0 16px; font-size: 22px; }
+h1 { margin: 0 0 16px; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+.page-title-icon { width: 32px; height: 32px; flex-shrink: 0; }
 h2 { margin: 28px 0 12px; font-size: 15px; color: #0071e3; border-bottom: 1px solid #eee; padding-bottom: 6px; }
 
 section { margin-bottom: 20px; }
@@ -425,7 +426,15 @@ a:hover { text-decoration: underline; }
 .usage-table th { font-weight: 600; color: #86868b; font-size: 11px; text-transform: uppercase; }
 .usage-table th.num,
 .usage-table td.num { text-align: right; }
-.usage-table .col-model { white-space: nowrap; }
+/* preset label 自 v1.8.19 起放寬至 30 字元,避免長 label 撐寬整列;
+   原 v1.2.61 的 nowrap 是為了「不要把『3.1-flash-lite』折行」,放寬後改成
+   max-width + ellipsis 兼顧短/長 label 兩種情境,完整 label 由 title attr 補。 */
+.usage-table .col-model {
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .usage-table tbody tr:hover { background: #f0f7ff; }
 .usage-table .site-url {
   display: block;
@@ -828,34 +837,66 @@ a:hover { text-decoration: underline; }
 .preset-model-label[hidden] { display: none !important; }
 
 /* v1.5.0: 雙語對照視覺標記設定 */
-.dual-demo {
+/* v1.8.31: 並排 light / dark 兩個預覽 box */
+.dual-demo-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   margin: 12px 0;
+}
+.dual-demo {
   padding: 12px 14px;
   border: 1px solid #d2d2d7;
   border-radius: 8px;
+}
+.dual-demo-light {
   background: #fff;
 }
+.dual-demo-dark {
+  background: #1a1a1a;
+  border-color: #3a3a3a;
+}
+.dual-demo-label {
+  font-size: 11px;
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+.dual-demo-light .dual-demo-label { color: #6e6e73; }
+.dual-demo-dark  .dual-demo-label { color: #9CA3AF; }
+
 .dual-demo .dual-demo-original {
   margin: 0 0 4px 0;
-  color: #1d1d1f;
   font-size: 14px;
   line-height: 1.5;
 }
+.dual-demo-light .dual-demo-original { color: #1d1d1f; }
+.dual-demo-dark  .dual-demo-original { color: #d2d2d7; }
+
 .dual-demo .dual-demo-translation {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
 }
-/* wrapper 樣式：與 content-inject.js ensureDualWrapperStyle 注入到頁面的 CSS 對齊。
-   這份是給 options 頁的 demo 預覽用，不影響真實網頁的 wrapper。 */
+.dual-demo-light .dual-demo-translation { color: #1d1d1f; }
+.dual-demo-dark  .dual-demo-translation { color: #d2d2d7; }
+
+/* wrapper 樣式:與 content-inject.js ensureDualWrapperStyle 注入到頁面的 CSS 對齊。
+   這份是給 options 頁的 demo 預覽用,不影響真實網頁的 wrapper。 */
 shinkansen-translation {
   display: block;
   margin-top: 0.25em;
+  box-sizing: border-box;
 }
-shinkansen-translation[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 2px 4px; }
+:where(h1, h2, h3, h4, h5, h6) + shinkansen-translation { margin-top: 0.5em; }
+/* light (default) */
+shinkansen-translation[data-sk-mark="tint"]   { background-color: #FFF8E1; padding: 4px 8px; border-radius: 4px; }
 shinkansen-translation[data-sk-mark="bar"]    { border-left: 2px solid #9CA3AF; padding-left: 8px; }
 shinkansen-translation[data-sk-mark="dashed"] { text-decoration: underline wavy #C7CDD3; text-decoration-thickness: 1px; text-underline-offset: 4px; }
 shinkansen-translation[data-sk-mark="none"]   {}
+/* dark */
+shinkansen-translation[data-sk-mark="tint"][data-sk-theme="dark"]   { background-color: rgba(255, 255, 255, 0.08); }
+shinkansen-translation[data-sk-mark="bar"][data-sk-theme="dark"]    { border-left-color: #9CA3AF; }
+shinkansen-translation[data-sk-mark="dashed"][data-sk-theme="dark"] { text-decoration-color: #9CA3AF; }
 
 .dual-mark-options {
   display: flex;
@@ -926,3 +967,40 @@ shinkansen-translation[data-sk-mark="none"]   {}
 /* v1.6.5: 強制覆寫 hidden attribute——display:flex 會 override 掉 user-agent
    [hidden] { display: none }，造成 hidden=true 仍顯示的 bug。 */
 .update-banner-row[hidden] { display: none !important; }
+
+/* preset label 自 v1.8.19 起放寬到 30 字元,「工具列翻譯本頁按鈕」與
+   「自動翻譯網站使用的預設」兩個 select 的 option text 為「{slotTitle}:{label}」,
+   給 max-width 避免長 label 撐寬整個 form row(瀏覽器會自動 truncate option 顯示)。 */
+#popup-button-slot,
+#auto-translate-slot {
+  max-width: 360px;
+  width: 100%;
+}
+
+/* v1.8.19: 配額 section 進階摺疊區。預設收起,點 summary 展開內容。 */
+.advanced-details {
+  margin-top: 12px;
+  border: 1px solid #e5e5ea;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.advanced-details > summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d1d1f;
+  list-style: none;
+}
+.advanced-details > summary::-webkit-details-marker { display: none; }
+.advanced-details > summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 10px;
+  color: #86868b;
+  transition: transform 0.15s;
+}
+.advanced-details[open] > summary::before { transform: rotate(90deg); }
+.advanced-details > *:not(summary) { padding-left: 12px; padding-right: 12px; }
+.advanced-details > *:last-child { padding-bottom: 12px; }
