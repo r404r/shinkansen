@@ -56,7 +56,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 | Toast master switch | ✅ | upstream v1.6.8：showProgressToast 可完全關閉翻譯進度通知 |
 | 延續翻譯開關 | ✅ | Nozomi v1.7 新增；stickyTranslateEnabled 可關閉跨導航自動續翻 |
 | Bing Translate（Microsoft Translator） | ✅ | Nozomi v1.8 新增；JWT Bearer token（`edge.microsoft.com/translate/auth`）+ REST API（`api.cognitive.microsofttranslator.com/translate`）；免費無需 API Key；中國大陸可用 |
-| 中國用語黑名單 | ✅ | upstream v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；`lib/forbidden-terms.js` 偵測層。Nozomi v1.7 追加 zh-CN 模式自動跳過 |
+| 禁用詞清單 | ✅ | upstream v1.5.6 新增；`<forbidden_terms_blacklist>` prompt 注入；`lib/forbidden-terms.js` 偵測層。Nozomi v1.7 追加 zh-CN 模式自動跳過 |
 | Firefox 快捷鍵編輯 | ✅ | Nozomi v1.7 新增；設定頁點擊徽章即時編輯，`browser.commands.update()` API；Chrome 無此 API，維持跳轉 |
 | 設定頁 | ✅ | 7 Tab：一般設定 / Gemini / 自訂模型 / 術語表 / 禁用詞清單 / YouTube 字幕 / 用量紀錄 / Debug；匯入匯出 |
 | Popup 面板 | ✅ | 翻譯/還原；快取/費用統計；自動翻譯開關；YouTube 字幕 toggle |
@@ -353,7 +353,7 @@ shinkansen/
 │   ├── openai-compat.js       # OpenAI-compatible adapter（v1.5.7）
 │   ├── openai-compat-thinking.js  # 思考強度統一控制（v1.6.18，6 provider 適配）
 │   ├── system-instruction.js  # 共用 batch 構建 helper（v1.5.7，從 gemini.js 抽出）
-│   ├── forbidden-terms.js     # 中國用語黑名單偵測層（v1.5.6）
+│   ├── forbidden-terms.js     # 禁用詞清單偵測層（v1.5.6）
 │   ├── google-translate.js    # Google Translate 免費端點
 │   ├── bing-token.js          # Microsoft Translator JWT token 管理（Nozomi）
 │   ├── bing-translate.js      # Microsoft Translator 翻譯 API（Nozomi）
@@ -785,7 +785,7 @@ npm run build:all       # 同時構建兩個平台
 | Session storage | `browser.storage.session` 原生 | `browser.storage.local` + `_sk_session_` 前綴 fallback |
 | 編譯時常量 | `__BROWSER__ === 'chrome'` | `__BROWSER__ === 'firefox'` |
 | 快捷鍵修改 | 無 API，跳轉 `chrome://extensions/shortcuts` | `browser.commands.update()` 設定頁內即時編輯 |
-| 中國用語黑名單 | 正常運作 | 正常運作（zh-CN 模式自動跳過） |
+| 禁用詞清單 | 正常運作 | 正常運作（zh-CN 模式自動跳過） |
 
 ### 18.3 發佈流程
 

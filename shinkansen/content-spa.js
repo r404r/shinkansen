@@ -535,6 +535,8 @@
       if (savedHTML == null) continue;
       if (!target.isConnected) continue;
       // savedHTML 是 Node[] snapshot（cloneChildSnapshot）；DOM API 還原（200ms cooldown 防迴圈）
+      // 早期短路:當前 children 已等於 snapshot,跳過(避免無謂的 replaceChildren + 後續 mutation)
+      if (SK.childSnapshotEquals(target, savedHTML)) continue;
       SK.restoreChildSnapshot(target, savedHTML);
       _justRestoredAt.set(target, now);
       restored++;
