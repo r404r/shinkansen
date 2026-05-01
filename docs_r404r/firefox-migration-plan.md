@@ -296,3 +296,34 @@ Firefox 不支持 manifest 的 `"world": "MAIN"`，需要一个 loader 脚本在
 - `content-*.js`（除 youtube-main）— 纯 DOM 操作，无浏览器特定 API
 - `lib/cache.js`, `lib/gemini.js`, `lib/storage.js` 等 — 通过 compat.js 使用 browser.*
 - `background.js` 的 setBadgeTextColor — 已有 feature detection guard
+
+---
+
+## Troubleshooting（开发期常见坑）
+
+### Firefox 临时载入下 manifest.firefox.json 动到 `commands` 段后必须 reload
+
+**症状**: 改完 `manifest.firefox.json` 的 `commands` section（rename / 增减 command id / 改 suggested_key）+ 重新 `npm run build:all`，但 Firefox 里快捷键还是按旧的 command id 跑、或者直接没反应、或者「设定快捷键时显示无效的组合」。
+
+**根因**: `about:debugging → 临时载入附加元件` 模式下，Firefox 把 manifest **缓存**到载入时的状态。后续就算磁盘上的 manifest.json 已经更新（npm run build:all 重写过），运行中的扩展进程仍然跑旧 manifest。所以 `commands.update({ name: 'translate-preset-0' })` 会抛 NotFound（因为运行时只认识旧 manifest 里的 `translate-preset-2`）。
+
+**解法**: 每次改完 `manifest.firefox.json` 必须在 `about:debugging → Shinkansen-Nozomi` 点 **重新载入**。reload 后 Firefox 重新读磁盘 manifest，新 command id 才生效。
+
+**真实案例（2026-05-01）**:
+- v1.8.19 上游 rename `translate-preset-2 → translate-preset-0`（让主要预设字典序排第一）
+- 我们 merge 上游时 `manifest.firefox.json` 的 commands 段没跟着同步，仍然停在 `translate-preset-2`
+- options.js / popup.js / background.js 都更新成新 id，但 Firefox 实际加载的 manifest 还是旧的
+- 用户在 Firefox 上设「主要预设」快捷键 → `commands.update({name:'translate-preset-0'})` 抛 NotFound → catch 显示「无效的组合」
+- 修法是把 manifest.firefox.json 也 sync 成新 id，然后 reload 扩展。
+
+**防御性提醒**: 改 `commands` 段的 PR / commit 必须在 commit message 里写明「需要使用者升级后重新加载/重启 Firefox」，否则 AMO 上线后用户也可能踩到（虽然 AMO 正式安装一般会强制 reload，但 dev / beta / unpacked 模式不一定）。
+
+### 改完 manifest 后用户的自定义快捷键可能丢失
+
+**症状**: rename command id 后，Firefox 把使用者之前对 **旧 id** 的 `commands.update()` binding 当成不再存在的 command 丢弃，新 id 回到 manifest 的 `suggested_key` 默认值。
+
+**说明**: 这是预期行为（Firefox 没办法把旧 binding 自动迁移到 new id，因为它不知道 0 ↔ 2 的映射）。
+
+**用户体验**: 升级后看到主要预设的快捷键回到 Alt+S 默认（即使他原本绑了 Cmd+Shift+T 之类）。需要重新绑定。
+
+**release notes 应该写清楚**: 「v1.x.y 起内部 command id 重新命名，Firefox 上之前自定义过『主要预设』快捷键的用户需重新绑定一次」。
