@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shinkansen｜極速、私密、高品質的網頁翻譯體驗</title>
-  <meta name="description" content="使用 Google Gemini 將外語網頁翻譯成台灣繁體中文，原地替換文字，保留頁面原始排版你的瀏覽資料不經過第三方伺服器">
+  <title>Shinkansen Nozomi（のぞみ）｜Firefox / Chrome 网页翻译扩展</title>
+  <meta name="description" content="Shinkansen Nozomi 是 Shinkansen 的 fork：新增 Firefox 双平台支持、Bing 第四翻译引擎、三语界面（zh-TW / zh-CN / ja）、划词翻译、Sticky 自动翻译。浏览数据不经过第三方服务器">
 
   <!-- Open Graph / Social Preview -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Shinkansen — Chrome 網頁翻譯擴充功能">
-  <meta property="og:description" content="使用 Google Gemini 翻譯網頁，保留原始排版，瀏覽資料不經過第三方伺服器">
-  <meta property="og:image" content="https://jimmysu0309.github.io/shinkansen/og-image.png">
-  <meta property="og:url" content="https://jimmysu0309.github.io/shinkansen/">
+  <meta property="og:title" content="Shinkansen Nozomi — Firefox / Chrome 网页翻译扩展">
+  <meta property="og:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划词翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
+  <meta property="og:image" content="https://r404r.github.io/shinkansen/og-image.png">
+  <meta property="og:url" content="https://r404r.github.io/shinkansen/">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Shinkansen — Chrome 網頁翻譯擴充功能">
-  <meta name="twitter:description" content="使用 Google Gemini 翻譯網頁，保留原始排版，瀏覽資料不經過第三方伺服器">
-  <meta name="twitter:image" content="https://jimmysu0309.github.io/shinkansen/og-image.png">
+  <meta name="twitter:title" content="Shinkansen Nozomi — Firefox / Chrome 网页翻译扩展">
+  <meta name="twitter:description" content="Firefox 双平台 · Bing 第四引擎 · 三语界面 · 划词翻译 · Sticky 自动翻译。fork 自 jimmysu0309/shinkansen">
+  <meta name="twitter:image" content="https://r404r.github.io/shinkansen/og-image.png">
 
   <link rel="icon" type="image/png" href="icon-128.png">
   <style>
@@ -25,7 +25,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", sans-serif;
+      /* Noto 优先：CJK SC/TC/JP 是 Linux/Android 系统名；macOS 用 PingFang/Hiragino，Windows 用 Microsoft YaHei/JhengHei 作 fallback。不依赖 Google Fonts，零第三方依赖 */
+      font-family: "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", "Noto Sans SC", "Noto Sans TC", "Noto Sans JP", "PingFang SC", "PingFang TC", "Hiragino Kaku Gothic ProN", "Microsoft YaHei", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: #1a1a1a;
       background: #fff;
       line-height: 1.7;
@@ -119,7 +120,7 @@
     .hero-sub {
       margin-top: 12px;
       font-size: 0.85rem;
-      color: #888;
+      color: #666;
     }
     .hero-sub a { color: #2563eb; text-decoration: none; }
     .hero-sub a:hover { text-decoration: underline; }
@@ -148,7 +149,7 @@
     .compare-caption {
       margin-top: 16px;
       font-size: 0.85rem;
-      color: #888;
+      color: #666;
       text-align: center;
     }
     .comparison .container { max-width: 960px; }
@@ -242,7 +243,7 @@
       color: #1d1d1f;
     }
 
-    /* Privacy Hero — 專案核心動機 */
+    /* Privacy Hero — 项目核心动机 */
     .privacy-hero {
       background: #f0f5fa;
       border-radius: 16px;
@@ -280,11 +281,11 @@
       padding: 48px 0 32px;
       text-align: center;
       font-size: 0.82rem;
-      color: #aaa;
+      color: #666;
       border-top: 1px solid #f0f0f0;
       margin-top: 48px;
     }
-    footer a { color: #888; text-decoration: none; }
+    footer a { color: #666; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
 
     /* Responsive */
@@ -300,47 +301,48 @@
   <!-- Hero -->
   <div class="hero">
     <div class="container">
-      <img src="icon-128.png" alt="Shinkansen" class="hero-icon">
-      <h1>Shinkansen<span class="hero-sep">｜</span><span class="hero-subtitle">極速、私密、高品質的網頁翻譯體驗</span></h1>
-      <p class="tagline">你的瀏覽內容不該經過別人的伺服器<br>Shinkansen 由你的電腦直接呼叫 Google Gemini 翻譯，不經過任何第三方</p>
+      <img src="icon-128.png" alt="Shinkansen Nozomi" class="hero-icon">
+      <h1>Shinkansen Nozomi<span class="hero-sep">｜</span><span class="hero-subtitle">Firefox / Chrome 网页翻译扩展</span></h1>
+      <p class="tagline">Shinkansen 的 fork：追加 Firefox 双平台、Bing 第四引擎、三语界面、划词翻译、Sticky 自动翻译<br>翻译请求由你的电脑直连 AI / 翻译 API，不经过任何第三方服务器</p>
       <div class="btn-row">
-        <a href="https://chromewebstore.google.com/detail/shinkansen/pnhmlecoofeoofajcjenndnimhbodhlg" class="btn-download">從 Chrome Web Store 安裝<span class="btn-version">v<!-- cws-version-start -->1.4.22<!-- cws-version-end --> · 已上架</span></a>
-        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下載最新版<span class="btn-version">v1.9.0</span></a>
+        <a href="https://addons.mozilla.org/en-US/firefox/addon/shinkansen-nozomi/" class="btn-download">从 Firefox Add-ons 安装<span class="btn-version">已上架 AMO · 推荐</span></a>
+        <a href="https://github.com/r404r/shinkansen/releases/latest" class="btn-download secondary">GitHub 下载（含 Chrome）<span class="btn-version">最新版 · 手动安装</span></a>
       </div>
-      <p class="hero-sub">開放原始碼 · <a href="https://github.com/jimmysu0309/shinkansen#readme">使用說明</a> · <a href="https://github.com/jimmysu0309/shinkansen">GitHub</a></p>
+      <p class="hero-sub">开源 · <a href="https://github.com/r404r/shinkansen#readme">使用说明</a> · <a href="https://github.com/r404r/shinkansen">GitHub</a> · fork 自 <a href="https://github.com/jimmysu0309/shinkansen">jimmysu0309/shinkansen</a></p>
     </div>
   </div>
 
-  <!-- Recent updates — Hero 下方第一個 section，使用者一進站就看到亮點 -->
+  <!-- Nozomi fork 独有特性 — 一进站就看到 fork 的价值 -->
   <section>
     <div class="container">
-      <h2>近期重大更新</h2>
+      <h2>Nozomi 追加特性</h2>
       <ul class="recent-updates">
-        <li>新增<strong>極速秒翻</strong>，按下翻譯 1 秒看到頁面開始變中文（限 Gemini）</li>
-        <li>新增<strong>雙語對照模式</strong>，原文 + 譯文並列顯示</li>
-        <li>新增<strong>自訂 AI 模型</strong>，可接 OpenRouter / Claude / DeepSeek / Ollama 本機等所有模型</li>
-        <li>新增<strong>AI 分句</strong>，YouTube 自動產生字幕經 AI 重新分句，中文字幕更自然好讀</li>
-        <li>新增<strong>中國用語黑名單</strong>，明確要求 LLM 不能用視頻 / 軟件 / 數據等中國用語</li>
-        <li>新增<strong>只翻文章開頭</strong>選項，先翻前 N 段預覽，大幅節省 token</li>
+        <li><strong>Firefox 双平台支持</strong>：上架 Firefox AMO，与 Chrome 共用同一份代码编译出两个平台版本</li>
+        <li><strong>Bing Translate 第四翻译引擎</strong>：在 Gemini / Google Translate / 自定义模型之外多一个免费选项</li>
+        <li><strong>三语用户界面</strong>：弹窗、设置页、提示文字全面支持 zh-TW / zh-CN / ja，跟随浏览器语言自动切换</li>
+        <li><strong>划词翻译</strong>：选中页面上任意文字即可即时翻译，无需整页翻</li>
+        <li><strong>Sticky 自动翻译</strong>：把指定域名记住，下次访问自动触发翻译，不用每页再按一次</li>
+        <li><strong>统一 CJK 字体栈</strong>：zh-TW / zh-CN / ja / en 显示字体统一处理，避免日文网页被中文字体错误渲染</li>
       </ul>
+      <p class="compare-caption" style="margin-top:18px">本页所有「上游既有」功能 — Gemini 直连、双语对照、YouTube 字幕、术语表、地区用语黑名单、费用透明、极速秒翻 — 在 Nozomi 上同样完整保留。完整功能列表见下方</p>
     </div>
   </section>
 
-  <!-- Privacy — 專案核心動機，放在最顯眼的位置 -->
+  <!-- Privacy — 项目核心动机，放在最显眼的位置 -->
   <div class="container">
     <div class="privacy-hero">
-      <h2>為什麼做 Shinkansen？</h2>
-      <p>既有的沈浸式網頁翻譯工具會把你瀏覽的每一頁內容傳到第三方伺服器——無論你讀了什麼文章、看了什麼信件，全部都可能被看光</p>
-      <p>Shinkansen 的出發點就是保護您的隱私：</p>
+      <h2>为什么做 Shinkansen Nozomi？</h2>
+      <p>既有的沉浸式网页翻译工具会把你浏览的每一页内容传到第三方服务器——无论你读了什么文章、看了什么邮件，全部都可能被看光</p>
+      <p>Shinkansen Nozomi 继承上游的隐私优先理念：</p>
       <div class="privacy-points">
         <div class="privacy-point">
-          <strong>資料不外傳</strong>：翻譯請求直連 Google Gemini，不經過任何第三方伺服器
+          <strong>数据不外传</strong>：翻译请求由你的电脑直连所选翻译 API（Gemini / Google Translate / Bing / 自定义模型），不经过任何第三方中继服务器
         </div>
         <div class="privacy-point">
-          <strong>設定留在本地</strong>：所有資料只存在你自己的電腦上
+          <strong>设置留在本地</strong>：所有数据只存在你自己的电脑上
         </div>
         <div class="privacy-point">
-          <strong>原始碼完全公開</strong>：任何人都可以檢視程式碼，確認沒有後門
+          <strong>源代码完全公开</strong>：任何人都可以查看代码，确认没有后门
         </div>
       </div>
     </div>
@@ -351,15 +353,15 @@
     <div class="container">
       <div class="compare-grid">
         <div class="compare-item">
-          <p class="compare-label">翻譯前</p>
-          <img src="screenshot-before.png" alt="翻譯前 — Wikipedia 英文原文">
+          <p class="compare-label">翻译前</p>
+          <img src="screenshot-before.png" alt="翻译前 — Wikipedia 英文原文">
         </div>
         <div class="compare-item">
-          <p class="compare-label">翻譯後</p>
-          <img src="screenshot-after.png" alt="翻譯後 — Shinkansen 將內容翻譯成繁體中文，排版完整保留">
+          <p class="compare-label">翻译后</p>
+          <img src="screenshot-after.png" alt="翻译后 — Shinkansen Nozomi 将内容翻译成中文，排版完整保留">
         </div>
       </div>
-      <p class="compare-caption">排版、連結、圖片全部保留，看起來就像原生中文頁面</p>
+      <p class="compare-caption">排版、链接、图片全部保留，看起来就像原生中文页面</p>
     </div>
   </div>
 
@@ -369,52 +371,68 @@
       <h2>功能特色</h2>
       <div class="features">
         <div class="feature">
-          <h3>極速秒翻</h3>
-          <p>按下翻譯 1 秒看到頁面開始變中文，不用等整批 API 回完再一次塞回頁面（限 Gemini）</p>
+          <h3>极速秒翻</h3>
+          <p>按下翻译 1 秒就看到页面开始变中文，不用等整批 API 返回再一次塞回页面（限 Gemini）</p>
         </div>
         <div class="feature">
-          <h3>保留網頁排版</h3>
-          <p>原地替換文字，字型、字級、顏色、連結全部保留，看起來就像原生中文頁面</p>
+          <h3>保留网页排版</h3>
+          <p>原地替换文字，字体、字号、颜色、链接全部保留，看起来就像原生中文页面</p>
         </div>
         <div class="feature">
-          <h3>雙語對照</h3>
-          <p>原文與譯文並列顯示，一眼對照學語言或核對譯文；單語覆蓋與雙語對照可隨時切換</p>
+          <h3>双语对照</h3>
+          <p>原文与译文并列显示，一眼对照学语言或核对译文；单语覆盖与双语对照可随时切换</p>
         </div>
         <div class="feature">
-          <h3>YouTube 字幕翻譯</h3>
-          <p>看 YouTube 影片時，英文字幕自動翻譯為中文</p>
+          <h3>YouTube 字幕翻译</h3>
+          <p>看 YouTube 视频时，英文字幕自动翻译为中文</p>
         </div>
         <div class="feature">
-          <h3>跨頁自動延續翻譯</h3>
-          <p>翻譯過的頁面點連結開新分頁、按返回鍵回上一頁都自動翻譯，不用每頁再按一次</p>
+          <h3>跨页自动延续翻译</h3>
+          <p>翻译过的页面点链接开新标签、按返回键回上一页都自动翻译，不用每页再按一次</p>
         </div>
         <div class="feature">
-          <h3>固定術語表</h3>
-          <p>自訂翻譯對照表，確保專有名詞一律使用你指定的譯名</p>
+          <h3>固定术语表</h3>
+          <p>自定义翻译对照表，确保专有名词一律使用你指定的译名</p>
         </div>
         <div class="feature">
-          <h3>中國用語黑名單</h3>
-          <p>可編輯的禁用詞清單（預設 25 條，涵蓋視頻 / 軟件 / 數據 / 網絡 / 質量 / 用戶等常踩雷詞），明確要求 LLM 不可使用</p>
+          <h3>地区用语黑名单</h3>
+          <p>可编辑的禁用词清单（默认 25 条，涵盖 视频 / 软件 / 数据 / 网络 / 质量 / 用户 等繁中地区视为陆词的常见词），译至繁中场景明确要求 LLM 不使用</p>
         </div>
         <div class="feature">
-          <h3>只翻文章開頭</h3>
-          <p>先翻前幾段預覽再決定是否讀完整篇，大幅節省 token</p>
+          <h3>只翻文章开头</h3>
+          <p>先翻前几段预览再决定是否读完整篇，大幅节省 token</p>
         </div>
         <div class="feature">
-          <h3>翻譯快取</h3>
-          <p>翻過的段落自動快取，同一頁再開不花錢</p>
+          <h3>翻译缓存</h3>
+          <p>翻过的段落自动缓存，同一页再开不花钱</p>
         </div>
         <div class="feature">
-          <h3>費用透明</h3>
-          <p>每次翻譯即時顯示花費多少錢，設定頁可回查過去每一筆翻譯紀錄的 token 用量與費用，支援圖表與 CSV 匯出</p>
+          <h3>费用透明</h3>
+          <p>每次翻译实时显示花费多少钱，设置页可回查过去每一笔翻译记录的 token 用量与费用，支持图表与 CSV 导出</p>
         </div>
         <div class="feature">
-          <h3>三翻譯引擎</h3>
-          <p>Gemini + Google Translate + <strong>自訂模型</strong>（OpenAI 相容端點，可接 OpenRouter / Together / DeepSeek / Ollama 本機等百種模型）並存，依場景自由切換</p>
+          <h3>四翻译引擎 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>Gemini + Google Translate + <strong>Bing Translate</strong> + <strong>自定义模型</strong>（OpenAI 兼容端点，可接 OpenRouter / Together / DeepSeek / Ollama 本机等百种模型）并存，按场景自由切换</p>
         </div>
         <div class="feature">
-          <h3>自訂快速鍵</h3>
-          <p>三組可自訂快速鍵（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一鍵切換翻譯引擎與模型</p>
+          <h3>自定义快捷键</h3>
+          <p>三组可自定义快捷键（<code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code>），一键切换翻译引擎与模型</p>
+        </div>
+        <div class="feature">
+          <h3>Firefox 双平台 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>上架 Firefox AMO，Chrome / Firefox 同一份代码编译出两个平台版本，符合 Mozilla AMO 审核（零 innerHTML）</p>
+        </div>
+        <div class="feature">
+          <h3>三语用户界面 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>弹窗、设置页、提示文字全面支持台湾繁体（zh-TW）/ 简体中文（zh-CN）/ 日文（ja），跟随浏览器语言自动切换</p>
+        </div>
+        <div class="feature">
+          <h3>划词翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>选中页面上任意文字即可即时翻译，弹出小卡片显示译文，无需整页翻</p>
+        </div>
+        <div class="feature">
+          <h3>Sticky 自动翻译 <span style="color:#2563eb;font-size:0.78rem">★ Nozomi</span></h3>
+          <p>把指定域名记住，下次访问自动触发翻译；YouTube 字幕跨页延续、SPA 路由切换也跟着自动翻</p>
         </div>
       </div>
     </div>
@@ -423,27 +441,28 @@
   <!-- Install Steps -->
   <section>
     <div class="container">
-      <h2>Beta 版手動安裝步驟</h2>
+      <h2>安装步骤</h2>
+      <p class="compare-caption" style="margin-bottom:24px"><strong>Firefox 用户</strong>：直接点上方「从 Firefox Add-ons 安装」按钮，AMO 一键安装，跳到第 3 步设置 API Key 即可</p>
       <div class="steps">
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-body">
-            <h3>下載並解壓縮</h3>
-            <p>從上方按鈕下載 <code>.zip</code> 檔案，解壓縮到任意位置</p>
+            <h3>下载并解压（Chrome 用户）</h3>
+            <p>从上方「GitHub 下载」按钮下载 <code>shinkansen-chrome-vX.Y.Z.zip</code>，解压到任意位置</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-body">
-            <h3>載入擴充功能</h3>
-            <p>開啟 Chrome，前往 <code>chrome://extensions/</code>，打開右上角「開發人員模式」，點「載入未封裝項目」，選擇解壓縮後的 <code>shinkansen</code> 資料夾</p>
+            <h3>加载扩展（Chrome 用户）</h3>
+            <p>打开 Chrome，访问 <code>chrome://extensions/</code>，打开右上角「开发者模式」，点「加载已解压的扩展程序」，选择解压后的 <code>shinkansen</code> 文件夹</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-body">
-            <h3>設定 API Key</h3>
-            <p>點工具列的 Shinkansen 圖示 → 設定 → 貼上你的 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/API-KEY-SETUP.md" style="color:#2563eb;">Gemini API Key</a>完成！按 <code>Alt+S</code> 用 Gemini 翻譯，或按 <code>Alt+D</code> 用免費的 Google Translate（不需 API Key）</p>
+            <h3>设置 API Key（共通）</h3>
+            <p>点工具栏的 Shinkansen 图标 → 设置 → 粘贴你的 <a href="https://github.com/r404r/shinkansen/blob/main/API-KEY-SETUP.md" style="color:#2563eb;">Gemini API Key</a>完成！三组快捷键 <code>Alt+A</code> / <code>Alt+S</code> / <code>Alt+D</code> 对应可自定义的翻译预设；其中 Google Translate 与 Bing 引擎免 API Key 即可使用</p>
           </div>
         </div>
       </div>
@@ -453,7 +472,8 @@
   <!-- Footer -->
   <footer>
     <div class="container">
-      <p>Shinkansen 採用 <a href="https://github.com/jimmysu0309/shinkansen/blob/main/LICENSE">Elastic License 2.0</a> 授權 · <a href="privacy-policy.html">隱私權政策</a> · <a href="https://github.com/jimmysu0309/shinkansen">原始碼</a></p>
+      <p>Shinkansen Nozomi 采用 <a href="https://github.com/r404r/shinkansen/blob/main/LICENSE">Elastic License 2.0</a> 授权 · <a href="privacy-policy.html">隐私政策</a> · <a href="https://github.com/r404r/shinkansen">源代码</a></p>
+      <p style="margin-top:8px">fork 自 <a href="https://github.com/jimmysu0309/shinkansen">jimmysu0309/shinkansen</a> · 感谢上游作者 Jimmy Su 的原作</p>
       <p style="margin-top:8px; font-style:italic;">No coding skills were harmed in the making of this shit.</p>
     </div>
   </footer>
