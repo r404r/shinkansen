@@ -121,14 +121,32 @@ async function init() {
   // v1.4.13: toggle 語意從「當前 active 狀態」改為「ytSubtitle.autoTranslate 設定值」，
   // 讓使用者一打開 popup 就看到預設 ON（DEFAULT_SETTINGS.ytSubtitle.autoTranslate=true），
   // 不再因為 content script 尚未啟動 active 就顯示 off 造成「預設沒開」的錯覺。
+  // Nozomi: v1.6.23 上游把 popup toggle 改成 per-tab message 不寫 storage, 但 init reader
+  // 仍讀全局 storage → desync (使用者開了 → 關 popup → 再開 popup checkbox 顯示 off, 但字幕
+  // 實際在翻)。修法: 先問 content script 當前 tab state, 拿不到再 fallback 全局 default。
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url || '';
     if (url.includes('youtube.com/watch')) {
       $('yt-subtitle-row').hidden = false;
-      const { ytSubtitle = {} } = await browser.storage.sync.get('ytSubtitle');
-      // 沒設定過視為 true（與 DEFAULT_SETTINGS.ytSubtitle.autoTranslate 對齊）
-      $('yt-subtitle-toggle').checked = ytSubtitle.autoTranslate !== false;
+      let active = null;
+      try {
+        const resp = await browser.tabs.sendMessage(tab.id, { type: 'GET_SUBTITLE_STATE' });
+        if (resp?.ok) {
+          // 三層優先序:
+          // 1. override 不為 null → 使用者在此 tab 明示開/關過,以 override 為準(蓋過全域 default)
+          // 2. active === true → 目前正在翻 → 顯示 ON(蓋過 SET_SUBTITLE 後的暫態)
+          // 3. 否則 → fallback 全域 default(處理 800ms/500ms 自動啟動 race window)
+          if (resp.override === true || resp.override === false) active = resp.override;
+          else if (resp.active === true) active = true;
+        }
+      } catch { /* content script 尚未注入(頁面剛加載 / SPA 切換中)→ 走 fallback */ }
+      if (active === null) {
+        // fallback: 全局 default(沒設定過視為 true,與 DEFAULT_SETTINGS.ytSubtitle.autoTranslate 對齊)
+        const { ytSubtitle = {} } = await browser.storage.sync.get('ytSubtitle');
+        active = ytSubtitle.autoTranslate !== false;
+      }
+      $('yt-subtitle-toggle').checked = active;
     }
     // commit 5a':Drive 影片 viewer toggle 共用 ytSubtitle.autoTranslate
     // (user 不需要為 Drive 多做設定,跟 YouTube 字幕用同一個開關)
@@ -282,14 +300,16 @@ $('options-btn').addEventListener('click', async() => {
   }
 });
 
-// v1.6.23:popup 開著時 reactive sync ytSubtitle.autoTranslate(設定頁同步寫 storage 後立即反映)
+// v1.6.23:popup 開著時 reactive sync ytSubtitle 設定(設定頁同步寫 storage 後立即反映)
 // popup 通常 click 外面就關閉,但 detached popup window 或極短時間視窗下這條 listener 確保一致
+// Nozomi: yt-subtitle-toggle 改為 per-tab state(由 GET_SUBTITLE_STATE 提供),不再從 storage
+// onChanged 同步,避免 bilingual toggle 寫 storage 時把 YT toggle 拉回全域預設造成 desync。
+// Drive toggle 仍是 storage-bound 設計(content-drive.js listen storage.onChanged 即時生效),
+// 以及 bilingual toggle 也是 storage-bound,這兩個維持原行為。
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync' || !changes.ytSubtitle) return;
   const newVal = changes.ytSubtitle.newValue || {};
-  // 同一個 ytSubtitle.autoTranslate 設定同步兩個 popup toggle(YouTube + Drive 共用)
   const enabled = newVal.autoTranslate !== false;
-  $('yt-subtitle-toggle').checked = enabled;
   $('drive-subtitle-toggle').checked = enabled;
   // commit 5c:bilingualMode 同步
   $('bilingual-toggle').checked = newVal.bilingualMode === true;

@@ -1461,8 +1461,14 @@
       return true;
     }
     // v1.2.12: YouTube 字幕翻譯開關（popup toggle 用）
+    // Nozomi: 同步回 per-tab subtitleUserOverride(null/true/false)讓 popup 區分
+    // 「使用者明示開/關」、「目前正在翻」、「都沒有 → 走全域 default」三種狀態。
     if (msg?.type === 'GET_SUBTITLE_STATE') {
-      sendResponse({ ok: true, active: SK.YT?.active ?? false });
+      sendResponse({
+        ok: true,
+        active: SK.YT?.active ?? false,
+        override: SK.YT?.subtitleUserOverride ?? null,
+      });
       return true;
     }
     // v1.4.0: Google Translate 快捷鍵（Opt+G）
@@ -1486,6 +1492,8 @@
     if (msg?.type === 'SET_SUBTITLE') {
       const enabled = !!msg.payload?.enabled;
       const active = !!(SK.YT && SK.YT.active);
+      // Nozomi: 記下 per-tab user override 給 GET_SUBTITLE_STATE 用
+      if (SK.YT) SK.YT.subtitleUserOverride = enabled;
       if (enabled && !active) {
         SK.translateYouTubeSubtitles?.().catch(err => {
           SK.sendLog('warn', 'system', 'SET_SUBTITLE start failed', { error: err.message });

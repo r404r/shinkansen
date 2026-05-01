@@ -239,6 +239,9 @@
     batchTimer:       null,
     flushing:         false,
     active:           false,
+    // Nozomi: popup toggle 點擊時記下 per-tab user override(null=未動,true/false=使用者明示),
+    // GET_SUBTITLE_STATE 回 popup,讓 popup 在 active=false 但使用者剛開過的 race window 也顯示對。
+    subtitleUserOverride: null,
     videoId:          null,
     isAsr:            false,        // 本影片字幕是否為 YouTube 自動產生（kind=asr）。
                                     //   true → translateWindowFrom 走 ASR 合句路徑（D' 模式,timestamp mode）。
