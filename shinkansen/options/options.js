@@ -426,8 +426,10 @@ function updateYtPromptCostHint() {
 // v1.4.13: 從 chrome.commands.getAll() 讀取實際綁定鍵位顯示在每張 card 右上角
 // v1.8.19: command id 主要預設(slot 2)從 translate-preset-2 改為 translate-preset-0
 //          (字典序保證 chrome://extensions/shortcuts 顯示順序「主要 → 預設 2 → 預設 3」)
+// Nozomi: 抽到模組層級供 keydown handler(編輯時 commands.update)共用,避免兩處硬編碼漂移。
+const SLOT_TO_COMMAND_ID = { 1: 'translate-preset-1', 2: 'translate-preset-0', 3: 'translate-preset-3' };
+
 async function refreshPresetKeyBindings() {
-  const SLOT_TO_COMMAND_ID = { 1: 'translate-preset-1', 2: 'translate-preset-0', 3: 'translate-preset-3' };
   try {
     const cmds = await browser.commands.getAll();
     for (const slot of [1, 2, 3]) {
@@ -539,7 +541,7 @@ if (_isFirefoxExt && typeof browser.commands?.update === 'function') {
 
       try {
         await browser.commands.update({
-          name: `translate-preset-${slot}`,
+          name: SLOT_TO_COMMAND_ID[slot],
           shortcut: shortcut,
         });
         keyEl.removeAttribute('data-editing');
