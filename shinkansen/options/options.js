@@ -2146,10 +2146,10 @@ function renderLogTable() {
   const filtered = getFilteredLogs();
 
   // 更新計數
-  $('log-count').textContent = `${allLogs.length} 筆`;
+  $('log-count').textContent = t('opt_log_count', allLogs.length);
   const filteredCountEl = $('log-filtered-count');
   if (filtered.length !== allLogs.length) {
-    filteredCountEl.textContent = `（篩選後 ${filtered.length} 筆）`;
+    filteredCountEl.textContent = t('opt_log_filtered_count', filtered.length);
     filteredCountEl.hidden = false;
   } else {
     filteredCountEl.hidden = true;
@@ -2159,10 +2159,10 @@ function renderLogTable() {
     tbody.replaceChildren();
     emptyMsg.hidden = allLogs.length > 0 ? true : false;
     if (allLogs.length > 0 && filtered.length === 0) {
-      emptyMsg.textContent = '沒有符合篩選條件的 Log';
+      emptyMsg.textContent = t('opt_log_no_match');
       emptyMsg.hidden = false;
     } else if (allLogs.length === 0) {
-      emptyMsg.textContent = '尚無 Log。翻譯一個頁面後，Log 會自動出現在這裡';
+      emptyMsg.textContent = t('opt_log_empty');
       emptyMsg.hidden = false;
     }
     return;
