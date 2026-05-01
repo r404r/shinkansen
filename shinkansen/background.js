@@ -572,6 +572,11 @@ const messageHandlers = {
     async: true,
     handler: (payload, sender) => handleTranslateGoogle(payload, sender, '_gt_yt'),
   },
+  // Nozomi: Bing Translate 字幕翻譯（快取 key 用 _bt_yt 後綴，跟網頁翻譯 _bt 分區）
+  TRANSLATE_SUBTITLE_BATCH_BING: {
+    async: true,
+    handler: (payload, sender) => handleTranslateBing(payload, sender, '_bt_yt'),
+  },
   EXTRACT_GLOSSARY: {
     async: true,
     handler: (payload, sender) => handleExtractGlossary(payload, sender),

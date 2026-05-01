@@ -321,7 +321,8 @@ function updateYtSectionVisibility() {
   const geminiOnly = document.getElementById('yt-gemini-only-sections');
   const promptSection = document.getElementById('yt-prompt-section');
   if (geminiOnly) geminiOnly.hidden = (engine !== 'gemini');
-  if (promptSection) promptSection.hidden = (engine === 'google');
+  // Nozomi: Bing 跟 Google 一樣是 MT 不支援 prompt 注入,字幕 prompt section 一併隱藏
+  if (promptSection) promptSection.hidden = (engine === 'google' || engine === 'bing');
 }
 
 // v1.5.8: 字幕分頁 prompt 開銷估算 — 用「目前字幕用的 model + input 單價」算
