@@ -318,11 +318,20 @@ function refreshSlotDropdownLabels() {
 //                   但 prompt 字幕專用）
 function updateYtSectionVisibility() {
   const engine = $('ytEngine')?.value || 'gemini';
+  const isGemini = (engine === 'gemini');
   const geminiOnly = document.getElementById('yt-gemini-only-sections');
   const promptSection = document.getElementById('yt-prompt-section');
-  if (geminiOnly) geminiOnly.hidden = (engine !== 'gemini');
+  if (geminiOnly) geminiOnly.hidden = !isGemini;
   // Nozomi: Bing 跟 Google 一樣是 MT 不支援 prompt 注入,字幕 prompt section 一併隱藏
   if (promptSection) promptSection.hidden = (engine === 'google' || engine === 'bing');
+  // Nozomi: 非 Gemini 引擎時 LLM 合句(_runAsrWindow)被跳過,AI 分句 toggle 顯示但禁用 + 說明
+  // 不直接隱藏整個 section: 切回 Gemini 後使用者預期看到原狀態,disabled + hint 是更清晰的訊號
+  const asrToggle = document.getElementById('ytAsrProgressive');
+  const asrLabel = document.getElementById('yt-asr-toggle-label');
+  const asrHint = document.getElementById('yt-asr-non-gemini-hint');
+  if (asrToggle) asrToggle.disabled = !isGemini;
+  if (asrLabel) asrLabel.style.opacity = isGemini ? '' : '0.55';
+  if (asrHint) asrHint.hidden = isGemini;
 }
 
 // v1.5.8: 字幕分頁 prompt 開銷估算 — 用「目前字幕用的 model + input 單價」算

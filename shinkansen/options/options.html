@@ -891,18 +891,22 @@
     </section>
 
     <!-- v1.6.23: 簡化為單一 toggle：開啟=混合模式（progressive）、關閉=預設分句（heuristic） -->
-    <section>
+    <section id="yt-asr-section">
       <h2 data-i18n="opt_yt_section_asr">自動產生字幕分句模式</h2>
       <p class="muted" data-i18n="opt_yt_asr_desc">
         僅影響 YouTube 自動產生的字幕，人工字幕不受此設定影響
       </p>
-      <label class="checkbox-label">
+      <label class="checkbox-label" id="yt-asr-toggle-label">
         <input type="checkbox" id="ytAsrProgressive" checked>
         <strong data-i18n="opt_yt_label_asr_progressive">AI 分句模式</strong>
         <small class="muted" data-i18n="opt_yt_desc_asr_progressive">
           開啟：使用 AI 分句，提升字幕品質，些微提升 token 耗費。 關閉：使用 YouTube 自動產生字幕的原始分句邏輯
         </small>
       </label>
+      <!-- Nozomi: 非 Gemini 引擎時 LLM 合句路徑跳過,顯示說明 -->
+      <small class="muted" id="yt-asr-non-gemini-hint" hidden data-i18n="opt_yt_asr_non_gemini_hint">
+        AI 分句僅 Gemini 引擎可用。當前選用非 Gemini 引擎時,自動字幕走啟發式分句路徑,此設定不生效。
+      </small>
     </section>
 
     <!-- v1.4.0: 字幕翻譯引擎選擇 -->
