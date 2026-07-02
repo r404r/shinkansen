@@ -2433,6 +2433,21 @@ function applyRichTextLocale() {
     usageEl.appendChild(a);
     usageEl.appendChild(document.createTextNode(t('opt_usage_desc_after')));
   }
+
+  // hotkey-shortcuts-line: "鍵位可至 [擴充功能快捷鍵設定] 變更。"
+  // 這個 <a> 的跳轉走 .open-shortcuts-link 的 click listener(tabs.create,模組
+  // 頂層只綁一次),不能像 setWithLink 那樣重建錨點(listener 會丟),
+  // 改用 replaceChildren 把「既有錨點節點」原封搬回、只更新前後文字。
+  const hotkeyLineEl = $('hotkey-shortcuts-line');
+  const shortcutsLinkEl = $('open-shortcuts');
+  if (hotkeyLineEl && shortcutsLinkEl) {
+    shortcutsLinkEl.textContent = t('opt_hotkey_shortcuts_link');
+    hotkeyLineEl.replaceChildren(
+      document.createTextNode(t('opt_hotkey_shortcuts_before')),
+      shortcutsLinkEl,
+      document.createTextNode(t('opt_hotkey_shortcuts_after')),
+    );
+  }
 }
 
 // 語言切換事件
