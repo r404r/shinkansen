@@ -5,6 +5,20 @@
 
 ---
 
+## v1.9.1
+
+**v1.9.1** — 補正 v1.9.1.x release 產物的 Extension manifest 版本號。
+
+**根因**:GitHub Actions `release.yml` 只把 tag 名稱用於 ZIP 檔名與 GitHub Release 名稱；`scripts/build.js` 則會把 `shinkansen/manifest.json` / `shinkansen/manifest.firefox.json` 原樣複製到 build 目錄。因此先前以 `v1.9.1.0` 觸發 release 時，產物外部名稱已是 v1.9.1.0，但 Chrome / Firefox ZIP 內的 `manifest.json` 仍停在 `1.9.0`。
+
+**修法**:將 Chrome 與 Firefox manifest 的 `version` 欄位同步 bump 到 `1.9.1`，並同步更新 `test/version-check.spec.js`、`SPEC.md`、`README.md` 的版本 forcing function 對應值。既有 `v1.9.1.0` release 不重寫，改用新的 `v1.9.1.1` tag 重新產出一致的 release artifacts。
+
+**SANITY**:`npm run test:version` 驗 manifest/runtime/docs 版本一致；`npm run build:all` 驗雙平台 build；抽查 build 目錄內 Chrome / Firefox `manifest.json` 版本均為 `1.9.1`。
+
+**影響檔案**:`shinkansen/manifest.json`,`shinkansen/manifest.firefox.json`,`test/version-check.spec.js`,`SPEC.md`,`README.md`,`CHANGELOG.md`。
+
+---
+
 ## v1.9.0.4
 
 **v1.9.0.4** — 修 v1.9.0.3 build 漏複製 `content-drive.js` / `content-drive-iframe.js` 導致**所有快捷鍵全部失效**(Firefox 實機驗證 reproduce)。

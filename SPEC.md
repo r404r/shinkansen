@@ -4,10 +4,10 @@
 
 - 文件版本：v1.4
 - 建立日期：2026-04-08
-- 最後更新：2026-04-28（v1.8.0）
+- 最後更新：2026-07-02（v1.9.1）
 - 目標平台：Chrome & Firefox（Manifest V3）
 - 作業系統：macOS 26
-- 目前 Extension 版本：1.9.0
+- 目前 Extension 版本：1.9.1
 
 ---
 
@@ -31,7 +31,7 @@ Shinkansen-Nozomi 是一款瀏覽器擴充功能（Chrome & Firefox），將英�
 
 ## 2. 功能範圍
 
-### 2.1 已實作（v1.9.0 為止）
+### 2.1 已實作（v1.9.1 為止）
 
 詳細版本歷史見 [`CHANGELOG.md`](CHANGELOG.md)。
 
